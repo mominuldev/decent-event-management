@@ -1,0 +1,15 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    tmpDir: storage/framework/cache/phpstan
+    # We use the modern `casts()` method (Laravel 11+) on every model
+    # instead of the legacy `$casts` property.
+    parseModelCastsMethod: true
+
+    paths:
+        - app
+        - database/factories
+        - database/seeders
+
+    level: 8
