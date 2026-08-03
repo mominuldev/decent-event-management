@@ -5,7 +5,7 @@ namespace App\Console\Commands;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
-use OpenApi\Generator;
+use Symfony\Component\Process\Process;
 
 #[Signature('app:generate-open-api-spec')]
 #[Description('Generate OpenAPI 3.1 specification from annotated controllers')]
@@ -26,7 +26,7 @@ class GenerateOpenApiSpec extends Command
 
         try {
             // Use the CLI approach that works with swagger-php 6.x
-            $process = new \Symfony\Component\Process\Process(
+            $process = new Process(
                 ['./vendor/bin/openapi', 'app/Http', '--format', 'json', '--output', $output],
                 base_path()
             );
@@ -34,14 +34,16 @@ class GenerateOpenApiSpec extends Command
             $process->run();
 
             if (! $process->isSuccessful()) {
-                $this->error('Failed to generate OpenAPI specification: ' . $process->getErrorOutput());
+                $this->error('Failed to generate OpenAPI specification: '.$process->getErrorOutput());
 
                 return self::FAILURE;
             }
 
             // Read the generated file to get stats
-            if (file_exists($output)) {
-                $openapi = json_decode(file_get_contents($output), true);
+            $contents = file_exists($output) ? file_get_contents($output) : false;
+
+            if ($contents !== false) {
+                $openapi = json_decode($contents, true);
                 $pathCount = count($openapi['paths'] ?? []);
                 $schemaCount = count($openapi['components']['schemas'] ?? []);
 
@@ -56,7 +58,7 @@ class GenerateOpenApiSpec extends Command
 
             return self::FAILURE;
         } catch (\Exception $e) {
-            $this->error('Error generating OpenAPI specification: ' . $e->getMessage());
+            $this->error('Error generating OpenAPI specification: '.$e->getMessage());
 
             return self::FAILURE;
         }

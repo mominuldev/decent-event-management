@@ -169,6 +169,31 @@ class AuthController extends Controller
         ]);
     }
 
+    #[OAT\Get(
+        path: '/admin/auth/me',
+        summary: 'Get the authenticated staff member\'s own profile, roles, and permissions',
+        tags: ['Authentication'],
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Caller profile',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(property: 'ulid', type: 'string'),
+                            new OAT\Property(property: 'name', type: 'string'),
+                            new OAT\Property(property: 'email', type: 'string', format: 'email'),
+                            new OAT\Property(property: 'roles', type: 'array', items: new OAT\Items(type: 'string')),
+                            new OAT\Property(property: 'permissions', type: 'array', items: new OAT\Items(type: 'string')),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 401, description: 'Unauthenticated'),
+        ]
+    )]
     public function me(Request $request): JsonResponse
     {
         /** @var User $user */
@@ -183,6 +208,25 @@ class AuthController extends Controller
         ]);
     }
 
+    #[OAT\Post(
+        path: '/admin/auth/logout',
+        summary: 'Revoke the current access token',
+        tags: ['Authentication'],
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Logged out',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [new OAT\Property(property: 'message', type: 'string')]
+                    )
+                )
+            ),
+            new OAT\Response(response: 401, description: 'Unauthenticated'),
+        ]
+    )]
     public function logout(Request $request): JsonResponse
     {
         /** @var User $user */

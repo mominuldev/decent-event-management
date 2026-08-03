@@ -18,11 +18,101 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use OpenApi\Attributes as OAT;
+use Symfony\Component\HttpFoundation\Response;
 
+#[OAT\Tag(name: 'Payments')]
 class PaymentController extends Controller
 {
+    #[OAT\Get(
+        path: '/admin/payments',
+        summary: 'List payments with filters',
+        tags: ['Payments'],
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OAT\Parameter(
+                name: 'status',
+                in: 'query',
+                description: 'Filter by payment status',
+                schema: new OAT\Schema(type: 'string')
+            ),
+            new OAT\Parameter(
+                name: 'method',
+                in: 'query',
+                description: 'Filter by payment method (bkash, nagad, rocket, sslcommerz, manual, ...)',
+                schema: new OAT\Schema(type: 'string')
+            ),
+            new OAT\Parameter(
+                name: 'date_from',
+                in: 'query',
+                description: 'Filter by created_at on or after this date',
+                schema: new OAT\Schema(type: 'string', format: 'date')
+            ),
+            new OAT\Parameter(
+                name: 'date_to',
+                in: 'query',
+                description: 'Filter by created_at on or before this date',
+                schema: new OAT\Schema(type: 'string', format: 'date')
+            ),
+            new OAT\Parameter(
+                name: 'per_page',
+                in: 'query',
+                description: 'Results per page, capped at 100',
+                schema: new OAT\Schema(type: 'integer', default: 20)
+            ),
+        ],
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Paginated list of payments',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(
+                                property: 'data',
+                                type: 'array',
+                                items: new OAT\Items(
+                                    properties: [
+                                        new OAT\Property(property: 'ulid', type: 'string'),
+                                        new OAT\Property(property: 'payment_number', type: 'string'),
+                                        new OAT\Property(property: 'method', type: 'string'),
+                                        new OAT\Property(property: 'channel', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'status', type: 'string'),
+                                        new OAT\Property(property: 'amount_due_paisa', type: 'integer', description: 'Integer paisa, 1 BDT = 100 paisa'),
+                                        new OAT\Property(property: 'amount_paid_paisa', type: 'integer', description: 'Integer paisa, 1 BDT = 100 paisa'),
+                                        new OAT\Property(property: 'fee_paisa', type: 'integer', description: 'Integer paisa, 1 BDT = 100 paisa'),
+                                        new OAT\Property(property: 'net_paisa', type: 'integer', description: 'Integer paisa, 1 BDT = 100 paisa'),
+                                        new OAT\Property(property: 'refunded_paisa', type: 'integer', description: 'Integer paisa, 1 BDT = 100 paisa'),
+                                        new OAT\Property(property: 'currency', type: 'string'),
+                                        new OAT\Property(property: 'gateway_transaction_id', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'payer_msisdn', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'manual_trx_id', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'reconciliation_status', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'initiated_at', type: 'string', format: 'date-time', nullable: true),
+                                        new OAT\Property(property: 'paid_at', type: 'string', format: 'date-time', nullable: true),
+                                        new OAT\Property(property: 'expires_at', type: 'string', format: 'date-time', nullable: true),
+                                        new OAT\Property(property: 'failed_at', type: 'string', format: 'date-time', nullable: true),
+                                        new OAT\Property(property: 'verified_at', type: 'string', format: 'date-time', nullable: true),
+                                        new OAT\Property(property: 'created_at', type: 'string', format: 'date-time'),
+                                    ],
+                                    type: 'object'
+                                )
+                            ),
+                            new OAT\Property(property: 'links', type: 'object'),
+                            new OAT\Property(property: 'meta', type: 'object'),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 401, description: 'Unauthenticated'),
+            new OAT\Response(response: 403, description: 'Missing payment.view_any permission'),
+        ]
+    )]
     public function index(Request $request): AnonymousResourceCollection
     {
+        abort_unless((bool) $request->user()?->can('payment.view_any'), Response::HTTP_FORBIDDEN);
+
         $query = Payment::query()->latest();
 
         if ($request->filled('status')) {
@@ -46,13 +136,147 @@ class PaymentController extends Controller
         return PaymentResource::collection($query->paginate($perPage));
     }
 
-    public function show(Payment $payment): PaymentResource
+    #[OAT\Get(
+        path: '/admin/payments/{payment}',
+        summary: 'Get a single payment',
+        tags: ['Payments'],
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OAT\Parameter(
+                name: 'payment',
+                in: 'path',
+                required: true,
+                description: 'Payment ULID',
+                schema: new OAT\Schema(type: 'string')
+            ),
+        ],
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Payment detail, including transactions and refunds',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(
+                                property: 'data',
+                                properties: [
+                                    new OAT\Property(property: 'ulid', type: 'string'),
+                                    new OAT\Property(property: 'payment_number', type: 'string'),
+                                    new OAT\Property(property: 'method', type: 'string'),
+                                    new OAT\Property(property: 'channel', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'status', type: 'string'),
+                                    new OAT\Property(property: 'amount_due_paisa', type: 'integer', description: 'Integer paisa, 1 BDT = 100 paisa'),
+                                    new OAT\Property(property: 'amount_paid_paisa', type: 'integer', description: 'Integer paisa, 1 BDT = 100 paisa'),
+                                    new OAT\Property(property: 'fee_paisa', type: 'integer', description: 'Integer paisa, 1 BDT = 100 paisa'),
+                                    new OAT\Property(property: 'net_paisa', type: 'integer', description: 'Integer paisa, 1 BDT = 100 paisa'),
+                                    new OAT\Property(property: 'refunded_paisa', type: 'integer', description: 'Integer paisa, 1 BDT = 100 paisa'),
+                                    new OAT\Property(property: 'currency', type: 'string'),
+                                    new OAT\Property(property: 'gateway_transaction_id', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'payer_msisdn', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'manual_trx_id', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'reconciliation_status', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'initiated_at', type: 'string', format: 'date-time', nullable: true),
+                                    new OAT\Property(property: 'paid_at', type: 'string', format: 'date-time', nullable: true),
+                                    new OAT\Property(property: 'expires_at', type: 'string', format: 'date-time', nullable: true),
+                                    new OAT\Property(property: 'failed_at', type: 'string', format: 'date-time', nullable: true),
+                                    new OAT\Property(property: 'verified_at', type: 'string', format: 'date-time', nullable: true),
+                                    new OAT\Property(property: 'created_at', type: 'string', format: 'date-time'),
+                                    new OAT\Property(property: 'verified_by_name', type: 'string', nullable: true),
+                                ],
+                                type: 'object'
+                            ),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 401, description: 'Unauthenticated'),
+            new OAT\Response(response: 403, description: 'Missing payment.view permission'),
+            new OAT\Response(response: 404, description: 'Payment not found'),
+        ]
+    )]
+    public function show(Request $request, Payment $payment): PaymentResource
     {
+        abort_unless((bool) $request->user()?->can('payment.view'), Response::HTTP_FORBIDDEN);
+
         $payment->load(['registration', 'attendee', 'verifiedBy', 'transactions', 'refunds']);
 
         return new PaymentResource($payment);
     }
 
+    #[OAT\Post(
+        path: '/admin/payments/{payment}/verify-manual',
+        summary: 'Verify a manual (offline) payment as an authenticated Event Manager',
+        tags: ['Payments'],
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OAT\Parameter(
+                name: 'payment',
+                in: 'path',
+                required: true,
+                description: 'Payment ULID',
+                schema: new OAT\Schema(type: 'string')
+            ),
+        ],
+        requestBody: new OAT\RequestBody(
+            required: true,
+            content: new OAT\MediaType(
+                mediaType: 'application/json',
+                schema: new OAT\Schema(
+                    properties: [
+                        new OAT\Property(
+                            property: 'verification_note',
+                            type: 'string',
+                            maxLength: 255,
+                            required: ['verification_note']
+                        ),
+                    ]
+                )
+            )
+        ),
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Payment verified',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(
+                                property: 'data',
+                                properties: [
+                                    new OAT\Property(property: 'ulid', type: 'string'),
+                                    new OAT\Property(property: 'payment_number', type: 'string'),
+                                    new OAT\Property(property: 'status', type: 'string'),
+                                    new OAT\Property(property: 'verified_at', type: 'string', format: 'date-time', nullable: true),
+                                    new OAT\Property(property: 'verified_by_name', type: 'string', nullable: true),
+                                ],
+                                type: 'object'
+                            ),
+                            new OAT\Property(property: 'message', type: 'string'),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 401, description: 'Unauthenticated'),
+            new OAT\Response(response: 403, description: 'Missing payment.verify_manual permission'),
+            new OAT\Response(response: 404, description: 'Payment not found'),
+            new OAT\Response(
+                response: 422,
+                description: 'Payment cannot be verified from its current status',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(property: 'code', type: 'string', example: 'verification_failed'),
+                            new OAT\Property(property: 'message', type: 'string'),
+                            new OAT\Property(property: 'request_id', type: 'string'),
+                        ]
+                    )
+                )
+            ),
+        ]
+    )]
     public function verifyManual(VerifyManualPaymentRequest $request, Payment $payment, VerifyManualPayment $action): JsonResponse
     {
         try {
@@ -95,6 +319,78 @@ class PaymentController extends Controller
         }
     }
 
+    #[OAT\Post(
+        path: '/admin/payments/{payment}/reject-manual',
+        summary: 'Reject a manual (offline) payment and cancel its registration',
+        tags: ['Payments'],
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OAT\Parameter(
+                name: 'payment',
+                in: 'path',
+                required: true,
+                description: 'Payment ULID',
+                schema: new OAT\Schema(type: 'string')
+            ),
+        ],
+        requestBody: new OAT\RequestBody(
+            required: true,
+            content: new OAT\MediaType(
+                mediaType: 'application/json',
+                schema: new OAT\Schema(
+                    properties: [
+                        new OAT\Property(
+                            property: 'rejection_reason',
+                            type: 'string',
+                            maxLength: 255,
+                            required: ['rejection_reason']
+                        ),
+                    ]
+                )
+            )
+        ),
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Payment rejected',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(
+                                property: 'data',
+                                properties: [
+                                    new OAT\Property(property: 'ulid', type: 'string'),
+                                    new OAT\Property(property: 'payment_number', type: 'string'),
+                                    new OAT\Property(property: 'status', type: 'string'),
+                                    new OAT\Property(property: 'failed_at', type: 'string', format: 'date-time', nullable: true),
+                                ],
+                                type: 'object'
+                            ),
+                            new OAT\Property(property: 'message', type: 'string'),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 401, description: 'Unauthenticated'),
+            new OAT\Response(response: 403, description: 'Missing payment.reject_manual permission'),
+            new OAT\Response(response: 404, description: 'Payment not found'),
+            new OAT\Response(
+                response: 422,
+                description: 'Payment cannot be rejected from its current status',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(property: 'code', type: 'string', example: 'rejection_failed'),
+                            new OAT\Property(property: 'message', type: 'string'),
+                            new OAT\Property(property: 'request_id', type: 'string'),
+                        ]
+                    )
+                )
+            ),
+        ]
+    )]
     public function rejectManual(RejectManualPaymentRequest $request, Payment $payment): JsonResponse
     {
         try {
@@ -153,6 +449,91 @@ class PaymentController extends Controller
         }
     }
 
+    #[OAT\Post(
+        path: '/admin/payments/{payment}/refund',
+        summary: 'Refund a payment, fully or partially',
+        tags: ['Payments'],
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OAT\Parameter(
+                name: 'payment',
+                in: 'path',
+                required: true,
+                description: 'Payment ULID',
+                schema: new OAT\Schema(type: 'string')
+            ),
+        ],
+        requestBody: new OAT\RequestBody(
+            required: true,
+            content: new OAT\MediaType(
+                mediaType: 'application/json',
+                schema: new OAT\Schema(
+                    properties: [
+                        new OAT\Property(
+                            property: 'reason',
+                            type: 'string',
+                            maxLength: 255,
+                            required: ['reason']
+                        ),
+                        new OAT\Property(
+                            property: 'amount_paisa',
+                            type: 'integer',
+                            nullable: true,
+                            minimum: 1,
+                            description: 'Integer paisa amount to refund; omit for a full refund'
+                        ),
+                        new OAT\Property(
+                            property: 'type',
+                            type: 'string',
+                            enum: ['full', 'partial'],
+                            required: ['type']
+                        ),
+                    ]
+                )
+            )
+        ),
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Payment refunded',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(
+                                property: 'data',
+                                properties: [
+                                    new OAT\Property(property: 'ulid', type: 'string'),
+                                    new OAT\Property(property: 'refund_number', type: 'string'),
+                                    new OAT\Property(property: 'amount_paisa', type: 'integer', description: 'Integer paisa, 1 BDT = 100 paisa'),
+                                    new OAT\Property(property: 'status', type: 'string'),
+                                ],
+                                type: 'object'
+                            ),
+                            new OAT\Property(property: 'message', type: 'string'),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 401, description: 'Unauthenticated'),
+            new OAT\Response(response: 403, description: 'Missing payment.refund permission'),
+            new OAT\Response(response: 404, description: 'Payment not found'),
+            new OAT\Response(
+                response: 422,
+                description: 'Refund cannot be processed (e.g. amount exceeds remaining refundable balance)',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(property: 'code', type: 'string', example: 'refund_failed'),
+                            new OAT\Property(property: 'message', type: 'string'),
+                            new OAT\Property(property: 'request_id', type: 'string'),
+                        ]
+                    )
+                )
+            ),
+        ]
+    )]
     public function refund(RefundPaymentRequest $request, Payment $payment, RefundPayment $action): JsonResponse
     {
         try {

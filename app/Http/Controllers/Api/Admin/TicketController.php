@@ -16,11 +16,91 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use OpenApi\Attributes as OAT;
+use Symfony\Component\HttpFoundation\Response;
 
+#[OAT\Tag(name: 'Tickets')]
 class TicketController extends Controller
 {
+    #[OAT\Get(
+        path: '/admin/tickets',
+        summary: 'List tickets with optional filters',
+        tags: ['Tickets'],
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OAT\QueryParameter(
+                name: 'status',
+                description: 'Filter by ticket status',
+                schema: new OAT\Schema(type: 'string')
+            ),
+            new OAT\QueryParameter(
+                name: 'ticket_type_id',
+                description: 'Filter by ticket type ID',
+                schema: new OAT\Schema(type: 'integer')
+            ),
+            new OAT\QueryParameter(
+                name: 'search',
+                description: 'Search by ticket number or holder name',
+                schema: new OAT\Schema(type: 'string')
+            ),
+            new OAT\QueryParameter(
+                name: 'per_page',
+                description: 'Results per page, capped at 100',
+                schema: new OAT\Schema(type: 'integer', default: 20)
+            ),
+        ],
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Paginated list of tickets',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(
+                                property: 'data',
+                                type: 'array',
+                                items: new OAT\Items(
+                                    properties: [
+                                        new OAT\Property(property: 'ulid', type: 'string'),
+                                        new OAT\Property(property: 'ticket_number', type: 'string'),
+                                        new OAT\Property(property: 'status', type: 'string'),
+                                        new OAT\Property(property: 'admits_total', type: 'integer'),
+                                        new OAT\Property(property: 'admitted_count', type: 'integer'),
+                                        new OAT\Property(property: 'price_paid_paisa', type: 'integer', description: 'Amount in paisa (1 BDT = 100 paisa)'),
+                                        new OAT\Property(property: 'currency', type: 'string'),
+                                        new OAT\Property(property: 'holder_name', type: 'string'),
+                                        new OAT\Property(property: 'holder_batch_year', type: 'integer', nullable: true),
+                                        new OAT\Property(property: 'holder_type_label', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'issued_at', type: 'string', format: 'date-time', nullable: true),
+                                        new OAT\Property(property: 'voided_at', type: 'string', format: 'date-time', nullable: true),
+                                        new OAT\Property(property: 'void_reason', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'manifest_version', type: 'integer'),
+                                        new OAT\Property(property: 'created_at', type: 'string', format: 'date-time', nullable: true),
+                                    ],
+                                    type: 'object'
+                                )
+                            ),
+                            new OAT\Property(
+                                property: 'meta',
+                                properties: [
+                                    new OAT\Property(property: 'current_page', type: 'integer'),
+                                    new OAT\Property(property: 'per_page', type: 'integer'),
+                                    new OAT\Property(property: 'total', type: 'integer'),
+                                ],
+                                type: 'object'
+                            ),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 403, description: 'Missing ticket.view_any permission'),
+        ]
+    )]
     public function index(Request $request): AnonymousResourceCollection
     {
+        abort_unless((bool) $request->user()?->can('ticket.view_any'), Response::HTTP_FORBIDDEN);
+
         $query = Ticket::query()->with(['ticketType']);
 
         if ($request->filled('status')) {
@@ -44,13 +124,115 @@ class TicketController extends Controller
         return TicketResource::collection($query->paginate($perPage));
     }
 
-    public function show(Ticket $ticket): TicketResource
+    #[OAT\Get(
+        path: '/admin/tickets/{ticket}',
+        summary: 'Get a single ticket by ULID',
+        tags: ['Tickets'],
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OAT\PathParameter(name: 'ticket', description: 'Ticket ULID', schema: new OAT\Schema(type: 'string')),
+        ],
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Ticket details',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(property: 'ulid', type: 'string'),
+                            new OAT\Property(property: 'ticket_number', type: 'string'),
+                            new OAT\Property(property: 'status', type: 'string'),
+                            new OAT\Property(property: 'admits_total', type: 'integer'),
+                            new OAT\Property(property: 'admitted_count', type: 'integer'),
+                            new OAT\Property(property: 'price_paid_paisa', type: 'integer', description: 'Amount in paisa (1 BDT = 100 paisa)'),
+                            new OAT\Property(property: 'currency', type: 'string'),
+                            new OAT\Property(property: 'holder_name', type: 'string'),
+                            new OAT\Property(property: 'holder_batch_year', type: 'integer', nullable: true),
+                            new OAT\Property(property: 'holder_type_label', type: 'string', nullable: true),
+                            new OAT\Property(property: 'issued_at', type: 'string', format: 'date-time', nullable: true),
+                            new OAT\Property(property: 'voided_at', type: 'string', format: 'date-time', nullable: true),
+                            new OAT\Property(property: 'void_reason', type: 'string', nullable: true),
+                            new OAT\Property(property: 'first_admitted_at', type: 'string', format: 'date-time', nullable: true),
+                            new OAT\Property(property: 'last_admitted_at', type: 'string', format: 'date-time', nullable: true),
+                            new OAT\Property(property: 'manifest_version', type: 'integer'),
+                            new OAT\Property(property: 'created_at', type: 'string', format: 'date-time', nullable: true),
+                            new OAT\Property(property: 'ticket_type', type: 'object', description: 'Ticket type this ticket belongs to (see Ticket Types schema)'),
+                            new OAT\Property(property: 'qr_code_payload', type: 'string', nullable: true, description: 'Signed QR payload, when loaded'),
+                            new OAT\Property(property: 'replaces', type: 'object', nullable: true, description: 'The ticket this one replaced via reissue, if any'),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 403, description: 'Missing ticket.view permission'),
+            new OAT\Response(response: 404, description: 'Ticket not found'),
+        ]
+    )]
+    public function show(Request $request, Ticket $ticket): TicketResource
     {
+        abort_unless((bool) $request->user()?->can('ticket.view'), Response::HTTP_FORBIDDEN);
+
         $ticket->load(['registration', 'attendee', 'ticketType', 'qrCode', 'checkIns']);
 
         return new TicketResource($ticket);
     }
 
+    #[OAT\Post(
+        path: '/admin/tickets/{ticket}/void',
+        summary: 'Void an issued ticket',
+        description: 'Tickets are immutable once issued — voiding transitions status via the state machine and deactivates the QR code rather than deleting the record.',
+        tags: ['Tickets'],
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OAT\PathParameter(name: 'ticket', description: 'Ticket ULID', schema: new OAT\Schema(type: 'string')),
+        ],
+        requestBody: new OAT\RequestBody(
+            required: true,
+            content: new OAT\MediaType(
+                mediaType: 'application/json',
+                schema: new OAT\Schema(
+                    properties: [
+                        new OAT\Property(
+                            property: 'void_reason',
+                            type: 'string',
+                            description: 'Reason for voiding the ticket',
+                            required: ['void_reason']
+                        ),
+                    ]
+                )
+            )
+        ),
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Ticket voided successfully',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(property: 'data', type: 'object', description: 'The voided ticket (see GET /admin/tickets/{ticket} for shape)'),
+                            new OAT\Property(property: 'message', type: 'string'),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 403, description: 'Missing ticket.void permission'),
+            new OAT\Response(
+                response: 422,
+                description: 'Ticket is already voided',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(property: 'code', type: 'string', example: 'void_failed'),
+                            new OAT\Property(property: 'message', type: 'string'),
+                            new OAT\Property(property: 'request_id', type: 'string'),
+                        ]
+                    )
+                )
+            ),
+        ]
+    )]
     public function void(VoidTicketRequest $request, Ticket $ticket): JsonResponse
     {
         try {
@@ -101,8 +283,50 @@ class TicketController extends Controller
         }
     }
 
+    #[OAT\Post(
+        path: '/admin/tickets/{ticket}/reissue',
+        summary: 'Void a ticket and issue a replacement in its place',
+        description: 'Corrections to an issued ticket are always void + reissue, never edit — the new ticket links back via replaces_ticket_id.',
+        tags: ['Tickets'],
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OAT\PathParameter(name: 'ticket', description: 'Ticket ULID', schema: new OAT\Schema(type: 'string')),
+        ],
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Ticket reissued successfully',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(property: 'data', type: 'object', description: 'The newly issued replacement ticket (see GET /admin/tickets/{ticket} for shape)'),
+                            new OAT\Property(property: 'message', type: 'string'),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 403, description: 'Missing ticket.reissue permission'),
+            new OAT\Response(
+                response: 422,
+                description: 'Ticket is already voided and cannot be reissued, or is not linked to a registration',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(property: 'code', type: 'string', example: 'reissue_failed'),
+                            new OAT\Property(property: 'message', type: 'string'),
+                            new OAT\Property(property: 'request_id', type: 'string'),
+                        ]
+                    )
+                )
+            ),
+        ]
+    )]
     public function reissue(Request $request, Ticket $ticket, IssueTicket $action): JsonResponse
     {
+        abort_unless((bool) $request->user()?->can('ticket.reissue'), Response::HTTP_FORBIDDEN);
+
         try {
             $newTicket = DB::transaction(function () use ($request, $ticket, $action): Ticket {
                 if ($ticket->status === 'voided') {

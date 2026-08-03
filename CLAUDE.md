@@ -23,18 +23,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - All controller actions implemented (no stubs remaining)
 - Fake gateway drivers (FakeGateway, FakeSmsDriver, FakeEmailDriver, FakeWhatsAppDriver)
 - TOTP 2FA for staff (TwoFactorAuthenticationService + controller)
-- Comprehensive test coverage (83 tests passing, including domain logic tests)
+- Comprehensive test coverage (109 tests passing, including domain logic tests)
 
 ### ✅ Recent Wins
 - Fixed 2 failing concurrency tests - now all 83 tests passing (100% pass rate)
 - Atomic reservation and admission mechanisms verified working correctly
 - All Phase 2 core deliverables completed ahead of schedule
+- Closed a real RBAC gap: 14 admin endpoints (registrations, attendees, payments, tickets, ticket types, reports, settings) had no permission check at all — any authenticated staff member of any role could call them. Added the missing checks plus two permissions that didn't exist yet (`attendee.delete`, `ticket_type.delete`).
+- Added an end-to-end registration → payment → ticketing → admission test and a full permission-catalogue test (allow + deny case for every entry in `config/rbac.php`, plus HTTP round-trips against every enforced endpoint)
+- Documented all ~46 API endpoints with OpenAPI attributes (was 1/50) — spec now generates cleanly with full route coverage
+- 109 tests passing, Pint clean, PHPStan level 8 clean, `composer audit` clean
 
 ### 📋 Exit Criteria (from docs/08-development-roadmap.md)
-- [ ] Registration → payment → ticketing → admission flow works end-to-end in tests
+- [x] Registration → payment → ticketing → admission flow works end-to-end in tests
 - [x] Concurrency tests pass (300 purchases against 100 capacity, 20 concurrent scans)
-- [ ] Every permission has passing allow-case and deny-case tests
-- [ ] OpenAPI spec published and reviewed by frontend lead
+- [x] Every permission has passing allow-case and deny-case tests
+- [x] OpenAPI spec published (`public/docs/openapi.json`, regenerate via `php artisan app:generate-open-api-spec`) — **still needs review by the frontend lead**, which is a human sign-off step outside what this session can complete
 
 ### 🚨 External Dependencies (start during Phase 2!)
 - [ ] Payment gateway merchant applications (bKash, Nagad, Rocket, SSLCommerz) — **2-6 weeks lead time**

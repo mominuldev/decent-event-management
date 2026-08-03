@@ -12,12 +12,108 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Str;
+use OpenApi\Attributes as OAT;
 use Symfony\Component\HttpFoundation\Response;
 
+#[OAT\Tag(name: 'Registrations')]
 class RegistrationController extends Controller
 {
+    #[OAT\Get(
+        path: '/admin/registrations',
+        summary: 'List registrations with search and filters',
+        tags: ['Registrations'],
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OAT\Parameter(
+                name: 'search',
+                in: 'query',
+                description: 'Search by registration number, attendee full name, or attendee mobile',
+                schema: new OAT\Schema(type: 'string')
+            ),
+            new OAT\Parameter(
+                name: 'status',
+                in: 'query',
+                description: 'Filter by registration status',
+                schema: new OAT\Schema(type: 'string')
+            ),
+            new OAT\Parameter(
+                name: 'ticket_type_id',
+                in: 'query',
+                description: 'Filter by ticket type id',
+                schema: new OAT\Schema(type: 'string')
+            ),
+            new OAT\Parameter(
+                name: 'date_from',
+                in: 'query',
+                description: 'Filter by created_at on or after this date',
+                schema: new OAT\Schema(type: 'string', format: 'date')
+            ),
+            new OAT\Parameter(
+                name: 'date_to',
+                in: 'query',
+                description: 'Filter by created_at on or before this date',
+                schema: new OAT\Schema(type: 'string', format: 'date')
+            ),
+            new OAT\Parameter(
+                name: 'per_page',
+                in: 'query',
+                description: 'Results per page, capped at 100',
+                schema: new OAT\Schema(type: 'integer', default: 15)
+            ),
+        ],
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Paginated list of registrations',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(
+                                property: 'data',
+                                type: 'array',
+                                items: new OAT\Items(
+                                    properties: [
+                                        new OAT\Property(property: 'ulid', type: 'string'),
+                                        new OAT\Property(property: 'registration_number', type: 'string'),
+                                        new OAT\Property(property: 'status', type: 'string'),
+                                        new OAT\Property(property: 'participation_type', type: 'string'),
+                                        new OAT\Property(property: 'adults_count', type: 'integer'),
+                                        new OAT\Property(property: 'children_count', type: 'integer'),
+                                        new OAT\Property(property: 'subtotal_paisa', type: 'integer'),
+                                        new OAT\Property(property: 'discount_paisa', type: 'integer'),
+                                        new OAT\Property(property: 'total_paisa', type: 'integer'),
+                                        new OAT\Property(property: 'currency', type: 'string'),
+                                        new OAT\Property(property: 'discount_code', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'comments', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'special_notes', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'source', type: 'string'),
+                                        new OAT\Property(property: 'submitted_at', type: 'string', format: 'date-time', nullable: true),
+                                        new OAT\Property(property: 'confirmed_at', type: 'string', format: 'date-time', nullable: true),
+                                        new OAT\Property(property: 'cancelled_at', type: 'string', format: 'date-time', nullable: true),
+                                        new OAT\Property(property: 'created_at', type: 'string', format: 'date-time'),
+                                        new OAT\Property(property: 'attendee', type: 'object'),
+                                        new OAT\Property(property: 'ticket_type', type: 'object'),
+                                        new OAT\Property(property: 'guests', type: 'array', items: new OAT\Items(type: 'object')),
+                                        new OAT\Property(property: 'event_session', type: 'object'),
+                                    ],
+                                    type: 'object'
+                                )
+                            ),
+                            new OAT\Property(property: 'links', type: 'object'),
+                            new OAT\Property(property: 'meta', type: 'object'),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 401, description: 'Unauthenticated'),
+            new OAT\Response(response: 403, description: 'Missing registration.view_any permission'),
+        ]
+    )]
     public function index(Request $request): AnonymousResourceCollection
     {
+        abort_unless((bool) $request->user()?->can('registration.view_any'), Response::HTTP_FORBIDDEN);
+
         $query = Registration::query()->with(['attendee', 'guests', 'ticketType', 'payments']);
 
         if ($request->filled('search')) {
@@ -52,8 +148,69 @@ class RegistrationController extends Controller
         return RegistrationResource::collection($query->paginate($perPage));
     }
 
-    public function show(Registration $registration): RegistrationResource
+    #[OAT\Get(
+        path: '/admin/registrations/{registration}',
+        summary: 'Get a single registration',
+        tags: ['Registrations'],
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OAT\Parameter(
+                name: 'registration',
+                in: 'path',
+                required: true,
+                description: 'Registration ULID',
+                schema: new OAT\Schema(type: 'string')
+            ),
+        ],
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Registration detail',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(
+                                property: 'data',
+                                properties: [
+                                    new OAT\Property(property: 'ulid', type: 'string'),
+                                    new OAT\Property(property: 'registration_number', type: 'string'),
+                                    new OAT\Property(property: 'status', type: 'string'),
+                                    new OAT\Property(property: 'participation_type', type: 'string'),
+                                    new OAT\Property(property: 'adults_count', type: 'integer'),
+                                    new OAT\Property(property: 'children_count', type: 'integer'),
+                                    new OAT\Property(property: 'subtotal_paisa', type: 'integer'),
+                                    new OAT\Property(property: 'discount_paisa', type: 'integer'),
+                                    new OAT\Property(property: 'total_paisa', type: 'integer'),
+                                    new OAT\Property(property: 'currency', type: 'string'),
+                                    new OAT\Property(property: 'discount_code', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'comments', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'special_notes', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'source', type: 'string'),
+                                    new OAT\Property(property: 'submitted_at', type: 'string', format: 'date-time', nullable: true),
+                                    new OAT\Property(property: 'confirmed_at', type: 'string', format: 'date-time', nullable: true),
+                                    new OAT\Property(property: 'cancelled_at', type: 'string', format: 'date-time', nullable: true),
+                                    new OAT\Property(property: 'created_at', type: 'string', format: 'date-time'),
+                                    new OAT\Property(property: 'attendee', type: 'object'),
+                                    new OAT\Property(property: 'ticket_type', type: 'object'),
+                                    new OAT\Property(property: 'guests', type: 'array', items: new OAT\Items(type: 'object')),
+                                    new OAT\Property(property: 'event_session', type: 'object'),
+                                ],
+                                type: 'object'
+                            ),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 401, description: 'Unauthenticated'),
+            new OAT\Response(response: 403, description: 'Missing registration.view permission'),
+            new OAT\Response(response: 404, description: 'Registration not found'),
+        ]
+    )]
+    public function show(Request $request, Registration $registration): RegistrationResource
     {
+        abort_unless((bool) $request->user()?->can('registration.view'), Response::HTTP_FORBIDDEN);
+
         $registration->load([
             'attendee',
             'guests',
@@ -65,6 +222,67 @@ class RegistrationController extends Controller
         return new RegistrationResource($registration);
     }
 
+    #[OAT\Patch(
+        path: '/admin/registrations/{registration}',
+        summary: 'Update a registration (status, comments, notes)',
+        tags: ['Registrations'],
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OAT\Parameter(
+                name: 'registration',
+                in: 'path',
+                required: true,
+                description: 'Registration ULID',
+                schema: new OAT\Schema(type: 'string')
+            ),
+        ],
+        requestBody: new OAT\RequestBody(
+            required: false,
+            content: new OAT\MediaType(
+                mediaType: 'application/json',
+                schema: new OAT\Schema(
+                    properties: [
+                        new OAT\Property(
+                            property: 'status',
+                            type: 'string',
+                            enum: ['draft', 'pending_payment', 'pending_approval', 'approved', 'rejected', 'cancelled'],
+                            description: 'New registration status, applied via the state machine'
+                        ),
+                        new OAT\Property(property: 'comments', type: 'string', nullable: true, maxLength: 1000),
+                        new OAT\Property(property: 'special_notes', type: 'string', nullable: true, maxLength: 1000),
+                    ]
+                )
+            )
+        ),
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Registration updated',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(
+                                property: 'data',
+                                properties: [
+                                    new OAT\Property(property: 'ulid', type: 'string'),
+                                    new OAT\Property(property: 'registration_number', type: 'string'),
+                                    new OAT\Property(property: 'status', type: 'string'),
+                                    new OAT\Property(property: 'comments', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'special_notes', type: 'string', nullable: true),
+                                ],
+                                type: 'object'
+                            ),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 401, description: 'Unauthenticated'),
+            new OAT\Response(response: 403, description: 'Missing registration.update permission'),
+            new OAT\Response(response: 404, description: 'Registration not found'),
+            new OAT\Response(response: 422, description: 'Validation error, or the requested status transition is not permitted'),
+        ]
+    )]
     public function update(UpdateRegistrationRequest $request, Registration $registration): RegistrationResource
     {
         $oldData = $registration->toArray();
@@ -98,8 +316,44 @@ class RegistrationController extends Controller
         return new RegistrationResource($registration->refresh());
     }
 
+    #[OAT\Delete(
+        path: '/admin/registrations/{registration}',
+        summary: 'Delete a registration (only when not paid/confirmed)',
+        tags: ['Registrations'],
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OAT\Parameter(
+                name: 'registration',
+                in: 'path',
+                required: true,
+                description: 'Registration ULID',
+                schema: new OAT\Schema(type: 'string')
+            ),
+        ],
+        responses: [
+            new OAT\Response(response: 204, description: 'Registration deleted'),
+            new OAT\Response(response: 401, description: 'Unauthenticated'),
+            new OAT\Response(response: 403, description: 'Missing registration.delete permission'),
+            new OAT\Response(response: 404, description: 'Registration not found'),
+            new OAT\Response(
+                response: 422,
+                description: 'Registration is paid or confirmed and cannot be deleted',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(property: 'code', type: 'string', example: 'deletion_prevented'),
+                            new OAT\Property(property: 'message', type: 'string'),
+                        ]
+                    )
+                )
+            ),
+        ]
+    )]
     public function destroy(Request $request, Registration $registration): JsonResponse|Response
     {
+        abort_unless((bool) $request->user()?->can('registration.delete'), Response::HTTP_FORBIDDEN);
+
         if (in_array($registration->status, ['paid', 'confirmed'], true)) {
             return response()->json([
                 'code' => 'deletion_prevented',
@@ -115,8 +369,8 @@ class RegistrationController extends Controller
             'log_name' => 'registration',
             'event' => 'deleted',
             'description' => 'Registration soft deleted',
-            'causer_type' => $request->user()?->getMorphClass(),
-            'causer_id' => $request->user()?->id,
+            'causer_type' => $request->user()->getMorphClass(),
+            'causer_id' => $request->user()->id,
             'subject_type' => $registration->getMorphClass(),
             'subject_id' => $registration->id,
             'properties' => ['registration_ulid' => $registration->ulid],

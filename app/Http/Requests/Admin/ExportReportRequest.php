@@ -9,7 +9,9 @@ class ExportReportRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true; // Checked in controller per report
+        // The permission depends on the requested format (report.export_pdf/excel/csv),
+        // so it's enforced in ReportController::export() after validation resolves `format`.
+        return true;
     }
 
     /**

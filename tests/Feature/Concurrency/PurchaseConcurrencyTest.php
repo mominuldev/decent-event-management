@@ -9,8 +9,6 @@ use App\Domain\Ticketing\Models\Ticket;
 use App\Domain\Ticketing\Models\TicketType;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\WithFaker;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 

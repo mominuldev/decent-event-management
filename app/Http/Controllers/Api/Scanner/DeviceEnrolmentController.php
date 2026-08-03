@@ -13,6 +13,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use OpenApi\Attributes as OAT;
 
 /**
  * Exchanges a one-time enrolment token (minted by an Event Manager via
@@ -20,8 +21,65 @@ use Illuminate\Validation\ValidationException;
  * for a device-bound Sanctum token. Binds the token to hardware so a
  * leaked token cannot be used from an arbitrary machine — docs/03 §3.20.
  */
+#[OAT\Tag(name: 'Scanner')]
 class DeviceEnrolmentController extends Controller
 {
+    #[OAT\Post(
+        path: '/scanner/v1/enrol',
+        summary: 'Exchange a one-time enrolment token for a device-bound scanner token',
+        tags: ['Scanner'],
+        requestBody: new OAT\RequestBody(
+            required: true,
+            content: new OAT\MediaType(
+                mediaType: 'application/json',
+                schema: new OAT\Schema(
+                    properties: [
+                        new OAT\Property(
+                            property: 'enrolment_token',
+                            type: 'string',
+                            description: 'One-time token minted by an Event Manager via the admin enrolment-token endpoint',
+                            required: ['enrolment_token']
+                        ),
+                        new OAT\Property(property: 'device_fingerprint', type: 'string', maxLength: 190, required: ['device_fingerprint']),
+                        new OAT\Property(property: 'device_name', type: 'string', maxLength: 100, required: ['device_name']),
+                        new OAT\Property(property: 'device_code', type: 'string', maxLength: 16, required: ['device_code']),
+                        new OAT\Property(property: 'platform', type: 'string', enum: ['android', 'ios'], required: ['platform']),
+                        new OAT\Property(
+                            property: 'pin',
+                            type: 'string',
+                            pattern: '^[0-9]{6}$',
+                            description: '6-digit PIN; sets the PIN on first enrolment for this volunteer, verified against the stored hash on re-enrolment',
+                            required: ['pin']
+                        ),
+                    ]
+                )
+            )
+        ),
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Device enrolled and scanner-guard token issued',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(property: 'token', type: 'string', description: 'Scanner-guard bearer token'),
+                            new OAT\Property(property: 'expires_at', type: 'string', format: 'date-time', description: 'Bounded by the check-in window end'),
+                            new OAT\Property(
+                                property: 'device',
+                                type: 'object',
+                                properties: [
+                                    new OAT\Property(property: 'ulid', type: 'string'),
+                                    new OAT\Property(property: 'code', type: 'string'),
+                                ]
+                            ),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 422, description: 'Invalid/expired enrolment token, revoked volunteer, or incorrect PIN'),
+        ]
+    )]
     public function enrol(Request $request): JsonResponse
     {
         $request->validate([

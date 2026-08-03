@@ -9,13 +9,40 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use OpenApi\Attributes as OAT;
 
+#[OAT\Tag(name: 'Two-Factor')]
 class TwoFactorController extends Controller
 {
     private const int SESSION_HOURS = 8;
 
     public function __construct(private readonly TwoFactorAuthenticationService $twoFactor) {}
 
+    #[OAT\Post(
+        path: '/admin/auth/2fa/setup',
+        summary: 'Generate a new TOTP secret and QR code for the authenticated staff member',
+        description: 'Self-service: acts on the caller\'s own account only, no RBAC permission '.
+            'check beyond authentication. Available to a token holding either the `admin` or '.
+            'the setup-only `2fa-setup` ability.',
+        security: [['bearerAuth' => []]],
+        tags: ['Two-Factor'],
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'TOTP secret generated',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(property: 'secret', type: 'string', description: 'TOTP secret key'),
+                            new OAT\Property(property: 'qr_code_svg', type: 'string', description: 'QR code as inline SVG markup'),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 409, description: '2FA is already enabled — disable it first to reconfigure'),
+        ]
+    )]
     public function setup(Request $request): JsonResponse
     {
         /** @var User $user */
@@ -35,6 +62,53 @@ class TwoFactorController extends Controller
         ]);
     }
 
+    #[OAT\Post(
+        path: '/admin/auth/2fa/confirm',
+        summary: 'Confirm 2FA setup with a TOTP code and activate it',
+        description: 'Self-service: acts on the caller\'s own account only, no RBAC permission '.
+            'check beyond authentication. Requires a prior call to /admin/auth/2fa/setup. On '.
+            'success, revokes the setup-only token and issues a full `admin`-ability token.',
+        security: [['bearerAuth' => []]],
+        tags: ['Two-Factor'],
+        requestBody: new OAT\RequestBody(
+            required: true,
+            content: new OAT\MediaType(
+                mediaType: 'application/json',
+                schema: new OAT\Schema(
+                    properties: [
+                        new OAT\Property(
+                            property: 'code',
+                            type: 'string',
+                            description: '6-digit TOTP code',
+                            required: ['code']
+                        ),
+                    ]
+                )
+            )
+        ),
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: '2FA enabled; a new full-access token is issued',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(property: 'message', type: 'string'),
+                            new OAT\Property(
+                                property: 'recovery_codes',
+                                type: 'array',
+                                items: new OAT\Items(type: 'string')
+                            ),
+                            new OAT\Property(property: 'token', type: 'string', description: 'New full-access API bearer token'),
+                            new OAT\Property(property: 'expires_at', type: 'string', format: 'date-time'),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 422, description: 'Missing/invalid code, or setup was never called'),
+        ]
+    )]
     public function confirm(Request $request): JsonResponse
     {
         $request->validate(['code' => ['required', 'digits:6']]);
@@ -69,6 +143,46 @@ class TwoFactorController extends Controller
         ]);
     }
 
+    #[OAT\Post(
+        path: '/admin/auth/2fa/disable',
+        summary: 'Disable 2FA for the authenticated staff member',
+        description: 'Self-service: acts on the caller\'s own account only, no RBAC permission '.
+            'check beyond authentication. Requires the caller to re-enter their password. '.
+            'Only reachable with a full `admin`-ability token, i.e. 2FA must already be confirmed.',
+        security: [['bearerAuth' => []]],
+        tags: ['Two-Factor'],
+        requestBody: new OAT\RequestBody(
+            required: true,
+            content: new OAT\MediaType(
+                mediaType: 'application/json',
+                schema: new OAT\Schema(
+                    properties: [
+                        new OAT\Property(
+                            property: 'password',
+                            type: 'string',
+                            format: 'password',
+                            required: ['password']
+                        ),
+                    ]
+                )
+            )
+        ),
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: '2FA disabled',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(property: 'message', type: 'string'),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 422, description: 'Missing or incorrect password'),
+        ]
+    )]
     public function disable(Request $request): JsonResponse
     {
         $request->validate(['password' => ['required', 'string']]);

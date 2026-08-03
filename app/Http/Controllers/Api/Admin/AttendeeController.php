@@ -12,12 +12,98 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Str;
+use OpenApi\Attributes as OAT;
 use Symfony\Component\HttpFoundation\Response;
 
+#[OAT\Tag(name: 'Attendees')]
 class AttendeeController extends Controller
 {
+    #[OAT\Get(
+        path: '/admin/attendees',
+        summary: 'List attendees with search and filters',
+        tags: ['Attendees'],
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OAT\Parameter(
+                name: 'search',
+                in: 'query',
+                description: 'Search by full name, mobile, or email',
+                schema: new OAT\Schema(type: 'string')
+            ),
+            new OAT\Parameter(
+                name: 'participant_type',
+                in: 'query',
+                description: 'Filter by participant type',
+                schema: new OAT\Schema(type: 'string', enum: ['current_student', 'former_student', 'teacher', 'staff', 'guardian', 'other'])
+            ),
+            new OAT\Parameter(
+                name: 'ssc_batch_year',
+                in: 'query',
+                description: 'Filter by SSC batch year',
+                schema: new OAT\Schema(type: 'integer')
+            ),
+            new OAT\Parameter(
+                name: 'per_page',
+                in: 'query',
+                description: 'Results per page, capped at 100',
+                schema: new OAT\Schema(type: 'integer', default: 15)
+            ),
+        ],
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Paginated list of attendees',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(
+                                property: 'data',
+                                type: 'array',
+                                items: new OAT\Items(
+                                    properties: [
+                                        new OAT\Property(property: 'ulid', type: 'string'),
+                                        new OAT\Property(property: 'full_name', type: 'string'),
+                                        new OAT\Property(property: 'full_name_bn', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'mobile', type: 'string'),
+                                        new OAT\Property(property: 'email', type: 'string', format: 'email', nullable: true),
+                                        new OAT\Property(property: 'gender', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'date_of_birth', type: 'string', format: 'date-time', nullable: true),
+                                        new OAT\Property(property: 'occupation', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'designation', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'organization', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'participant_type', type: 'string'),
+                                        new OAT\Property(property: 'ssc_batch_year', type: 'integer', nullable: true),
+                                        new OAT\Property(property: 'current_class', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'tshirt_required', type: 'boolean'),
+                                        new OAT\Property(property: 'tshirt_size', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'address_district', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'country', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'blood_group', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'emergency_contact_name', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'emergency_contact_phone', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'notes', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'is_verified', type: 'boolean'),
+                                        new OAT\Property(property: 'profile_photo_url', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'created_at', type: 'string', format: 'date-time'),
+                                    ],
+                                    type: 'object'
+                                )
+                            ),
+                            new OAT\Property(property: 'links', type: 'object'),
+                            new OAT\Property(property: 'meta', type: 'object'),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 401, description: 'Unauthenticated'),
+            new OAT\Response(response: 403, description: 'Missing attendee.view_any permission'),
+        ]
+    )]
     public function index(Request $request): AnonymousResourceCollection
     {
+        abort_unless((bool) $request->user()?->can('attendee.view_any'), Response::HTTP_FORBIDDEN);
+
         $query = Attendee::query()->with(['profilePhoto']);
 
         if ($request->filled('search')) {
@@ -42,8 +128,71 @@ class AttendeeController extends Controller
         return AttendeeResource::collection($query->paginate($perPage));
     }
 
-    public function show(Attendee $attendee): AttendeeResource
+    #[OAT\Get(
+        path: '/admin/attendees/{attendee}',
+        summary: 'Get a single attendee',
+        tags: ['Attendees'],
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OAT\Parameter(
+                name: 'attendee',
+                in: 'path',
+                required: true,
+                description: 'Attendee ULID',
+                schema: new OAT\Schema(type: 'string')
+            ),
+        ],
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Attendee detail, including registrations',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(
+                                property: 'data',
+                                properties: [
+                                    new OAT\Property(property: 'ulid', type: 'string'),
+                                    new OAT\Property(property: 'full_name', type: 'string'),
+                                    new OAT\Property(property: 'full_name_bn', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'mobile', type: 'string'),
+                                    new OAT\Property(property: 'email', type: 'string', format: 'email', nullable: true),
+                                    new OAT\Property(property: 'gender', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'date_of_birth', type: 'string', format: 'date-time', nullable: true),
+                                    new OAT\Property(property: 'occupation', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'designation', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'organization', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'participant_type', type: 'string'),
+                                    new OAT\Property(property: 'ssc_batch_year', type: 'integer', nullable: true),
+                                    new OAT\Property(property: 'current_class', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'tshirt_required', type: 'boolean'),
+                                    new OAT\Property(property: 'tshirt_size', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'address_district', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'country', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'blood_group', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'emergency_contact_name', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'emergency_contact_phone', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'notes', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'is_verified', type: 'boolean'),
+                                    new OAT\Property(property: 'profile_photo_url', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'created_at', type: 'string', format: 'date-time'),
+                                ],
+                                type: 'object'
+                            ),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 401, description: 'Unauthenticated'),
+            new OAT\Response(response: 403, description: 'Missing attendee.view permission'),
+            new OAT\Response(response: 404, description: 'Attendee not found'),
+        ]
+    )]
+    public function show(Request $request, Attendee $attendee): AttendeeResource
     {
+        abort_unless((bool) $request->user()?->can('attendee.view'), Response::HTTP_FORBIDDEN);
+
         $attendee->load([
             'profilePhoto',
             'registrations.ticketType',
@@ -54,6 +203,72 @@ class AttendeeController extends Controller
         return new AttendeeResource($attendee);
     }
 
+    #[OAT\Patch(
+        path: '/admin/attendees/{attendee}',
+        summary: 'Update an attendee record',
+        tags: ['Attendees'],
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OAT\Parameter(
+                name: 'attendee',
+                in: 'path',
+                required: true,
+                description: 'Attendee ULID',
+                schema: new OAT\Schema(type: 'string')
+            ),
+        ],
+        requestBody: new OAT\RequestBody(
+            required: false,
+            content: new OAT\MediaType(
+                mediaType: 'application/json',
+                schema: new OAT\Schema(
+                    properties: [
+                        new OAT\Property(property: 'full_name', type: 'string', maxLength: 200),
+                        new OAT\Property(property: 'full_name_bn', type: 'string', nullable: true, maxLength: 200),
+                        new OAT\Property(property: 'mobile', type: 'string', maxLength: 20),
+                        new OAT\Property(property: 'email', type: 'string', format: 'email', nullable: true, maxLength: 254),
+                        new OAT\Property(
+                            property: 'participant_type',
+                            type: 'string',
+                            enum: ['current_student', 'former_student', 'teacher', 'staff', 'guardian', 'other']
+                        ),
+                        new OAT\Property(property: 'ssc_batch_year', type: 'integer', nullable: true),
+                        new OAT\Property(property: 'is_verified', type: 'boolean'),
+                        new OAT\Property(property: 'notes', type: 'string', nullable: true, maxLength: 1000),
+                    ]
+                )
+            )
+        ),
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Attendee updated',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(
+                                property: 'data',
+                                properties: [
+                                    new OAT\Property(property: 'ulid', type: 'string'),
+                                    new OAT\Property(property: 'full_name', type: 'string'),
+                                    new OAT\Property(property: 'mobile', type: 'string'),
+                                    new OAT\Property(property: 'email', type: 'string', format: 'email', nullable: true),
+                                    new OAT\Property(property: 'participant_type', type: 'string'),
+                                    new OAT\Property(property: 'is_verified', type: 'boolean'),
+                                ],
+                                type: 'object'
+                            ),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 401, description: 'Unauthenticated'),
+            new OAT\Response(response: 403, description: 'Missing attendee.update permission'),
+            new OAT\Response(response: 404, description: 'Attendee not found'),
+            new OAT\Response(response: 422, description: 'Validation error'),
+        ]
+    )]
     public function update(UpdateAttendeeRequest $request, Attendee $attendee): AttendeeResource
     {
         $oldData = $attendee->toArray();
@@ -75,8 +290,44 @@ class AttendeeController extends Controller
         return new AttendeeResource($attendee->refresh());
     }
 
+    #[OAT\Delete(
+        path: '/admin/attendees/{attendee}',
+        summary: 'Delete an attendee (only when no active registrations or issued tickets)',
+        tags: ['Attendees'],
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OAT\Parameter(
+                name: 'attendee',
+                in: 'path',
+                required: true,
+                description: 'Attendee ULID',
+                schema: new OAT\Schema(type: 'string')
+            ),
+        ],
+        responses: [
+            new OAT\Response(response: 204, description: 'Attendee deleted'),
+            new OAT\Response(response: 401, description: 'Unauthenticated'),
+            new OAT\Response(response: 403, description: 'Missing attendee.delete permission'),
+            new OAT\Response(response: 404, description: 'Attendee not found'),
+            new OAT\Response(
+                response: 422,
+                description: 'Attendee has active/paid registrations or issued tickets and cannot be deleted',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(property: 'code', type: 'string', example: 'deletion_prevented'),
+                            new OAT\Property(property: 'message', type: 'string'),
+                        ]
+                    )
+                )
+            ),
+        ]
+    )]
     public function destroy(Request $request, Attendee $attendee): JsonResponse|Response
     {
+        abort_unless((bool) $request->user()?->can('attendee.delete'), Response::HTTP_FORBIDDEN);
+
         $hasActiveRegistrations = $attendee->registrations()
             ->whereIn('status', ['paid', 'confirmed'])
             ->exists();
@@ -98,8 +349,8 @@ class AttendeeController extends Controller
             'log_name' => 'attendee',
             'event' => 'deleted',
             'description' => 'Attendee soft deleted',
-            'causer_type' => $request->user()?->getMorphClass(),
-            'causer_id' => $request->user()?->id,
+            'causer_type' => $request->user()->getMorphClass(),
+            'causer_id' => $request->user()->id,
             'subject_type' => $attendee->getMorphClass(),
             'subject_id' => $attendee->id,
             'properties' => ['attendee_ulid' => $attendee->ulid],

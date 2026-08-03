@@ -25,6 +25,7 @@ return [
         'attendee.view_any',
         'attendee.view',
         'attendee.update',
+        'attendee.delete',
         'attendee.merge_duplicates',
         'attendee.view_contact_details',
         'guest.manage',
@@ -40,6 +41,7 @@ return [
         'ticket_type.view_any',
         'ticket_type.manage',
         'ticket_type.set_price',
+        'ticket_type.delete',
 
         // Payments
         'payment.view_any',

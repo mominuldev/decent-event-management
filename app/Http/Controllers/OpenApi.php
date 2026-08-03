@@ -45,6 +45,45 @@ use OpenApi\Attributes as OAT;
     name: 'Settings',
     description: 'System configuration'
 )]
+#[OAT\Tag(
+    name: 'Ticket Types',
+    description: 'Ticket type / capacity / pricing management'
+)]
+#[OAT\Tag(
+    name: 'Attendees',
+    description: 'Attendee record management (admin)'
+)]
+#[OAT\Tag(
+    name: 'Volunteers',
+    description: 'Volunteer and device enrolment management'
+)]
+#[OAT\Tag(
+    name: 'Two-Factor',
+    description: 'Staff TOTP two-factor authentication'
+)]
+#[OAT\Tag(
+    name: 'Public',
+    description: 'Unauthenticated browse and registration endpoints'
+)]
+#[OAT\Tag(
+    name: 'Attendee Self-Service',
+    description: 'Authenticated attendee profile, registration, and ticket endpoints'
+)]
+#[OAT\Tag(
+    name: 'Scanner',
+    description: 'Volunteer scanner device enrolment, manifest sync, and offline scan upload'
+)]
+#[OAT\Tag(
+    name: 'Webhooks',
+    description: 'Server-to-server payment gateway callbacks'
+)]
+#[OAT\SecurityScheme(
+    securityScheme: 'bearerAuth',
+    type: 'http',
+    scheme: 'bearer',
+    bearerFormat: 'Sanctum personal access token',
+    description: 'Token issued by the relevant login endpoint. Admin, attendee, and scanner guards each mint tokens scoped to that guard and cannot be used interchangeably.'
+)]
 class OpenApi
 {
     // This class exists only to hold OpenAPI documentation attributes

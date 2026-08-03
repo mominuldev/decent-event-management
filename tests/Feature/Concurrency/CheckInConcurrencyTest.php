@@ -9,7 +9,6 @@ use App\Domain\Ticketing\Models\Ticket;
 use App\Domain\Ticketing\Models\TicketType;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\WithFaker;
-use Illuminate\Support\Facades\Process;
 use Tests\TestCase;
 
 /**
@@ -53,6 +52,8 @@ class CheckInConcurrencyTest extends TestCase
             'ticket_type_id' => $ticketType->id,
             'ticket_number' => 'CONCUR-TEST-'.bin2hex(random_bytes(8)),
             'status' => 'issued',
+            'admits_total' => 1,
+            'admitted_count' => 0,
         ]);
 
         $this->ticketNumber = $ticket->ticket_number;
