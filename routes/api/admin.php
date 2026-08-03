@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\Admin\AttendeeController;
+use App\Http\Controllers\Api\Admin\CheckInController;
+use App\Http\Controllers\Api\Admin\GateController;
 use App\Http\Controllers\Api\Admin\PaymentController;
 use App\Http\Controllers\Api\Admin\RegistrationController;
 use App\Http\Controllers\Api\Admin\ReportController;
@@ -30,3 +32,13 @@ Route::patch('settings/{key}', [SettingController::class, 'update'])->name('sett
 
 Route::post('volunteers/{volunteer:ulid}/enrolment-token', [VolunteerController::class, 'issueEnrolmentToken'])
     ->name('volunteers.enrolment-token');
+
+Route::apiResource('gates', GateController::class);
+
+// live-dashboard and manual-override must be registered before the
+// apiResource below, or its {check_in} show route greedily matches them
+// first and 404s on the failed ULID lookup.
+Route::get('check-ins/live-dashboard', [CheckInController::class, 'liveDashboard'])->name('check-ins.live-dashboard');
+Route::post('check-ins/manual-override', [CheckInController::class, 'manualOverride'])->name('check-ins.manual-override');
+Route::apiResource('check-ins', CheckInController::class)->only(['index', 'show']);
+Route::post('check-ins/{check_in:ulid}/resolve-conflict', [CheckInController::class, 'resolveConflict'])->name('check-ins.resolve-conflict');

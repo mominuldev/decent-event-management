@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Rbac;
 
+use App\Domain\CheckIn\Models\CheckIn;
+use App\Domain\CheckIn\Models\Gate;
 use App\Domain\CheckIn\Models\VolunteerProfile;
 use App\Domain\Payment\Models\Payment;
 use App\Domain\Registration\Models\Attendee;
@@ -349,5 +351,127 @@ class ComprehensivePermissionTest extends TestCase
         Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
         $this->postJson(route('api.v1.admin.volunteers.enrolment-token', ['volunteer' => $volunteerProfile->ulid]))
             ->assertStatus(200);
+    }
+
+    public function test_gate_view_any_http(): void
+    {
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.gates.index'))->assertStatus(200);
+
+        Sanctum::actingAs($this->volunteer, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.gates.index'))->assertStatus(403);
+    }
+
+    public function test_gate_view_http(): void
+    {
+        $gate = Gate::factory()->create();
+
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.gates.show', ['gate' => $gate->ulid]))->assertStatus(200);
+
+        Sanctum::actingAs($this->volunteer, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.gates.show', ['gate' => $gate->ulid]))->assertStatus(403);
+    }
+
+    public function test_gate_manage_http(): void
+    {
+        // gate.manage is Super-Admin-only, mirroring ticket_type.manage —
+        // Event Manager can view gates but not create/edit them.
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->postJson(route('api.v1.admin.gates.store'), [
+            'code' => 'PERM-TEST',
+            'name' => 'Permission Test Gate',
+        ])->assertStatus(403);
+
+        Sanctum::actingAs($this->superAdmin, ['*'], 'web-admin');
+        $this->postJson(route('api.v1.admin.gates.store'), [
+            'code' => 'PERM-TEST',
+            'name' => 'Permission Test Gate',
+        ])->assertStatus(201);
+
+        $gate = Gate::factory()->create();
+
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->patchJson(route('api.v1.admin.gates.update', ['gate' => $gate->ulid]), [
+            'name' => 'Renamed',
+        ])->assertStatus(403);
+    }
+
+    public function test_gate_delete_http(): void
+    {
+        $forSuperAdmin = Gate::factory()->create();
+        Sanctum::actingAs($this->superAdmin, ['*'], 'web-admin');
+        $this->deleteJson(route('api.v1.admin.gates.destroy', ['gate' => $forSuperAdmin->ulid]))->assertStatus(204);
+
+        $forEventManager = Gate::factory()->create();
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->deleteJson(route('api.v1.admin.gates.destroy', ['gate' => $forEventManager->ulid]))->assertStatus(403);
+    }
+
+    public function test_checkin_view_any_http(): void
+    {
+        // Volunteers already hold checkin.view_any (pre-existing grant, for
+        // their own scanner-side sync/manifest use) so they are not the
+        // deny-case here — use noRoleUser instead.
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.check-ins.index'))->assertStatus(200);
+
+        Sanctum::actingAs($this->noRoleUser, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.check-ins.index'))->assertStatus(403);
+    }
+
+    public function test_checkin_view_http(): void
+    {
+        $checkIn = CheckIn::factory()->create();
+
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.check-ins.show', ['check_in' => $checkIn->ulid]))->assertStatus(200);
+
+        Sanctum::actingAs($this->volunteer, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.check-ins.show', ['check_in' => $checkIn->ulid]))->assertStatus(403);
+    }
+
+    public function test_checkin_manual_override_http(): void
+    {
+        $gate = Gate::factory()->create();
+        $ticket = Ticket::factory()->create();
+
+        Sanctum::actingAs($this->volunteer, ['*'], 'web-admin');
+        $this->postJson(route('api.v1.admin.check-ins.manual-override'), [
+            'ticket_ulid' => $ticket->ulid,
+            'gate_ulid' => $gate->ulid,
+            'party_size' => 1,
+            'reason' => 'Permission test',
+        ])->assertStatus(403);
+
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->postJson(route('api.v1.admin.check-ins.manual-override'), [
+            'ticket_ulid' => $ticket->ulid,
+            'gate_ulid' => $gate->ulid,
+            'party_size' => 1,
+            'reason' => 'Permission test',
+        ])->assertStatus(201);
+    }
+
+    public function test_checkin_resolve_conflict_http(): void
+    {
+        $checkIn = CheckIn::factory()->create(['conflict_flag' => true, 'conflict_resolved_at' => null]);
+
+        Sanctum::actingAs($this->volunteer, ['*'], 'web-admin');
+        $this->postJson(route('api.v1.admin.check-ins.resolve-conflict', ['check_in' => $checkIn->ulid]))
+            ->assertStatus(403);
+
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->postJson(route('api.v1.admin.check-ins.resolve-conflict', ['check_in' => $checkIn->ulid]))
+            ->assertStatus(200);
+    }
+
+    public function test_checkin_view_live_dashboard_http(): void
+    {
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.check-ins.live-dashboard'))->assertStatus(200);
+
+        Sanctum::actingAs($this->noRoleUser, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.check-ins.live-dashboard'))->assertStatus(403);
     }
 }

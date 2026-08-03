@@ -709,6 +709,662 @@
                 ]
             }
         },
+        "/admin/check-ins": {
+            "get": {
+                "tags": [
+                    "Check-ins"
+                ],
+                "summary": "List check-ins (the gate scan/dispute log) with filters",
+                "operationId": "d914b2f0bee4f49ba07332193f27f4ae",
+                "parameters": [
+                    {
+                        "name": "gate_ulid",
+                        "in": "query",
+                        "description": "Filter by gate ULID",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "event_session_ulid",
+                        "in": "query",
+                        "description": "Filter by event session ULID",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "ticket_ulid",
+                        "in": "query",
+                        "description": "Filter by ticket ULID",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "result",
+                        "in": "query",
+                        "description": "Filter by scan result",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "date_from",
+                        "in": "query",
+                        "description": "Filter by scanned_at on or after this date",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "date_to",
+                        "in": "query",
+                        "description": "Filter by scanned_at on or before this date",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "Results per page, capped at 100",
+                        "schema": {
+                            "type": "integer",
+                            "default": 15
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated list of check-ins"
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Missing checkin.view_any permission"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/check-ins/{check_in}": {
+            "get": {
+                "tags": [
+                    "Check-ins"
+                ],
+                "summary": "Get a single check-in, including override and conflict-resolution detail",
+                "operationId": "90a68b00b3e7c12f4e88d4cf53a2f1b5",
+                "parameters": [
+                    {
+                        "name": "check_in",
+                        "in": "path",
+                        "description": "Check-in ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Check-in detail"
+                    },
+                    "403": {
+                        "description": "Missing checkin.view permission"
+                    },
+                    "404": {
+                        "description": "Check-in not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/check-ins/manual-override": {
+            "post": {
+                "tags": [
+                    "Check-ins"
+                ],
+                "summary": "Manually admit a ticket whose QR will not scan",
+                "description": "The single highest-abuse-risk action at the gate (docs/02 §2.4) — deliberately excludes Volunteers, always requires a reason, and is always logged to activity_logs.",
+                "operationId": "aaef4c4d37567f9150b6988da53e5e2d",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "ticket_ulid": {
+                                        "required": [
+                                            "ticket_ulid"
+                                        ],
+                                        "type": "string"
+                                    },
+                                    "gate_ulid": {
+                                        "required": [
+                                            "gate_ulid"
+                                        ],
+                                        "type": "string"
+                                    },
+                                    "party_size": {
+                                        "required": [
+                                            "party_size"
+                                        ],
+                                        "type": "integer",
+                                        "maximum": 20,
+                                        "minimum": 1
+                                    },
+                                    "reason": {
+                                        "required": [
+                                            "reason"
+                                        ],
+                                        "type": "string",
+                                        "maxLength": 255
+                                    },
+                                    "client_scan_uuid": {
+                                        "description": "Generated server-side if omitted",
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Check-in recorded"
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Missing checkin.manual_override permission"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/check-ins/{check_in}/resolve-conflict": {
+            "post": {
+                "tags": [
+                    "Check-ins"
+                ],
+                "summary": "Mark a flagged check-in conflict as resolved",
+                "description": "Nothing in this codebase sets conflict_flag=true yet (offline-sync conflict detection is unbuilt), so this will 422 against every real check-in today. Shipped now so the SPA surface and permission are ready once conflict detection lands.",
+                "operationId": "3d83789729320bf8d7afa9c433fef7c0",
+                "parameters": [
+                    {
+                        "name": "check_in",
+                        "in": "path",
+                        "description": "Check-in ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "note": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 500
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Conflict marked resolved"
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Missing checkin.resolve_conflict permission"
+                    },
+                    "404": {
+                        "description": "Check-in not found"
+                    },
+                    "422": {
+                        "description": "Check-in has no unresolved conflict",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "string",
+                                            "example": "no_conflict_to_resolve"
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/check-ins/live-dashboard": {
+            "get": {
+                "tags": [
+                    "Check-ins"
+                ],
+                "summary": "Live per-gate admission counts and recent scans",
+                "description": "Super Admin and Event Manager see every gate; a Volunteer sees only gates assigned to them via volunteer_gate_assignments (docs/02 §2.4).",
+                "operationId": "5b66450025b266260dbfa0d4476b80ff",
+                "responses": {
+                    "200": {
+                        "description": "Per-gate live counts plus the 10 most recent check-ins",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "gates": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        },
+                                        "recent_check_ins": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Missing checkin.view_live_dashboard permission"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/gates": {
+            "get": {
+                "tags": [
+                    "Gates"
+                ],
+                "summary": "List gates",
+                "operationId": "cd9cfad31ea566241cffad1207899d99",
+                "parameters": [
+                    {
+                        "name": "event_session_ulid",
+                        "in": "query",
+                        "description": "Filter by event session ULID",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "is_active",
+                        "in": "query",
+                        "description": "Filter by active status",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "Results per page, capped at 100",
+                        "schema": {
+                            "type": "integer",
+                            "default": 15
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated list of gates",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "ulid": {
+                                                        "type": "string"
+                                                    },
+                                                    "code": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    },
+                                                    "allowed_ticket_type_ids": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "integer"
+                                                        },
+                                                        "nullable": true
+                                                    },
+                                                    "location_note": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "admitted_count": {
+                                                        "type": "integer"
+                                                    },
+                                                    "is_active": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "event_session": {
+                                                        "type": "object",
+                                                        "nullable": true
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        },
+                                        "links": {
+                                            "type": "object"
+                                        },
+                                        "meta": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Missing gate.view_any permission"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Gates"
+                ],
+                "summary": "Create a new gate",
+                "operationId": "9b5ac61abde16442fb19106e0ff41411",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "code": {
+                                        "description": "Unique short code, max 16 chars",
+                                        "required": [
+                                            "code"
+                                        ],
+                                        "type": "string"
+                                    },
+                                    "name": {
+                                        "required": [
+                                            "name"
+                                        ],
+                                        "type": "string"
+                                    },
+                                    "event_session_ulid": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "allowed_ticket_type_ulids": {
+                                        "description": "If omitted, the gate admits every ticket type",
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "nullable": true
+                                    },
+                                    "location_note": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "is_active": {
+                                        "type": "boolean",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Gate created"
+                    },
+                    "403": {
+                        "description": "Missing gate.manage permission"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/gates/{gate}": {
+            "get": {
+                "tags": [
+                    "Gates"
+                ],
+                "summary": "Get a single gate by ULID",
+                "operationId": "9ad9826b55e6a9062ae6668b72c3e90a",
+                "parameters": [
+                    {
+                        "name": "gate",
+                        "in": "path",
+                        "description": "Gate ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Gate details"
+                    },
+                    "403": {
+                        "description": "Missing gate.view permission"
+                    },
+                    "404": {
+                        "description": "Gate not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Gates"
+                ],
+                "summary": "Delete a gate",
+                "description": "Super-Admin-only. Cannot delete a gate that has any recorded check-ins.",
+                "operationId": "806373684e0952a5e8a16b1733198a47",
+                "parameters": [
+                    {
+                        "name": "gate",
+                        "in": "path",
+                        "description": "Gate ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Gate deleted"
+                    },
+                    "403": {
+                        "description": "Missing gate.delete permission"
+                    },
+                    "404": {
+                        "description": "Gate not found"
+                    },
+                    "422": {
+                        "description": "Gate has recorded check-ins and cannot be deleted",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "string",
+                                            "example": "deletion_prevented"
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "patch": {
+                "tags": [
+                    "Gates"
+                ],
+                "summary": "Update a gate",
+                "operationId": "6607fa21d5709521cbd3b107879161a7",
+                "parameters": [
+                    {
+                        "name": "gate",
+                        "in": "path",
+                        "description": "Gate ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "code": {
+                                        "type": "string"
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "event_session_ulid": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "allowed_ticket_type_ulids": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "nullable": true
+                                    },
+                                    "location_note": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "is_active": {
+                                        "type": "boolean",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Gate updated"
+                    },
+                    "403": {
+                        "description": "Missing gate.manage permission"
+                    },
+                    "404": {
+                        "description": "Gate not found"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/admin/payments": {
             "get": {
                 "tags": [
@@ -5713,6 +6369,12 @@
         {
             "name": "Authentication",
             "description": "Admin and attendee authentication endpoints"
+        },
+        {
+            "name": "Check-ins"
+        },
+        {
+            "name": "Gates"
         },
         {
             "name": "Payments",

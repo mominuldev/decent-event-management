@@ -24,6 +24,7 @@ class GateResource extends JsonResource
             'name' => $this->name,
             'allowed_ticket_type_ids' => $this->allowed_ticket_type_ids,
             'location_note' => $this->location_note,
+            'admitted_count' => $this->admitted_count,
             'is_active' => $this->is_active,
             'event_session' => new EventSessionResource($this->whenLoaded('eventSession')),
         ];

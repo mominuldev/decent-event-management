@@ -62,9 +62,16 @@ return [
         'checkin.manual_override',
         'checkin.undo',
         'checkin.view_any',
+        'checkin.view',
         'checkin.view_live_dashboard',
         'checkin.resolve_conflict',
         'checkin.sync',
+
+        // Gates
+        'gate.view_any',
+        'gate.view',
+        'gate.manage',
+        'gate.delete',
 
         // Devices & volunteers
         'volunteer.view_any',
@@ -130,7 +137,8 @@ return [
             'payment.view_transactions', 'payment.reconcile', 'payment.export',
 
             'checkin.scan', 'checkin.admit', 'checkin.manual_override', 'checkin.undo',
-            'checkin.view_any', 'checkin.view_live_dashboard', 'checkin.resolve_conflict',
+            'checkin.view_any', 'checkin.view', 'checkin.view_live_dashboard', 'checkin.resolve_conflict',
+            'gate.view_any', 'gate.view',
 
             'volunteer.view_any', 'volunteer.create', 'volunteer.assign_gate',
             'volunteer.revoke_access', 'device.enrol', 'device.view_any',
