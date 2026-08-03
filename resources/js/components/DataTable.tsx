@@ -33,6 +33,7 @@ interface DataTableProps<T> {
     sorting?: SortingState;
     onSortingChange?: OnChangeFn<SortingState>;
     density?: 'comfortable' | 'compact';
+    onRowClick?: (row: T) => void;
 }
 
 export function DataTable<T>({
@@ -52,6 +53,7 @@ export function DataTable<T>({
     sorting,
     onSortingChange,
     density = 'comfortable',
+    onRowClick,
 }: DataTableProps<T>) {
     const pageCount = Math.max(1, Math.ceil(totalRows / pageSize));
 
@@ -128,7 +130,14 @@ export function DataTable<T>({
 
                         {!isLoading &&
                             table.getRowModel().rows.map((row) => (
-                                <tr key={row.id} className="border-b border-border last:border-0 hover:bg-table-row-hover">
+                                <tr
+                                    key={row.id}
+                                    onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+                                    className={cn(
+                                        'border-b border-border last:border-0 hover:bg-table-row-hover',
+                                        onRowClick && 'cursor-pointer',
+                                    )}
+                                >
                                     {row.getVisibleCells().map((cell) => (
                                         <td key={cell.id} className={cn(cellPad, 'text-text first:sticky first:left-0 first:bg-inherit')}>
                                             {flexRender(cell.column.columnDef.cell, cell.getContext())}

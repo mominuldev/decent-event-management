@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
 import { cn } from '@/lib/cn';
 
 /* ---- Card ---------------------------------------------------------------- */
@@ -98,6 +98,32 @@ export function IconButton({ className, children, ...rest }: BtnProps) {
 export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
     return (
         <input
+            className={cn(
+                'w-full rounded-xl border border-border bg-surface px-3 py-2 text-[13.5px] text-text outline-none placeholder:text-text-faint focus:border-accent',
+                className,
+            )}
+            {...rest}
+        />
+    );
+}
+
+export function Select({ className, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
+    return (
+        <select
+            className={cn(
+                'w-full rounded-xl border border-border bg-surface px-3 py-2 text-[13.5px] text-text outline-none focus:border-accent',
+                className,
+            )}
+            {...rest}
+        >
+            {children}
+        </select>
+    );
+}
+
+export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+    return (
+        <textarea
             className={cn(
                 'w-full rounded-xl border border-border bg-surface px-3 py-2 text-[13.5px] text-text outline-none placeholder:text-text-faint focus:border-accent',
                 className,

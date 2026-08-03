@@ -1,5 +1,326 @@
-import Placeholder from '@/features/misc/Placeholder';
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { ColumnDef } from '@tanstack/react-table';
+import { Search, ShieldCheck, Trash2 } from 'lucide-react';
+import { Badge, Button, Card, CardHeader, Input, Label, Select, Skeleton, Textarea } from '@/components/ui';
+import { Dialog, ConfirmDialog } from '@/components/Dialog';
+import { DataTable } from '@/components/DataTable';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { useToast } from '@/components/Toast';
+import { totalOf } from '@/lib/pagination';
+import * as attendeesApi from './api';
+import { PARTICIPANT_TYPES, type Attendee, type ParticipantType, type UpdateAttendeePayload } from './types';
+
+function useDebounced<T>(value: T, delayMs = 350): T {
+    const [debounced, setDebounced] = useState(value);
+    useEffect(() => {
+        const t = setTimeout(() => setDebounced(value), delayMs);
+        return () => clearTimeout(t);
+    }, [value, delayMs]);
+    return debounced;
+}
+
+function participantLabel(type: ParticipantType) {
+    return PARTICIPANT_TYPES.find((p) => p.value === type)?.label ?? type;
+}
+
+function AttendeeDetail({ ulid, onClose }: { ulid: string; onClose: () => void }) {
+    const { can } = useAuth();
+    const { push } = useToast();
+    const queryClient = useQueryClient();
+    const [form, setForm] = useState<UpdateAttendeePayload | null>(null);
+    const [confirmDelete, setConfirmDelete] = useState(false);
+
+    const { data, isLoading } = useQuery({
+        queryKey: ['attendee', ulid],
+        queryFn: () => attendeesApi.fetchAttendee(ulid),
+    });
+
+    useEffect(() => {
+        if (data && !form) {
+            setForm({
+                full_name: data.full_name,
+                full_name_bn: data.full_name_bn,
+                mobile: data.mobile,
+                email: data.email,
+                participant_type: data.participant_type,
+                ssc_batch_year: data.ssc_batch_year,
+                is_verified: data.is_verified,
+                notes: data.notes,
+            });
+        }
+    }, [data, form]);
+
+    const updateMutation = useMutation({
+        mutationFn: (payload: UpdateAttendeePayload) => attendeesApi.updateAttendee(ulid, payload),
+        onSuccess: () => {
+            push('success', 'Attendee updated.');
+            void queryClient.invalidateQueries({ queryKey: ['attendee', ulid] });
+            void queryClient.invalidateQueries({ queryKey: ['attendees'] });
+        },
+        onError: (e: Error) => push('critical', e.message),
+    });
+
+    const deleteMutation = useMutation({
+        mutationFn: () => attendeesApi.deleteAttendee(ulid),
+        onSuccess: () => {
+            push('success', 'Attendee deleted.');
+            void queryClient.invalidateQueries({ queryKey: ['attendees'] });
+            onClose();
+        },
+        onError: (e: Error) => push('critical', e.message),
+    });
+
+    const canEdit = can('attendee.update');
+    const canDelete = can('attendee.delete');
+
+    return (
+        <Dialog open onClose={onClose} title={data?.full_name ?? 'Attendee'} description={data?.mobile} className="max-w-lg">
+            {isLoading || !form ? (
+                <div className="space-y-3">
+                    {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <Label htmlFor="full_name">Full name</Label>
+                            <Input
+                                id="full_name"
+                                value={form.full_name ?? ''}
+                                disabled={!canEdit}
+                                onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+                            />
+                        </div>
+                        <div>
+                            <Label htmlFor="full_name_bn">Full name (বাংলা)</Label>
+                            <Input
+                                id="full_name_bn"
+                                value={form.full_name_bn ?? ''}
+                                disabled={!canEdit}
+                                onChange={(e) => setForm({ ...form, full_name_bn: e.target.value || null })}
+                            />
+                        </div>
+                        <div>
+                            <Label htmlFor="mobile">Mobile</Label>
+                            <Input
+                                id="mobile"
+                                value={form.mobile ?? ''}
+                                disabled={!canEdit}
+                                onChange={(e) => setForm({ ...form, mobile: e.target.value })}
+                            />
+                        </div>
+                        <div>
+                            <Label htmlFor="email">Email</Label>
+                            <Input
+                                id="email"
+                                type="email"
+                                value={form.email ?? ''}
+                                disabled={!canEdit}
+                                onChange={(e) => setForm({ ...form, email: e.target.value || null })}
+                            />
+                        </div>
+                        <div>
+                            <Label htmlFor="participant_type">Participant type</Label>
+                            <Select
+                                id="participant_type"
+                                value={form.participant_type}
+                                disabled={!canEdit}
+                                onChange={(e) => setForm({ ...form, participant_type: e.target.value as ParticipantType })}
+                            >
+                                {PARTICIPANT_TYPES.map((p) => (
+                                    <option key={p.value} value={p.value}>{p.label}</option>
+                                ))}
+                            </Select>
+                        </div>
+                        <div>
+                            <Label htmlFor="ssc_batch_year">SSC batch year</Label>
+                            <Input
+                                id="ssc_batch_year"
+                                type="number"
+                                value={form.ssc_batch_year ?? ''}
+                                disabled={!canEdit}
+                                onChange={(e) => setForm({ ...form, ssc_batch_year: e.target.value ? Number(e.target.value) : null })}
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <Label htmlFor="notes">Notes</Label>
+                        <Textarea
+                            id="notes"
+                            rows={2}
+                            value={form.notes ?? ''}
+                            disabled={!canEdit}
+                            onChange={(e) => setForm({ ...form, notes: e.target.value || null })}
+                        />
+                    </div>
+
+                    <label className="flex items-center gap-2 text-[13px] text-text">
+                        <input
+                            type="checkbox"
+                            checked={form.is_verified ?? false}
+                            disabled={!canEdit}
+                            onChange={(e) => setForm({ ...form, is_verified: e.target.checked })}
+                        />
+                        <ShieldCheck size={15} className="text-text-faint" />
+                        Verified attendee
+                    </label>
+
+                    <div className="flex items-center justify-between border-t border-border pt-4">
+                        {canDelete ? (
+                            <Button variant="ghost" size="sm" className="text-critical-fg" onClick={() => setConfirmDelete(true)}>
+                                <Trash2 size={15} /> Delete
+                            </Button>
+                        ) : <span />}
+                        <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+                            {canEdit && (
+                                <Button
+                                    size="sm"
+                                    disabled={updateMutation.isPending}
+                                    onClick={() => void updateMutation.mutateAsync(form)}
+                                >
+                                    {updateMutation.isPending ? 'Saving…' : 'Save changes'}
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <ConfirmDialog
+                open={confirmDelete}
+                onClose={() => setConfirmDelete(false)}
+                onConfirm={() => deleteMutation.mutateAsync()}
+                title="Delete attendee?"
+                description="This permanently removes the attendee record. Attendees with paid/confirmed registrations or issued tickets cannot be deleted."
+                confirmLabel="Delete attendee"
+            />
+        </Dialog>
+    );
+}
+
+const columns: ColumnDef<Attendee, unknown>[] = [
+    {
+        accessorKey: 'full_name',
+        header: 'Name',
+        cell: (ctx) => (
+            <div>
+                <div className="font-medium text-text">{ctx.row.original.full_name}</div>
+                <div className="text-[12px] text-text-faint">{ctx.row.original.mobile}</div>
+            </div>
+        ),
+    },
+    {
+        accessorKey: 'participant_type',
+        header: 'Type',
+        cell: (ctx) => <Badge tone="neutral">{participantLabel(ctx.row.original.participant_type)}</Badge>,
+    },
+    {
+        accessorKey: 'ssc_batch_year',
+        header: 'Batch',
+        cell: (ctx) => <span className="tnum">{ctx.row.original.ssc_batch_year ?? '—'}</span>,
+    },
+    {
+        accessorKey: 'is_verified',
+        header: 'Verified',
+        cell: (ctx) => (
+            ctx.row.original.is_verified
+                ? <Badge tone="success">Verified</Badge>
+                : <Badge tone="neutral">Unverified</Badge>
+        ),
+    },
+];
 
 export default function AttendeesPage() {
-    return <Placeholder title="Attendees" note="Attendee list, detail, edit, merge duplicates, and guest management with server-side pagination for 20k+ rows." />;
+    const [search, setSearch] = useState('');
+    const [participantType, setParticipantType] = useState<ParticipantType | ''>('');
+    const [batchYear, setBatchYear] = useState('');
+    const [pageIndex, setPageIndex] = useState(0);
+    const [selected, setSelected] = useState<string | null>(null);
+    const pageSize = 20;
+
+    const debouncedSearch = useDebounced(search);
+
+    const { data, isLoading, isError, refetch } = useQuery({
+        queryKey: ['attendees', debouncedSearch, participantType, batchYear, pageIndex],
+        queryFn: () =>
+            attendeesApi.fetchAttendees({
+                search: debouncedSearch,
+                participant_type: participantType,
+                ssc_batch_year: batchYear ? Number(batchYear) : '',
+                page: pageIndex + 1,
+                per_page: pageSize,
+            }),
+    });
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h1 className="text-[26px] font-bold tracking-tight text-text">Attendees</h1>
+                <p className="mt-1 text-[14px] text-text-muted">Search and manage every attendee record.</p>
+            </div>
+
+            <Card>
+                <CardHeader title="All attendees" />
+                <div className="flex flex-wrap items-end gap-3 px-5 pb-4 pt-4">
+                    <div className="min-w-[220px] flex-1">
+                        <Label htmlFor="search">Search</Label>
+                        <div className="relative">
+                            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-faint" />
+                            <Input
+                                id="search"
+                                className="pl-9"
+                                placeholder="Name, mobile, or email"
+                                value={search}
+                                onChange={(e) => { setSearch(e.target.value); setPageIndex(0); }}
+                            />
+                        </div>
+                    </div>
+                    <div className="w-48">
+                        <Label htmlFor="participant_type_filter">Participant type</Label>
+                        <Select
+                            id="participant_type_filter"
+                            value={participantType}
+                            onChange={(e) => { setParticipantType(e.target.value as ParticipantType | ''); setPageIndex(0); }}
+                        >
+                            <option value="">All types</option>
+                            {PARTICIPANT_TYPES.map((p) => (
+                                <option key={p.value} value={p.value}>{p.label}</option>
+                            ))}
+                        </Select>
+                    </div>
+                    <div className="w-32">
+                        <Label htmlFor="batch_year_filter">Batch year</Label>
+                        <Input
+                            id="batch_year_filter"
+                            type="number"
+                            placeholder="e.g. 2005"
+                            value={batchYear}
+                            onChange={(e) => { setBatchYear(e.target.value); setPageIndex(0); }}
+                        />
+                    </div>
+                </div>
+
+                <DataTable
+                    columns={columns}
+                    data={data?.data ?? []}
+                    getRowId={(r) => r.ulid}
+                    isLoading={isLoading}
+                    isError={isError}
+                    onRetry={() => void refetch()}
+                    onRowClick={(row) => setSelected(row.ulid)}
+                    emptyTitle="No attendees found"
+                    emptyDescription="Try adjusting your search or filters."
+                    pageIndex={pageIndex}
+                    pageSize={pageSize}
+                    totalRows={data ? totalOf(data) : 0}
+                    onPageChange={setPageIndex}
+                />
+            </Card>
+
+            {selected && <AttendeeDetail ulid={selected} onClose={() => setSelected(null)} />}
+        </div>
+    );
 }
