@@ -2,12 +2,11 @@
 
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+// The React SPA owns client-side routing; every non-API/webhook/scanner
+// path renders the shell so React Router can take over. `/login` is a
+// named route in its own right (Laravel's default Authenticate::redirectTo()
+// resolves route('login') for guests who omit an Accept: application/json
+// header) but otherwise renders the same shell.
+Route::view('/login', 'app')->name('login');
 
-// This is an API-only application. Named so Laravel's default
-// Authenticate::redirectTo() doesn't throw RouteNotFoundException when a
-// client omits an Accept: application/json header on an unauthenticated
-// request — it still resolves to a plain 401 JSON response either way.
-Route::get('/login', fn () => response()->json(['message' => 'Unauthenticated.'], 401))->name('login');
+Route::view('/{any?}', 'app')->where('any', '^(?!api|webhooks|scanner).*$');

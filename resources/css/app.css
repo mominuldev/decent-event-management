@@ -2,8 +2,255 @@
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
+@source '../js/**/*.{ts,tsx}';
 
+/*
+ * Theme selection is applied to <html data-theme="..."> by an inline script in
+ * app.blade.php before first paint (reads localStorage, falls back to OS
+ * preference) — see docs/08 §3.1. `dark:` utilities key off that attribute,
+ * not a media query, so the explicit toggle always wins.
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ---- Tier 1: primitives — theme-independent raw ramps, OKLCH ------------- */
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
+        'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-display: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+
+    /* Brand — a confident teal, distinct from a generic admin-template blue */
+    --color-brand-50: oklch(97.5% 0.02 195);
+    --color-brand-100: oklch(94% 0.045 195);
+    --color-brand-200: oklch(88% 0.07 195);
+    --color-brand-300: oklch(80% 0.09 195);
+    --color-brand-400: oklch(70% 0.1 195);
+    --color-brand-500: oklch(60% 0.11 195);
+    --color-brand-600: oklch(50% 0.105 195);
+    --color-brand-700: oklch(42% 0.09 195);
+    --color-brand-800: oklch(35% 0.07 195);
+    --color-brand-900: oklch(28% 0.055 195);
+    --color-brand-950: oklch(20% 0.04 195);
+
+    /* Status axis — separate from brand, never reused decoratively */
+    --color-success-500: oklch(62% 0.15 150);
+    --color-warning-500: oklch(75% 0.16 80);
+    --color-critical-500: oklch(58% 0.21 25);
+    --color-info-500: oklch(62% 0.13 240);
+
+    --radius-xl2: 1.1rem;
+    --shadow-soft: 0 1px 2px oklch(20% 0.02 250 / 6%), 0 4px 16px oklch(20% 0.02 250 / 8%);
+    --shadow-card: 0 1px 3px oklch(20% 0.02 250 / 6%), 0 8px 24px oklch(20% 0.02 250 / 6%);
+    --shadow-pop: 0 8px 30px oklch(20% 0.02 250 / 16%);
+}
+
+/* ---- Tier 2: semantic tokens — redefined per theme ----------------------- */
+:root {
+    --bg: oklch(98% 0.004 250);
+    --surface: oklch(100% 0 0);
+    --surface-2: oklch(96.5% 0.006 250);
+    --surface-3: oklch(94% 0.008 250);
+    --text: oklch(20% 0.015 260);
+    --text-muted: oklch(45% 0.02 260);
+    --text-faint: oklch(60% 0.015 260);
+    --border: oklch(90% 0.008 260);
+    --border-strong: oklch(82% 0.012 260);
+    --accent: var(--color-brand-600);
+    --accent-fg: oklch(100% 0 0);
+
+    --success-bg: oklch(95% 0.04 150);
+    --success-fg: oklch(38% 0.1 150);
+    --success-border: oklch(80% 0.09 150);
+    --warning-bg: oklch(96% 0.05 80);
+    --warning-fg: oklch(42% 0.11 70);
+    --warning-border: oklch(84% 0.1 80);
+    --critical-bg: oklch(95% 0.04 25);
+    --critical-fg: oklch(42% 0.16 25);
+    --critical-border: oklch(82% 0.12 25);
+    --info-bg: oklch(95% 0.03 240);
+    --info-fg: oklch(40% 0.1 240);
+    --info-border: oklch(82% 0.08 240);
+
+    color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) {
+        --bg: oklch(16% 0.014 260);
+        --surface: oklch(21% 0.016 260);
+        --surface-2: oklch(25% 0.018 260);
+        --surface-3: oklch(29% 0.02 260);
+        --text: oklch(94% 0.006 260);
+        --text-muted: oklch(72% 0.012 260);
+        --text-faint: oklch(52% 0.014 260);
+        --border: oklch(32% 0.02 260);
+        --border-strong: oklch(40% 0.02 260);
+        --accent: var(--color-brand-400);
+        --accent-fg: oklch(15% 0.02 195);
+
+        --success-bg: oklch(28% 0.06 150);
+        --success-fg: oklch(85% 0.09 150);
+        --success-border: oklch(40% 0.09 150);
+        --warning-bg: oklch(30% 0.06 80);
+        --warning-fg: oklch(86% 0.1 80);
+        --warning-border: oklch(42% 0.09 80);
+        --critical-bg: oklch(28% 0.08 25);
+        --critical-fg: oklch(85% 0.12 25);
+        --critical-border: oklch(42% 0.13 25);
+        --info-bg: oklch(28% 0.05 240);
+        --info-fg: oklch(85% 0.08 240);
+        --info-border: oklch(42% 0.09 240);
+
+        color-scheme: dark;
+    }
+}
+
+:root[data-theme='dark'] {
+    --bg: oklch(16% 0.014 260);
+    --surface: oklch(21% 0.016 260);
+    --surface-2: oklch(25% 0.018 260);
+    --surface-3: oklch(29% 0.02 260);
+    --text: oklch(94% 0.006 260);
+    --text-muted: oklch(72% 0.012 260);
+    --text-faint: oklch(52% 0.014 260);
+    --border: oklch(32% 0.02 260);
+    --border-strong: oklch(40% 0.02 260);
+    --accent: var(--color-brand-400);
+    --accent-fg: oklch(15% 0.02 195);
+
+    --success-bg: oklch(28% 0.06 150);
+    --success-fg: oklch(85% 0.09 150);
+    --success-border: oklch(40% 0.09 150);
+    --warning-bg: oklch(30% 0.06 80);
+    --warning-fg: oklch(86% 0.1 80);
+    --warning-border: oklch(42% 0.09 80);
+    --critical-bg: oklch(28% 0.08 25);
+    --critical-fg: oklch(85% 0.12 25);
+    --critical-border: oklch(42% 0.13 25);
+    --info-bg: oklch(28% 0.05 240);
+    --info-fg: oklch(85% 0.08 240);
+    --info-border: oklch(42% 0.09 240);
+
+    color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+    --bg: oklch(98% 0.004 250);
+    --surface: oklch(100% 0 0);
+    --surface-2: oklch(96.5% 0.006 250);
+    --surface-3: oklch(94% 0.008 250);
+    --text: oklch(20% 0.015 260);
+    --text-muted: oklch(45% 0.02 260);
+    --text-faint: oklch(60% 0.015 260);
+    --border: oklch(90% 0.008 260);
+    --border-strong: oklch(82% 0.012 260);
+    --accent: var(--color-brand-600);
+    --accent-fg: oklch(100% 0 0);
+
+    --success-bg: oklch(95% 0.04 150);
+    --success-fg: oklch(38% 0.1 150);
+    --success-border: oklch(80% 0.09 150);
+    --warning-bg: oklch(96% 0.05 80);
+    --warning-fg: oklch(42% 0.11 70);
+    --warning-border: oklch(84% 0.1 80);
+    --critical-bg: oklch(95% 0.04 25);
+    --critical-fg: oklch(42% 0.16 25);
+    --critical-border: oklch(82% 0.12 25);
+    --info-bg: oklch(95% 0.03 240);
+    --info-fg: oklch(40% 0.1 240);
+    --info-border: oklch(82% 0.08 240);
+
+    color-scheme: light;
+}
+
+/* Expose semantic tokens as Tailwind utilities (bg-surface, text-muted, border-border, …) */
+@theme inline {
+    --color-bg: var(--bg);
+    --color-surface: var(--surface);
+    --color-surface-2: var(--surface-2);
+    --color-surface-3: var(--surface-3);
+    --color-text: var(--text);
+    --color-text-muted: var(--text-muted);
+    --color-text-faint: var(--text-faint);
+    --color-border: var(--border);
+    --color-border-strong: var(--border-strong);
+    --color-accent: var(--accent);
+    --color-accent-fg: var(--accent-fg);
+
+    --color-success-bg: var(--success-bg);
+    --color-success-fg: var(--success-fg);
+    --color-success-border: var(--success-border);
+    --color-warning-bg: var(--warning-bg);
+    --color-warning-fg: var(--warning-fg);
+    --color-warning-border: var(--warning-border);
+    --color-critical-bg: var(--critical-bg);
+    --color-critical-fg: var(--critical-fg);
+    --color-critical-border: var(--critical-border);
+    --color-info-bg: var(--info-bg);
+    --color-info-fg: var(--info-fg);
+    --color-info-border: var(--info-border);
+}
+
+/* ---- Tier 3: component tokens — resolved from semantic ------------------- */
+@theme inline {
+    --color-table-row-hover: var(--surface-2);
+    --color-chart-grid: var(--border);
+    --color-chart-axis: var(--text-faint);
+}
+
+/* ---- Base ---------------------------------------------------------------- */
+@layer base {
+    * {
+        border-color: var(--color-border);
+    }
+    html {
+        -webkit-text-size-adjust: 100%;
+    }
+    body {
+        background-color: var(--bg);
+        color: var(--text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+    }
+    h1, h2, h3, h4 {
+        font-family: var(--font-display);
+        letter-spacing: -0.012em;
+    }
+    ::selection {
+        background: color-mix(in oklch, var(--color-brand-500) 22%, transparent);
+    }
+    /* Money, counts, batch years — never proportional */
+    .tnum {
+        font-variant-numeric: tabular-nums;
+    }
+    ::-webkit-scrollbar { width: 11px; height: 11px; }
+    ::-webkit-scrollbar-thumb {
+        background: var(--border-strong);
+        border-radius: 999px;
+        border: 3px solid var(--bg);
+    }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+    :focus-visible {
+        outline: 2px solid var(--color-brand-500);
+        outline-offset: 2px;
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* A QR always renders on a light plate regardless of theme — scanners need the contrast. */
+.qr-plate {
+    background: #fff;
+    color-scheme: light;
 }

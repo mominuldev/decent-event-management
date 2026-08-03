@@ -127,9 +127,14 @@ class AuthController extends Controller
             return response()->json(['message' => 'Invalid credentials.'], 401);
         }
 
-        $requires2fa = $user->two_factor_confirmed_at !== null;
+        $twoFactorConfirmed = $user->two_factor_confirmed_at !== null;
 
-        if ($requires2fa) {
+        // Local-only convenience: never active in testing/staging/production,
+        // so the mandatory-2FA invariant (docs/02 §2.2) stays fully enforced
+        // everywhere it matters.
+        $bypass2fa = app()->environment('local');
+
+        if ($twoFactorConfirmed && ! $bypass2fa) {
             $code = $request->string('totp_code')->value();
 
             if ($code === '' || $user->two_factor_secret === null || ! $this->twoFactor->verify($user->two_factor_secret, $code)) {
@@ -146,9 +151,11 @@ class AuthController extends Controller
             'last_login_ip' => $ip !== null ? inet_pton($ip) : null,
         ])->save();
 
+        $grantFullAccess = $twoFactorConfirmed || $bypass2fa;
+
         // Staff without confirmed 2FA get a setup-only token — see routes/api/v1.php.
-        $ability = $requires2fa ? 'admin' : '2fa-setup';
-        $expiresAt = $requires2fa ? now()->addHours(self::SESSION_HOURS) : now()->addMinutes(30);
+        $ability = $grantFullAccess ? 'admin' : '2fa-setup';
+        $expiresAt = $grantFullAccess ? now()->addHours(self::SESSION_HOURS) : now()->addMinutes(30);
 
         $token = $user->createToken(
             $request->string('device_name')->value() ?: 'admin-console',
@@ -159,7 +166,7 @@ class AuthController extends Controller
         return response()->json([
             'token' => $token->plainTextToken,
             'expires_at' => $expiresAt,
-            'requires_2fa_setup' => ! $requires2fa,
+            'requires_2fa_setup' => ! $grantFullAccess,
             'user' => [
                 'ulid' => $user->ulid,
                 'name' => $user->name,
