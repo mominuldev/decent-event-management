@@ -9,12 +9,14 @@ use App\Http\Requests\Admin\LoginRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use OpenApi\Attributes as OAT;
 
 /**
  * Password + mandatory TOTP 2FA for Super Admin / Event Manager — docs/02
  * §2.2. Sessions are capped at 8h via an explicit token expiry, not
  * Sanctum's global default, because the attendee guard needs 30 days.
  */
+#[OAT\Tag(name: 'Authentication')]
 class AuthController extends Controller
 {
     private const int MAX_FAILED_ATTEMPTS = 5;
@@ -25,6 +27,81 @@ class AuthController extends Controller
 
     public function __construct(private readonly TwoFactorAuthenticationService $twoFactor) {}
 
+    #[OAT\Post(
+        path: '/admin/auth/login',
+        summary: 'Admin login with email/password and optional TOTP',
+        tags: ['Authentication'],
+        requestBody: new OAT\RequestBody(
+            required: true,
+            content: new OAT\MediaType(
+                mediaType: 'application/json',
+                schema: new OAT\Schema(
+                    properties: [
+                        new OAT\Property(
+                            property: 'email',
+                            type: 'string',
+                            format: 'email',
+                            required: ['email']
+                        ),
+                        new OAT\Property(
+                            property: 'password',
+                            type: 'string',
+                            required: ['password']
+                        ),
+                        new OAT\Property(
+                            property: 'totp_code',
+                            type: 'string',
+                            description: 'TOTP code if 2FA is enabled'
+                        ),
+                        new OAT\Property(
+                            property: 'device_name',
+                            type: 'string',
+                            description: 'Device name for the token'
+                        ),
+                    ]
+                )
+            )
+        ),
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Successful login',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(
+                                property: 'token',
+                                type: 'string',
+                                description: 'API bearer token'
+                            ),
+                            new OAT\Property(
+                                property: 'expires_at',
+                                type: 'string',
+                                format: 'date-time'
+                            ),
+                            new OAT\Property(
+                                property: 'requires_2fa_setup',
+                                type: 'boolean'
+                            ),
+                            new OAT\Property(
+                                property: 'user',
+                                properties: [
+                                    new OAT\Property(property: 'ulid', type: 'string'),
+                                    new OAT\Property(property: 'name', type: 'string'),
+                                    new OAT\Property(property: 'email', type: 'string', format: 'email'),
+                                    new OAT\Property(property: 'roles', type: 'array', items: new OAT\Items(type: 'string')),
+                                ],
+                                type: 'object'
+                            ),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 401, description: 'Invalid credentials'),
+            new OAT\Response(response: 423, description: 'Account locked'),
+        ]
+    )]
     public function login(LoginRequest $request): JsonResponse
     {
         $user = User::where('email', $request->string('email'))->first();
