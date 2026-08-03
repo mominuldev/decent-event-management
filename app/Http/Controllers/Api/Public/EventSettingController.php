@@ -2,13 +2,17 @@
 
 namespace App\Http\Controllers\Api\Public;
 
+use App\Domain\Shared\Models\EventSetting;
 use App\Http\Controllers\Controller;
-use Illuminate\Http\JsonResponse;
+use App\Http\Resources\EventSettingResource;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class EventSettingController extends Controller
 {
-    public function show(): JsonResponse
+    public function show(): AnonymousResourceCollection
     {
-        return response()->json(['data' => []]);
+        $settings = EventSetting::where('is_public', true)->get();
+
+        return EventSettingResource::collection($settings);
     }
 }
