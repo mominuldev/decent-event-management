@@ -18,12 +18,14 @@ gantt
 
     section Backend
     Ph2 Backend API Core           :p2, 2026-08-10, 42d
-    Ph4 Payment Gateways           :p4, after p2, 28d
+    Ph4A SSLCommerz Sandbox        :p4a, 2026-08-24, 21d
+    Ph4B Gateways Live Cutover     :p4b, after p4a, 21d
     Ph5 Email SMS WhatsApp         :p5, after p2, 21d
-    Ph6 QR & PDF Tickets           :p6, after p4, 21d
+    Ph6 QR & PDF Tickets           :p6, after p4a, 21d
 
     section Frontend
     Ph3 Next.js Frontend           :p3, 2026-09-07, 42d
+    Ph3.5 CMS                      :p35, 2026-09-21, 21d
 
     section Mobile
     Ph7 Scanner App                :p7, after p6, 35d
@@ -37,10 +39,12 @@ gantt
     Event day                      :milestone, m2, after p9, 0d
 ```
 
-**Critical path:** Phase 2 → Phase 4 → Phase 6 → Phase 7 → Phase 8 → Phase 9. Phases 3 and 5 run in parallel and are not on it.
+**Critical path:** Phase 2 → Phase 4A → Phase 6 → Phase 7 → Phase 8 → Phase 9. Phases 3, 3.5, 4B, and 5 run in parallel and are not on it.
+
+> **Revised 2026-08-03.** Phase 4 was split into **4A (sandbox)** and **4B (live cutover)** after confirming that SSLCommerz sandbox credentials are self-service and require no merchant onboarding — see [Phase 4A](#phase-4a--sslcommerz-sandbox-integration). This takes merchant onboarding off the critical path and pulls the projected event-ready date forward by roughly five weeks. Phase 3.5 (CMS) was added; it was previously in no phase at all. See [§9.5](#95-revision-log).
 
 **The two schedule risks that are not engineering problems:**
-1. **Payment gateway merchant onboarding** (bKash, Nagad, Rocket, SSLCommerz) takes 2–6 weeks in Bangladesh and requires trade licence, TIN, and bank documents. **Start this during Phase 2, not Phase 4.** It is the single most common cause of slipped launch dates on projects like this.
+1. **Payment gateway merchant onboarding** (bKash, Nagad, Rocket, SSLCommerz) takes 2–6 weeks in Bangladesh and requires trade licence, TIN, and bank documents. **Start this during Phase 2, not Phase 4.** It is the single most common cause of slipped launch dates on projects like this. *It no longer blocks engineering* — Phase 4A builds and proves the full money path against sandbox — but it still blocks **Phase 4B**, and therefore blocks taking a single real taka.
 2. **WhatsApp Business template approval** by Meta takes days per template and templates get rejected for wording. **Draft and submit during Phase 2.**
 
 Both are procurement, not development. Neither can be compressed by working harder.
@@ -70,10 +74,36 @@ Build the domain core — schema, models, business rules, authentication, RBAC, 
 - CI pipeline: lint (Pint), static analysis (PHPStan level 8), tests, `composer audit`
 
 ### Exit criteria
-- A registration can be created, paid via the fake gateway, ticketed, and admitted end-to-end in tests
-- The concurrency tests pass: 300 concurrent purchases against a 100-capacity tier sell exactly 100; 20 concurrent scans of one ticket admit exactly once
-- Every permission has a passing allow-case and deny-case test
-- OpenAPI spec published and reviewed by the frontend lead
+- ❌ A registration can be created, paid via the **fake gateway**, ticketed, and admitted end-to-end in tests — *not met; see D1 below. The existing end-to-end test proves the manual-verification path only.*
+- ✅ The concurrency tests pass: 300 concurrent purchases against a 100-capacity tier sell exactly 100; 20 concurrent scans of one ticket admit exactly once
+- ✅ Every permission has a passing allow-case and deny-case test
+- ⚠️ OpenAPI spec published and reviewed by the frontend lead — *published; frontend-lead review outstanding, and Phase 3 formally depends on it*
+
+### Phase 2 review findings — 2026-08-03
+
+An architecture and code review at the end of week 2 found the following. **D1–D4 are Phase 2 defects and must close before Phase 2 is signed off.** D5–D10 are drift between these docs and the code, or deliverables quietly missing from the phase; they are cheap now and expensive later.
+
+| # | Finding | Evidence |
+|---|---|---|
+| **D1** | **Gateway-verified payments never issue a ticket.** `VerifyPayment::markSucceeded()` transitions the payment to `succeeded` and the registration to `paid`, then stops. Only `VerifyManualPayment` calls `IssueTicket`. A gateway-paid attendee gets no ticket, no QR, no PDF. | `app/Domain/Payment/Actions/VerifyPayment.php:75-100` vs `VerifyManualPayment.php:65` |
+| **D2** | **The test suite cannot see D1.** The end-to-end test reaches `paid` via `POST admin/payments/{ulid}/verify-manual`, and `VerifyPaymentTest` asserts payments, registrations, and ticket_types but never asserts a `tickets` row exists. The exit criterion above is satisfied by the wrong code path. | `tests/Feature/EndToEndTest.php:111`; `tests/Feature/Payment/VerifyPaymentTest.php` |
+| **D3** | **No payment endpoint of any kind exists.** `InitiatePayment` has zero callers. The deliverable "REST API v1 — … payment (stubbed gateway)" is unmet, and Phase 3's payment-selection step has no contract to build against. | `app/Domain/Payment/Actions/InitiatePayment.php`; `routes/api/public.php` |
+| **D4** | **Idempotency is required but never enforced.** `StoreRegistrationRequest` demands `idempotency_key` and `EnsureIdempotency` is aliased in `bootstrap/app.php` — but applied to **zero routes**. A double-submit creates two registrations, two capacity reservations, and two payments. | `bootstrap/app.php:34`; `routes/api/*.php` |
+| **D5** | **Reserved capacity leaks permanently.** `tryReserve()` fires on every registration and is released only on explicit payment *failure*. `payments.expires_at` is never written, there is no sweeper, and `routes/console.php` defines no schedule. Abandoned checkouts consume seats forever — the event reads sold out with empty seats. | `CreateRegistration.php:31`; `routes/console.php` |
+| **D6** | **The event-driven module boundary does not exist.** All ten `Events/` and `Listeners/` directories are empty and nothing is ever dispatched. `CreateRegistration` writes `Payment` directly; `VerifyManualPayment` calls `IssueTicket` directly. [01 §1.3](01-system-architecture.md#13-backend-architecture) and `CLAUDE.md` both describe a boundary the code does not have. | `app/Domain/*/Events`, `app/Domain/*/Listeners` |
+| **D7** | **Registration validation gaps.** `payment_method` reaches the database unvalidated and silently defaults to `bkash`. No check of `max_admits`, `allowed_participant_types`, `is_active`/`is_public`, or the `sale_starts_at`/`sale_ends_at` window. | `app/Http/Requests/Public/StoreRegistrationRequest.php`; `CreateRegistration.php:130` |
+| **D8** | **Audit logging lives in controllers, not actions.** `ActivityLog::create()` appears in five admin controllers. Any non-HTTP caller — console command, queue job, CMS — silently skips the audit trail, contradicting the append-only guarantee in [06 §6.8](06-security-architecture.md#68-data-protection). | `app/Http/Controllers/Api/Admin/*.php` |
+| **D9** | **No observers exist**, though the deliverable list names them. Also: no media upload endpoint, so `manual_proof_media_id` and the manual-payment proof flow are unusable; no `config/cors.php` for the separate Next.js origin; `config/sanctum.php` sets `'expiration' => null`, so staff console tokens never expire. | `app/Domain/*/Models`; `config/sanctum.php:53` |
+| **D10** | **No admin check-in endpoints**, though this phase's deliverable list names check-in among the REST API v1 surfaces. The admin SPA's Check-in page is therefore an unbacked placeholder. Users/roles, gates, devices, and volunteer CRUD are likewise absent. The Notifications page is correctly waiting on Phase 5. | `routes/api/admin.php`; `resources/js/features/checkin/CheckInPage.tsx` |
+
+**Not defects — correctly deferred.** The review also flagged the `placeholder_sig` QR signature, the absent `QrSigner`, missing PDF rendering, the O(n) ticket-number counter, absent notification delivery, and the missing expiry-sweeper/reconciliation jobs. All six are **scheduled deliverables of Phases 4A, 5, and 6** and are the intended Phase 2 state. They are listed here only so they are not re-reported as bugs.
+
+### Revised exit criteria
+
+Add to the four above:
+- [ ] D1–D4 closed, with a regression test that asserts a `tickets` row after **gateway** verification
+- [ ] D10's admin check-in endpoints delivered, or explicitly rescheduled into a named phase rather than left implicit
+- [ ] `composer test` green with the new assertions, Pint and PHPStan level 8 clean
 
 ### Parallel non-engineering work (starts week 1)
 - [ ] Payment gateway merchant applications submitted
@@ -91,6 +121,12 @@ Build the domain core — schema, models, business rules, authentication, RBAC, 
 Build both frontend applications against the published API contract, with the registration wizard and the admin dashboard as the two highest-value surfaces — one is where 20,000 people form their impression of the event, the other is where the organising team runs it.
 
 **Stack:** React 19 · Next.js 16 App Router · **Tailwind CSS 4** · Shadcn UI · TanStack Query + TanStack Table · TypeScript strict. Both apps and the shared packages use one design system; there is no second styling approach anywhere in the frontend.
+
+> **Amended 2026-08-03 — the admin dashboard is not Next.js.** It is built as a **Vite + React 19 SPA inside the Laravel repo** (`resources/js`, served by the catch-all in `routes/web.php`), while the **public site remains Next.js** on its own origin. This is a deliberate deviation: the admin console is authenticated-only, so it gains nothing from SSR/ISR, and co-locating it with the API removes a deployment target.
+>
+> Two consequences to manage rather than ignore:
+> - `@decent/api-client` and `@decent/schemas` are no longer shared by construction. The SPA hand-writes its types in `resources/js/features/*/types.ts`. **Generate the SPA's client from `public/docs/openapi.json` as part of the build**, or the Phase 3 exit criterion *"no drift between client and server validation"* has no mechanism behind it and will quietly become false.
+> - `@decent/ui` is consumed only by the public app. The design system in [§3.1](#31-design-system--theming-foundation) must still be implemented **twice from the same token file** — ship the `@theme` token CSS as a shared package, not a copy-paste.
 
 ### Week plan
 
@@ -248,34 +284,128 @@ Recharts, wrapped in `@decent/ui` so no chart is configured twice. Tokenised col
 
 ---
 
-## Phase 4 — Payment Gateway Integration
+## Phase 3.5 — Content Management System
 
-**Duration:** 4 weeks · **Depends on:** Phase 2 + **merchant credentials in hand**
+**Duration:** 3 weeks · **Depends on:** Phase 2 · **Runs in parallel with:** Phase 3 weeks 2–5 · **Added:** 2026-08-03
 
-### Objectives
-Replace `FakeGateway` with four real adapters and prove the money path is correct under adversarial conditions.
+### Why this exists
+
+The CMS was named in the project brief but appeared in no phase of this roadmap. Phase 3 assumed hand-built Next.js marketing pages and Phase 9 assumed content would be "loaded" once. Neither gives the organising committee a way to change a schedule, add a sponsor logo, or fix a Bangla typo without a developer and a deploy — for a year-long centenary campaign that is not viable.
+
+Backend-led, so it does **not** compete with the registration wizard, which [Phase 3's notes](#notes) correctly identify as the top schedule risk.
+
+### Scope boundary
+
+A **structured content CMS**, not a page builder. Editors fill typed fields in known content types; they do not compose arbitrary layouts. This is the difference between three weeks and three months, and it is the right trade for a single-event site.
 
 ### Deliverables
+
+- Seventh domain module `app/Domain/Content/`, following the same Actions/Models/Policies layering
+- Migrations for: `content_pages`, `content_blocks`, `content_translations`, `menus`/`menu_items`, `sponsors`, `schedule_items`, `faqs`, `gallery_albums`/`gallery_items`
+- **Bilingual by construction** — every editable string is `en`/`bn` at the schema level, not a duplicated page tree
+- **Draft → review → published** via `HasStateMachine`, with `published_at` scheduling and a preview token for unpublished content
+- Revision history with restore; `content_pages` rows are versioned, never overwritten in place
+- Media library UI over the **existing** `media_files` table — this also closes D9's missing upload endpoint and unblocks manual payment-proof upload
+- Public read API: `GET /api/v1/public/content/{slug}`, `/menus`, `/sponsors`, `/schedule`, `/faqs`, cache-tagged and CDN-friendly with ETags
+- Admin CMS screens in the React SPA: page list, typed block editor, media picker, menu ordering, publish controls
+- RBAC: new `content.*` permissions in `config/rbac.php` (`view_any`, `create`, `update`, `publish`, `delete`, `manage_media`), seeded via `RbacSeeder`, with allow/deny test pairs
+- `next/image` + ISR revalidation hook so a publish invalidates the public site without a redeploy
+
+### Exit criteria
+
+- [ ] A non-technical editor publishes a new page with an image and a Bangla title, unaided, in under five minutes
+- [ ] Publishing invalidates the CDN and the public site reflects it within 60 seconds
+- [ ] Unpublished content is unreachable without a valid preview token — verified by test, including the 404-not-403 rule
+- [ ] Every `content.*` permission has an allow-case and a deny-case test
+- [ ] Phase 3's public marketing pages render entirely from CMS content, with **no hard-coded copy**
+- [ ] Bangla renders correctly through the full path: editor → database → API → rendered page
+
+### Notes
+
+Sequence the schema and public read API in weeks 1–2 so Phase 3's week 6 (public marketing pages) builds against real content rather than fixtures it will later have to unpick. Uploads must follow the file rules in [06](06-security-architecture.md) — magic-byte validation, image re-encoding to strip EXIF/GPS, randomised private filenames, signed short-TTL URLs. A CMS is the most common place those rules get quietly skipped.
+
+---
+
+## Phase 4A — SSLCommerz Sandbox Integration
+
+**Duration:** 3 weeks · **Depends on:** Phase 2 (D1–D4 closed) · **Blocked by nothing external** · **Added:** 2026-08-03
+
+### Why this phase was split
+
+The original Phase 4 was gated on "merchant credentials in hand," which put a 2–6 week procurement queue directly on the critical path ahead of Phases 6–9. That gating is unnecessary: **SSLCommerz sandbox credentials are self-service and require no merchant onboarding.** The entire money path — session creation, IPN verification, server-side validation, refunds, and every adversarial case — can be built and proven against sandbox now. Only the credential swap and the live-transaction proof have to wait.
+
+Sequencing SSLCommerz first also matches [R1](#92-risk-register), which already identified it as the fastest gateway to approve.
+
+**Development environment:** SSLCommerz sandbox, per <https://sandbox-gw.sslcommerz.com/docs> and <https://developer.sslcommerz.com/doc/v4/>.
+
+| Purpose | Sandbox endpoint |
+|---|---|
+| Session initiation | `POST https://sandbox-gw.sslcommerz.com/gwprocess/v4/api.php` |
+| Order validation (`val_id`) | `GET https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php` |
+| Transaction query | same validator API, by `sessionkey` or `tran_id` |
+| Refund | `https://sandbox.sslcommerz.com/validator/api/merchantTransIDvalidationAPI.php` |
+
+Store credentials are `store_id` / `store_passwd` (sandbox default store `testbox`), held in `config/services.php` and `.env` — **never** in `event_settings` unencrypted, and never committed.
+
+### The invariant this phase must not break
+
+SSLCommerz's own documentation is unambiguous: *"Due to the security issue and to avoid data tampering, you must call the SSLCOMMERZ APIs from your server,"* and the `success_url` redirect is explicitly insufficient on its own. This is the same rule already stated in [06 §6.6](06-security-architecture.md#66-payment-security) and enforced in `ProcessGatewayWebhook`.
+
+Concretely, for every transaction:
+1. `success_url` returns the browser. **This proves nothing** and must never transition a payment.
+2. The IPN arrives server-to-server. Verify `verify_sign` against the fields listed in `verify_key`, hashed with the store password. An invalid signature is recorded and ignored.
+3. **Only then** call the validation API with `val_id` and accept `VALID` or `VALIDATED`. `INVALID_TRANSACTION` is a failure.
+4. Re-check `total_amount` and `currency` against `payments.amount_due_paisa` before `succeeded`. Mismatch goes to `reconciliation_status`, never auto-resolved.
+
+Note the paisa boundary: SSLCommerz transacts in decimal BDT with a **10.00 minimum**, while the database stores integer paisa. Conversion belongs in `SslCommerzClient` alone — no decimal amount may leak past the adapter.
+
+### Deliverables
+
+- `SslCommerzClient` implementing `PaymentGatewayInterface` — `createIntent` (session init), `verify` (`val_id` validation), `refund`, `parseWebhook` (IPN with `verify_sign`/`verify_key`)
+- Wire `PaymentGatewayResolver::forMethod()` to return it for `sslcommerz`; other gateways keep resolving to `FakeGateway` until Phase 4B
+- **Public payment endpoints** — initiate against a registration, plus `success`/`fail`/`cancel` return handlers that only *read* status and never mutate it. Closes D3.
+- `idempotent:payment.initiate` middleware actually attached to those routes. Closes D4.
+- IPN endpoint hardening: signature verification, IP allowlisting, replay rejection
+- Payment intent expiry sweeper with a gateway pre-check, plus the scheduler entry that runs it. Closes D5.
+- Nightly reconciliation job with the three mismatch classes
+- Manual verification workflow completed: proof upload (needs the Phase 3.5 media endpoint), duplicate-TrxID detection, approval queue, attributed approval
+- Refund workflow with approval, gateway call, and ticket voiding
+- Sandbox test suite: success, failure, timeout, cancelled, replayed callback, forged signature, amount mismatch, duplicate IPN, partial refund, `INVALID_TRANSACTION`
+
+### Exit criteria
+
+- [ ] A full sandbox transaction completes: session → hosted page → IPN → `val_id` validation → `succeeded` → **ticket issued** → admitted at a gate
+- [ ] A forged or replayed `success_url` hit produces **no** payment transition and **no** ticket
+- [ ] An IPN with an invalid `verify_sign` is recorded and ignored
+- [ ] A double-clicked Pay button produces exactly one charge and one registration
+- [ ] An amount-mismatched transaction lands in `reconciliation_status` and never reaches `succeeded`
+- [ ] The expiry sweeper returns leaked reservations to available capacity
+
+---
+
+## Phase 4B — Live Gateway Cutover
+
+**Duration:** 3 weeks · **Depends on:** Phase 4A + **merchant credentials in hand**
+
+### Objectives
+Swap sandbox for live, and add the remaining three gateways against the contract Phase 4A has already proven.
+
+### Deliverables
+- SSLCommerz live credential cutover; live endpoints (`securepay.sslcommerz.com`) behind config, not code
 - `BkashClient` — tokenised checkout, token refresh cycle, create/execute/query/refund
 - `NagadClient` — RSA payload encryption/signing, initialise/complete/verify
 - `RocketClient` — per the current merchant integration spec
-- `SslCommerzClient` — session init, IPN handler, `val_id` validation, refund
-- Webhook endpoints with per-gateway signature verification and IP allowlisting
-- Server-side verification as the sole path to `succeeded` ([06 §6.6](06-security-architecture.md#66-payment-security))
-- Manual verification workflow: proof upload, duplicate-TrxID detection, approval queue, attributed approval
-- Refund workflow with approval, gateway call, and ticket voiding
-- Payment intent expiry sweeper with gateway pre-check
-- Nightly reconciliation job with the three mismatch classes
-- Sandbox test suite covering: success, failure, timeout, replayed callback, amount mismatch, duplicate webhook, partial refund
+- Per-gateway signature verification and IP allowlisting for the remaining three webhook endpoints
+- Gateway credentials stored encrypted, gated by `payment.manage_gateway_credentials`
+- Runbook: switching a gateway off mid-event without a deploy
 
 ### Exit criteria
-- Every gateway completes a live low-value production transaction (100 BDT), verified and refunded
-- A replayed success callback with a forged signature does **not** produce a ticket
-- A double-clicked Pay button produces exactly one charge
-- Reconciliation correctly flags a manually introduced mismatch
+- Every enabled gateway completes a live low-value production transaction (100 BDT), verified and refunded
+- Reconciliation correctly flags a manually introduced mismatch against real settlement data
+- A gateway can be disabled from settings and the public site stops offering it within 60 seconds
 
 ### Risk
-This phase cannot start without credentials. If onboarding slips, Phase 4 slips, and Phases 6–9 slip behind it. Track credential status weekly from Phase 2 week 1 and escalate at the first delay.
+This phase still cannot start without credentials — but nothing downstream now waits on it. If onboarding slips, Phase 4B slips **alone**; Phases 6–9 proceed on the sandbox-proven adapter. Track credential status weekly from Phase 2 week 1 and escalate at the first delay. If credentials slip past registration open, launch with SSLCommerz-only or manual-verification-only, which R1 already contemplates as a fallback.
 
 ---
 
@@ -312,10 +442,14 @@ Bangla SMS rendering is the classic failure here — it looks correct in the ven
 
 ## Phase 6 — QR Ticket Generation
 
-**Duration:** 3 weeks · **Depends on:** Phases 2 and 4
+**Duration:** 3 weeks · **Depends on:** Phases 2 and **4A** (sandbox is sufficient — this phase needs a proven ticket-issuance trigger, not live money)
 
 ### Objectives
 Implement the signing scheme, ticket assets, and the manifest endpoint the scanner will depend on.
+
+> **Security note added 2026-08-03.** Until this phase lands, QR admission is **unauthenticated by design and must not be exposed outside development**. Issuance currently writes the literal string `'placeholder_sig'` (`IssueTicket.php:52-58`) and `ProcessCheckIn` hardcodes `'signature_valid' => true` (`ProcessCheckIn.php:176`) without verifying anything — it parses the payload, reads the ticket ULID, and admits. Payload expiry is not checked either. Anyone holding a ticket ULID could forge `DTM1.<ulid>.<n>.<exp>.K1.<anything>`. This is the expected Phase 2 state, but **no ticket PDF may be sent to a real attendee before this phase closes**, and the gate rehearsal in Phase 8 must include a forged-QR attempt.
+>
+> This phase also replaces the interim ticket-number counter — `Ticket::…->lockForUpdate()->count() + 1` in `IssueTicket.php:19`, which full-scans on every issuance and can collide under concurrency — with `TicketNumberGenerator`.
 
 ### Deliverables
 - Ed25519 key generation and secret-manager storage; key ID scheme
@@ -478,21 +612,27 @@ Deploy, cut over, operate the event, and hand over.
 graph LR
     P1["Ph1<br/>Architecture"] --> P2["Ph2<br/>Backend API"]
     P2 --> P3["Ph3<br/>Frontend"]
-    P2 --> P4["Ph4<br/>Payments"]
+    P2 --> P35["Ph3.5<br/>CMS"]
+    P2 --> P4A["Ph4A<br/>SSLCommerz<br/>Sandbox"]
     P2 --> P5["Ph5<br/>Messaging"]
-    P4 --> P6["Ph6<br/>QR Tickets"]
+    P4A --> P4B["Ph4B<br/>Live Cutover"]
+    P4A --> P6["Ph6<br/>QR Tickets"]
     P6 --> P7["Ph7<br/>Scanner App"]
     P3 --> P8["Ph8<br/>Testing"]
+    P35 --> P3
+    P4B --> P8
     P5 --> P8
     P7 --> P8
     P8 --> P9["Ph9<br/>Deployment"]
 
-    EX1["Gateway merchant<br/>onboarding · 2-6 wks"] -.blocks.-> P4
+    EX1["Gateway merchant<br/>onboarding · 2-6 wks"] -.blocks.-> P4B
     EX2["WhatsApp template<br/>approval · 1-2 wks"] -.blocks.-> P5
     EX3["SMS vendor +<br/>sender ID"] -.blocks.-> P5
     EX4["Scanner hardware<br/>procurement"] -.blocks.-> P7
 
     style P1 fill:#1f6f4a,color:#fff
+    style P4A fill:#1f6f4a,color:#fff
+    style P35 fill:#2f5f8a,color:#fff
     style EX1 fill:#8a2f2f,color:#fff
     style EX2 fill:#8a2f2f,color:#fff
     style EX3 fill:#8a2f2f,color:#fff
@@ -501,13 +641,15 @@ graph LR
 
 Red nodes are external dependencies with lead times outside the team's control. All four must be initiated during Phase 2.
 
+**The change that matters:** merchant onboarding (EX1) now blocks **only Phase 4B**. Previously it blocked Phase 4 and therefore Phases 6, 7, 8, and 9 behind it. Phase 4A is self-service sandbox and starts immediately, so a procurement delay costs the ability to take live money — it no longer costs the scanner app, the security audit, or the deployment window.
+
 ---
 
 ## 9.2 Risk register
 
 | # | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|---|
-| R1 | Gateway onboarding delayed | High | High | Start week 1 of Phase 2; sequence SSLCommerz first as the fastest to approve; keep manual verification as a launch-capable fallback |
+| R1 | Gateway onboarding delayed | High | ~~High~~ **Medium** | *Revised 2026-08-03.* Start week 1 of Phase 2; sequence SSLCommerz first as the fastest to approve; keep manual verification as a launch-capable fallback. **Impact downgraded** because Phase 4A proves the full money path against self-service sandbox, so a delay no longer blocks Phases 6–9 — it blocks only live collection |
 | R2 | Venue network unusable on event day | High | — | Already mitigated architecturally: offline-first is the default, not a fallback |
 | R3 | Registration spike exceeds forecast | Medium | Medium | CDN-first static pages, autoscaling, load-tested headroom |
 | R4 | Bangla rendering breaks in PDF or SMS | Medium | Medium | Test on physical devices and real printers in Phases 5 and 6 |
@@ -518,6 +660,9 @@ Red nodes are external dependencies with lead times outside the team's control. 
 | R9 | Key person unavailable near the event | Medium | High | Documented runbooks, no single-owner subsystem, two people trained on gate ops |
 | R10 | SMS cost overruns budget | Medium | Medium | Cost tracked per message from day one; kill switch; length-budgeted templates |
 | R11 | Dark theme retrofitted late, or brand assets arrive without dark variants | Medium | Medium | Theming is week 1 of Phase 3 and token-level, so no screen is ever built single-theme; dark logo variant is a Phase 2 prerequisite ([§9.4](#94-what-phase-2-needs-before-it-starts)) |
+| R12 | **A phase is marked done on the strength of a test that exercises the wrong code path** | High | High | *Added 2026-08-03 — already materialised as [D1/D2](#phase-2-review-findings--2026-08-03).* Every exit criterion naming a flow must be met by a test that asserts the flow's **terminal artefact** (a `tickets` row, a delivered notification, an `admitted` check-in), not an intermediate status. Review exit-criterion tests against the criterion wording at phase sign-off |
+| R13 | **CMS scope expands into a page builder** | Medium | Medium | *Added 2026-08-03.* [Phase 3.5](#phase-35--content-management-system) is explicitly a structured-content CMS with fixed content types. Arbitrary layout composition, per-page theming, and plugin systems are Phase 10, per R7 |
+| R14 | **Unsigned QR tickets escape development before Phase 6** | Low | Critical | *Added 2026-08-03.* Admission is unauthenticated until [Phase 6](#phase-6--qr-ticket-generation). No ticket PDF may be delivered to a real attendee before it closes; the Phase 8 gate rehearsal must include a forged-QR attempt as an explicit test case |
 
 ---
 
@@ -546,6 +691,41 @@ Every phase is complete only when all of these hold:
 7. Refund policy and cutoff date
 
 Items 4, 5, and 7 are business decisions that block engineering. Getting them settled during Phase 1 sign-off rather than mid-Phase-2 is worth roughly a week of schedule.
+
+---
+
+## 9.5 Revision log
+
+### 2026-08-03 — Phase 2 review, SSLCommerz sandbox decision, CMS scoping
+
+Triggered by an architecture, code, and schema review at the end of Phase 2 week 2.
+
+**What was found**
+
+The database design and the module layering hold up well — integer paisa with explicit currency, ULID/BIGINT separation, append-only `payment_transactions`, atomic reservation and admission counters, and the state machines are all correct and worth protecting. The gap is between what these docs claim is finished and what the code does. Ten findings are recorded as [D1–D10](#phase-2-review-findings--2026-08-03); four are Phase 2 defects, of which **D1 (gateway payments never issue a ticket)** is the one that would have surfaced during Phase 4 as a mysterious payment bug.
+
+Six further gaps were raised and then dismissed as **correctly deferred** — the placeholder QR signature, the missing `QrSigner`, PDF rendering, the interim ticket-number counter, notification delivery, and the expiry/reconciliation jobs. All are scheduled deliverables of Phases 4A, 5, and 6. They are recorded so they are not re-reported as bugs on the next review.
+
+**What changed**
+
+| Change | Rationale |
+|---|---|
+| Phase 4 split into **4A (sandbox)** and **4B (live cutover)** | SSLCommerz sandbox is self-service. Gating engineering on merchant onboarding was a self-inflicted 2–6 week critical-path dependency |
+| Phase 6 now depends on **4A**, not 4 | The signing scheme needs a proven issuance trigger, not live settlement |
+| **Phase 3.5 (CMS)** added, 3 weeks, parallel with Phase 3 | It was in the brief and in no phase. Placed before registration opens so the site is editable at launch |
+| Phase 3 amended: admin dashboard is a **Vite + React SPA**, not Next.js | Records a deviation already made in code, and names the two things it costs |
+| R1 impact downgraded High → Medium; **R12, R13, R14** added | Onboarding no longer blocks Phases 6–9. R12 captures the exit-criterion failure mode that D1/D2 already demonstrated |
+| Phase 2 exit criteria re-scored | One met criterion was met by the wrong code path |
+
+**Projected effect on the schedule:** event-ready moves from roughly late January 2027 to roughly late December 2026 — about five weeks — entirely from removing procurement from the critical path. Registration open (~12 October 2026) is essentially unchanged, since it depends on Phase 5 messaging.
+
+**Development environment for payments:** SSLCommerz sandbox, per <https://sandbox-gw.sslcommerz.com/docs> and <https://developer.sslcommerz.com/doc/v4/>. Endpoints and the mandatory server-side `val_id` validation rule are recorded in [Phase 4A](#phase-4a--sslcommerz-sandbox-integration).
+
+**Immediate actions**
+
+1. Submit the SSLCommerz merchant application — still the longest pole, even though it no longer blocks engineering
+2. Close D1–D4; they are roughly a day's work and constitute the honest remainder of Phase 2
+3. Obtain the frontend-lead OpenAPI review that Phase 3 formally depends on
 
 ---
 

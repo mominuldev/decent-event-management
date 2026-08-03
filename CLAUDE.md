@@ -4,44 +4,90 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Phase Status
 
-**Phase 2 — Backend API Development (Week 2 of 6 weeks)**
+**Phase 2 — Backend API Development (Week 2 of 6 weeks) — closing out, 4 known defects open**
 
-### ✅ Completed - All Major Deliverables
+> Reviewed 2026-08-03. Phase 2 is substantially built but **not signed off**: an architecture/code review found four real defects (D1–D4) plus five doc-vs-code drift items (D5–D9). Full detail, evidence, and file references live in [docs/08-development-roadmap.md §"Phase 2 review findings"](docs/08-development-roadmap.md). The roadmap was revised in the same pass — Phase 4 split into 4A (SSLCommerz sandbox, unblocked) and 4B (live cutover), and Phase 3.5 (CMS) added.
+
+### 🔴 Open defects — close these before Phase 2 sign-off
+
+- **D1 — Gateway-verified payments never issue a ticket.** `VerifyPayment::markSucceeded()` (`app/Domain/Payment/Actions/VerifyPayment.php:75-100`) marks the payment `succeeded` and the registration `paid`, then stops. Only `VerifyManualPayment.php:65` calls `IssueTicket`. **This is the highest-priority bug in the repo** — every SSLCommerz payment will produce a paid registration with no ticket.
+- **D2 — The test suite cannot see D1.** `tests/Feature/EndToEndTest.php:111` reaches `paid` via the *manual* verification endpoint, and `tests/Feature/Payment/VerifyPaymentTest.php` never asserts a `tickets` row. Any fix must add a gateway-path regression test that asserts the ticket exists.
+- **D3 — No payment endpoint exists.** `InitiatePayment` has zero callers; `routes/api/public.php` stops at registration creation. The frontend has no way to start a payment.
+- **D4 — Idempotency is required but unenforced.** `StoreRegistrationRequest` demands `idempotency_key` and `EnsureIdempotency` is aliased in `bootstrap/app.php:34`, but attached to **zero routes**.
+
+### ⚠️ Doc-vs-code drift (D5–D10) — fix the code or fix the docs, don't leave both
+
+- **D5** Reserved capacity leaks: `tryReserve()` on every registration, released only on explicit payment failure. `payments.expires_at` is never written and `routes/console.php` defines no schedule. Sweeper is a Phase 4A deliverable.
+- **D6** The event-driven module boundary described below **does not exist** — all ten `Events/`/`Listeners/` dirs are empty, nothing is dispatched, and modules call each other's actions and models directly.
+- **D7** `payment_method` reaches the DB unvalidated (defaults to `bkash`); no validation of `max_admits`, `allowed_participant_types`, `is_active`/`is_public`, or the sale window.
+- **D8** `ActivityLog::create()` lives in five admin controllers, not in the actions — non-HTTP callers skip the audit trail.
+- **D9** No observers exist; no media upload endpoint (so manual payment proof is unusable); no `config/cors.php` for the Next.js origin; `config/sanctum.php` has `'expiration' => null`, so staff tokens never expire.
+- **D10** `routes/api/admin.php` has **no check-in endpoints**, though Phase 2's deliverable list names them — so the SPA's Check-in page has no backend. Also missing: users/roles, gates, devices, and volunteer CRUD. The notifications dashboard is correctly deferred to Phase 5.
+
+### 🚧 Deferred by design — do NOT report these as bugs
+
+Scheduled deliverables of Phases 4A/5/6, correctly absent in Phase 2:
+`placeholder_sig` QR signature and the missing `QrSigner`; `ProcessCheckIn` not verifying signatures; ticket PDF rendering; the interim O(n) ticket-number counter in `IssueTicket.php:19`; notification delivery (the outbox is never written); the expiry sweeper and reconciliation jobs; real gateway adapters other than `FakeGateway`.
+
+**Security constraint until Phase 6 lands:** QR admission is unauthenticated — `ProcessCheckIn.php:176` hardcodes `signature_valid => true` and verifies nothing. No ticket PDF may be delivered to a real attendee before the Ed25519 signing scheme ships.
+
+### ✅ Genuinely complete
+
 - Six-module domain structure (Registration, Payment, Ticketing, Notification, CheckIn, Reporting, Shared)
-- All 26 migrations with seeders and realistic factories
-- Eloquent models with relationships and observers
-- RBAC with roles, permissions, and policies (spatie/laravel-permission)
-- Sanctum authentication for all three guards (web-admin, attendee, scanner)
+- All 26 migrations with seeders and realistic factories (`DummyDataSeeder` for demo, `LoadTestSeeder` for volume)
+- Eloquent models with relationships, casts, and `HasUlid`/`HasStateMachine`/`HasImmutableCreatedAt` traits applied
+- RBAC with roles, permissions, and policies (spatie/laravel-permission), seeded from `config/rbac.php`
+- Sanctum authentication for all three guards (web-admin, attendee, scanner) + TOTP 2FA for staff
 - REST API v1 route structure (public, attendee, admin, scanner, webhooks)
 - API Resources for all major entities
-- Horizon queue configuration with four lanes
-- CI pipeline (Pint, PHPStan level 8, tests, composer audit)
-- OpenAPI documentation controller and basic spec
-- Idempotency middleware and handling
-- Activity logging infrastructure
-- State machine implementation (HasStateMachine trait) - integrated across all models
-- All controller actions implemented (no stubs remaining)
-- Fake gateway drivers (FakeGateway, FakeSmsDriver, FakeEmailDriver, FakeWhatsAppDriver)
-- TOTP 2FA for staff (TwoFactorAuthenticationService + controller)
-- Comprehensive test coverage (109 tests passing, including domain logic tests)
-
-### ✅ Recent Wins
-- Fixed 2 failing concurrency tests - now all 83 tests passing (100% pass rate)
-- Atomic reservation and admission mechanisms verified working correctly
-- All Phase 2 core deliverables completed ahead of schedule
-- Closed a real RBAC gap: 14 admin endpoints (registrations, attendees, payments, tickets, ticket types, reports, settings) had no permission check at all — any authenticated staff member of any role could call them. Added the missing checks plus two permissions that didn't exist yet (`attendee.delete`, `ticket_type.delete`).
-- Added an end-to-end registration → payment → ticketing → admission test and a full permission-catalogue test (allow + deny case for every entry in `config/rbac.php`, plus HTTP round-trips against every enforced endpoint)
-- Documented all ~46 API endpoints with OpenAPI attributes (was 1/50) — spec now generates cleanly with full route coverage
+- Horizon configuration with four queue lanes *(configured; nothing dispatches to them yet — see D6/Phase 5)*
+- CI pipeline (Pint, PHPStan level 8, tests, `composer audit`)
+- OpenAPI attributes on all ~46 endpoints; spec generates cleanly
+- State machine (`HasStateMachine`) integrated across all models
+- Fake drivers: `FakeGateway`, `FakeSmsDriver`, `FakeEmailDriver`, `FakeWhatsAppDriver`
+- Atomic reservation (`tryReserve`/`confirmSale`/`releaseReservation`) and atomic admission (`tryAdmit`) — verified under concurrency
 - 109 tests passing, Pint clean, PHPStan level 8 clean, `composer audit` clean
 
+### ⚠️ Previously listed as complete — corrected 2026-08-03
+
+These were on the "done" list but the code does not support the claim. Do not rely on them:
+
+| Claimed | Reality |
+|---|---|
+| "Eloquent models with … observers" | **No observers exist** anywhere in `app/` |
+| "Idempotency middleware and handling" | Middleware exists and is aliased; attached to **zero routes** (D4) |
+| "All controller actions implemented (no stubs remaining)" | True for existing controllers, but **there is no payment controller at all** (D3) |
+| "Activity logging infrastructure" | Works, but lives in controllers rather than actions, so non-HTTP callers bypass it (D8) |
+| "End-to-end registration → payment → ticketing → admission test" | The test reaches `paid` via the **manual** verification endpoint; the gateway path is untested and broken (D1/D2) |
+
+### ✅ Recent wins (accurate)
+
+- Closed a real RBAC gap: 14 admin endpoints (registrations, attendees, payments, tickets, ticket types, reports, settings) had no permission check at all — any authenticated staff member of any role could call them. Added the missing checks plus two permissions that didn't exist yet (`attendee.delete`, `ticket_type.delete`).
+- Full permission-catalogue test: allow + deny case for every entry in `config/rbac.php`, plus HTTP round-trips against every enforced endpoint
+- Concurrency tests green: 300 purchases against 100 capacity sells exactly 100; 20 concurrent scans admit exactly once
+- Documented all ~46 API endpoints with OpenAPI attributes (was 1/50)
+
 ### 📋 Exit Criteria (from docs/08-development-roadmap.md)
-- [x] Registration → payment → ticketing → admission flow works end-to-end in tests
+- [ ] Registration → payment → ticketing → admission flow works end-to-end in tests — **not met (D1/D2)**: the existing test proves the manual-verification path only, never the gateway path
 - [x] Concurrency tests pass (300 purchases against 100 capacity, 20 concurrent scans)
 - [x] Every permission has passing allow-case and deny-case tests
-- [x] OpenAPI spec published (`public/docs/openapi.json`, regenerate via `php artisan app:generate-open-api-spec`) — **still needs review by the frontend lead**, which is a human sign-off step outside what this session can complete
+- [~] OpenAPI spec published (`public/docs/openapi.json`, regenerate via `php artisan app:generate-open-api-spec`) — **still needs review by the frontend lead**, which is a human sign-off step outside what this session can complete. Phase 3 formally depends on it.
+- [ ] D1–D4 closed, with a regression test asserting a `tickets` row after **gateway** verification
+
+### 💳 Payments — development environment
+
+Development and all Phase 4A work run against the **SSLCommerz sandbox** (<https://sandbox-gw.sslcommerz.com/docs>, <https://developer.sslcommerz.com/doc/v4/>). Sandbox credentials are self-service — no merchant onboarding required — so the full money path is buildable now.
+
+| Purpose | Sandbox endpoint |
+|---|---|
+| Session initiation | `POST https://sandbox-gw.sslcommerz.com/gwprocess/v4/api.php` |
+| Order validation (`val_id`) | `GET https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php` |
+| Refund | `https://sandbox.sslcommerz.com/validator/api/merchantTransIDvalidationAPI.php` |
+
+`store_id`/`store_passwd` belong in `config/services.php` + `.env`, never committed and never in an unencrypted `event_settings` row. The mandatory order for every transaction: **IPN `verify_sign`/`verify_key` check → `val_id` validation API (accept only `VALID` or `VALIDATED`) → amount/currency re-check against `amount_due_paisa` → only then `succeeded`.** The `success_url` browser redirect proves nothing and must never transition a payment — SSLCommerz's own docs say so explicitly. SSLCommerz transacts in decimal BDT with a 10.00 minimum; that conversion lives inside `SslCommerzClient` alone and no decimal amount may leak past the adapter.
 
 ### 🚨 External Dependencies (start during Phase 2!)
-- [ ] Payment gateway merchant applications (bKash, Nagad, Rocket, SSLCommerz) — **2-6 weeks lead time**
+- [ ] Payment gateway merchant applications (bKash, Nagad, Rocket, SSLCommerz) — **2-6 weeks lead time**. Blocks Phase 4B (live cutover) only; sandbox work is unblocked. Sequence SSLCommerz first.
 - [ ] WhatsApp Business template approval
 - [ ] SMS vendor contract and sender ID
 - [ ] Domain registration and email SPF/DKIM/DMARC setup
@@ -50,7 +96,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository layout
 
-This repo is a single Laravel application at the repo root. `.github/workflows/backend-ci.yml` runs lint/static-analysis/tests against the repo root.
+A single Laravel application at the repo root, which serves **both** the API and the admin dashboard SPA. `.github/workflows/backend-ci.yml` runs lint/static-analysis/tests against the repo root.
+
+| Path | What lives there |
+|---|---|
+| `app/Domain/{Module}/` | The six domain modules — Actions, Models, Policies, Services, Events, Listeners |
+| `app/Http/Controllers/Api/{Public,Attendee,Admin,Scanner}/` | Thin controllers, split by audience |
+| `app/Http/Controllers/Webhooks/` | Gateway IPN endpoints (one per gateway) |
+| `routes/api/` | `public.php`, `attendee.php`, `admin.php`, wired by `v1.php`; plus `scanner.php`, `webhooks.php` at `routes/` |
+| `resources/js/` | **The admin dashboard** — Vite + React 19 SPA (see below) |
+| `docs/01`–`08` | Design docs. Start at `docs/README.md`; the ADRs explain *why* |
+
+**Three frontends, two repos.** Only one of them is here:
+
+- **Admin dashboard — in this repo** at `resources/js`, a Vite + React 19 SPA served by the catch-all in `routes/web.php`. Deliberately *not* Next.js: it is authenticated-only, so SSR/ISR buys nothing and co-location removes a deploy target.
+- **Public site — separate Next.js repo**, consuming this API cross-origin. Needs `config/cors.php` with an explicit origin allowlist, which does not exist yet (D9).
+- **Scanner — separate React Native app** (Phase 7), talking to `routes/scanner.php`.
 
 ## Commands
 
@@ -90,29 +151,42 @@ Tests require a **real MySQL** database, not SQLite (see `phpunit.xml`): migrati
 ./vendor/bin/pint --test   # check only, as run in CI
 ```
 
-**Frontend build** (Vite, for the Blade/asset pipeline in this repo — the separate Next.js public/admin apps described in the docs are not part of this repo):
+**Admin dashboard SPA** (Vite + React, `resources/js`):
 ```bash
-npm run dev
+npm run dev        # Vite dev server (or just use `composer dev`, which runs it)
 npm run build
+npm run typecheck  # tsc --noEmit — TypeScript is strict; run before committing SPA changes
+```
+
+**OpenAPI spec** — regenerate after adding or changing any endpoint:
+```bash
+php artisan app:generate-open-api-spec   # writes public/docs/openapi.json
+```
+
+**Seed data:**
+```bash
+php artisan db:seed                              # RBAC, settings, ticket types, sessions, gates
+php artisan db:seed --class=DummyDataSeeder      # demo registrations/payments/tickets for local dev
+php artisan db:seed --class=LoadTestSeeder       # bulk volume for performance work
 ```
 
 ## Architecture
 
 Full design docs live in `docs/` (`01`–`08`, start at `docs/README.md`). Read the relevant doc before making non-trivial changes to a subsystem — the ADRs in `docs/README.md` explain *why*, and getting them wrong breaks correctness at the gate on event day, not just a test. The load-bearing decisions:
 
-- **Modular monolith.** Laravel organized into six domain modules under `app/Domain/`: `Registration`, `Payment`, `Ticketing`, `Notification`, `CheckIn`, `Reporting`, plus `Shared` for cross-cutting concerns (`User`, `EventSetting`, `ActivityLog`, `IdempotencyKey`, and support traits). Modules communicate through events and service interfaces — **never reach into another module's Eloquent models directly**.
+- **Modular monolith.** Laravel organized into six domain modules under `app/Domain/`: `Registration`, `Payment`, `Ticketing`, `Notification`, `CheckIn`, `Reporting`, plus `Shared` for cross-cutting concerns (`User`, `EventSetting`, `ActivityLog`, `IdempotencyKey`, and support traits). Modules communicate through events and service interfaces — **never reach into another module's Eloquent models directly**. ⚠️ **This is the target, not the current state (D6):** the `Events/`/`Listeners/` directories are empty and existing code violates it (`CreateRegistration` creates `Payment` directly; `VerifyManualPayment` calls `IssueTicket` directly). Write *new* cross-module code the right way — an event and a listener — rather than copying the existing violations. Phase 3.5 adds a seventh module, `Content`.
 - **Layering within a module:** HTTP (`app/Http/Controllers` — thin, no business logic) → FormRequests (validation + `authorize()`) → Actions/domain services in `app/Domain/*/Actions` and `*/Services` → Repositories/Eloquent → async Jobs for anything slow (gateway calls, PDF/QR rendering, SMS/email/WhatsApp). The queue boundary is deliberate: registration and payment must stay fast and transactional; notification delivery and asset generation are allowed to be slow or briefly broken.
 - **Money is integer paisa, never float/decimal** (`BIGINT UNSIGNED`, 1 BDT = 100 paisa), with an explicit `currency` column. Never introduce a decimal money column.
 - **Public-facing identifiers are ULIDs**; auto-increment BIGINT PKs stay internal only. Routes use `{model:ulid}` binding (see `routes/api/*.php`).
 - **Tickets are immutable once issued.** Corrections are void + reissue (`replaces_ticket_id` chain), never edit/delete.
 - **State transitions go through `HasStateMachine`** (`app/Domain/Shared/Support/HasStateMachine.php`): a model defines a `TRANSITIONS` constant (`['from' => ['to', ...]]`) and calls `transitionTo()`; illegal transitions throw `InvalidStateTransitionException`. Don't mutate a `status` column directly — use this instead. Permitted maps are specified in `docs/04-erd.md` §4.7.
-- **QR tickets are Ed25519-signed**, not database-lookup tokens; scanner devices hold only the public key plus a signed revocation manifest, so admission decisions work fully offline. Admission counting uses an atomic conditional `UPDATE ... WHERE admitted_count + :n <= admits_total` — never SELECT-then-INSERT — to stay race-safe under concurrent gate scans.
+- **QR tickets are Ed25519-signed**, not database-lookup tokens; scanner devices hold only the public key plus a signed revocation manifest, so admission decisions work fully offline. Admission counting uses an atomic conditional `UPDATE ... WHERE admitted_count + :n <= admits_total` — never SELECT-then-INSERT — to stay race-safe under concurrent gate scans. ⚠️ **Signing is not implemented yet (Phase 6).** `IssueTicket.php:52-58` writes the literal `'placeholder_sig'` and `ProcessCheckIn.php:176` hardcodes `signature_valid => true` without verifying anything — it reads the ticket ULID out of the payload and admits. Payload expiry is not checked either. The atomic admission counting *is* real and correct; only the signature layer is missing. **No ticket PDF may reach a real attendee until `QrSigner` ships.**
 - **RBAC:** `spatie/laravel-permission` under the `web-admin` guard, catalogue seeded from the versioned `config/rbac.php` (never created ad hoc — this is what keeps staging/production provably in sync). Code must check **permissions** (`payment.verify_manual`), never role names. Staff (`users`) and attendees (`attendees`) are separate identity domains/guards — do not conflate them. Volunteer (`scanner` guard) access is additionally scoped server-side by enrolled device, assigned gate, and the check-in time window — see `docs/02-rbac-permissions.md` §2.4 for the full authorization flow (permission check **and** model policy must both pass).
 - **Routes** are split by audience under `routes/api/`: `public.php` (unauthenticated browse/register), `attendee.php` (attendee self-service, `auth:attendee`), `admin.php` (staff console, `auth:web-admin`), wired together in `routes/api/v1.php`; plus `routes/scanner.php` (volunteer devices) and `routes/webhooks.php` (payment gateway IPNs). `routes/api.php` just mounts `v1.php` under the `api/v1` prefix.
-- **Payments:** four gateways (bKash, Nagad, Rocket, SSLCommerz) behind one adapter contract (`createIntent`, `verify`, `refund`, `parseWebhook`) under `app/Domain/Payment/Gateways/`. A browser return-callback is **never** trusted to mark a payment succeeded — only a server-to-server verify call or a signature-validated IPN can do that. `payments` (the money intent) and `payment_transactions` (every gateway interaction, append-only) are deliberately separate tables — don't collapse them.
-- **Notifications** go through a database outbox (`notifications`/`notification_events`) written in the same transaction as the triggering business event, then drained by queue workers via provider-agnostic channel drivers (Email/SMS/WhatsApp). Don't call a notification provider directly from request-handling code.
+- **Payments:** four gateways (bKash, Nagad, Rocket, SSLCommerz) behind one adapter contract (`createIntent`, `verify`, `refund`, `parseWebhook`) under `app/Domain/Payment/Gateways/`. A browser return-callback is **never** trusted to mark a payment succeeded — only a server-to-server verify call or a signature-validated IPN can do that. `payments` (the money intent) and `payment_transactions` (every gateway interaction, append-only) are deliberately separate tables — don't collapse them. ⚠️ Today **every** gateway name resolves to `FakeGateway` (`PaymentGatewayResolver::forMethod()`); `SslCommerzClient` is the Phase 4A deliverable — see the sandbox section above. `PaymentGatewayResolver` is the *only* place that may branch on gateway name; domain code never does.
+- **Notifications** go through a database outbox (`notifications`/`notification_events`) written in the same transaction as the triggering business event, then drained by queue workers via provider-agnostic channel drivers (Email/SMS/WhatsApp). Don't call a notification provider directly from request-handling code. ⚠️ Nothing writes to the outbox yet and there is no `app/Jobs` — delivery is Phase 5.
 
-Queue lanes (Horizon) are named by urgency — `payments` (<5s), `tickets` (<30s), `notifications` (<60s), `reports` (minutes) — keep jobs on the queue that matches their latency budget, since notification volume must never delay a payment webhook.
+Queue lanes (Horizon) are named by urgency — `payments` (<5s), `tickets` (<30s), `notifications` (<60s), `reports` (minutes) — keep jobs on the queue that matches their latency budget, since notification volume must never delay a payment webhook. ⚠️ There is no `app/Jobs` directory yet and nothing is dispatched; the first jobs land in Phase 4A/5. When you add one, put it on the lane matching its latency budget rather than the default.
 
 ## Development conventions
 
@@ -123,7 +197,7 @@ Follow these so new code matches what's already in `app/` and passes CI (Pint, P
 - **Money is `BIGINT UNSIGNED` paisa** on every monetary column, with an explicit `currency` column alongside it. Never add a `decimal`/`float` money column, never compare amounts across currencies without an explicit check.
 - **Idempotency is mandatory on unsafe operations**, not optional hardening: payment intents, gateway webhooks, ticket issuance, and scanner sync all need an `idempotency_key` with a unique index (see `App\Domain\Shared\Models\IdempotencyKey`, `isInFlight()`). A retried webhook or a double-tapped button must produce one effect.
 - **A payment only reaches `succeeded` via server-to-server gateway verification or an authenticated Event Manager approving a manual payment** — never from a browser return-callback. If you touch payment code, this invariant is the one thing that must never regress.
-- **Log sensitive actions to `activity_logs`**: refunds, voids, manual check-in overrides, role/permission changes, key rotation, exports, impersonation. Record actor, subject, before/after diff, IP, and `request_id`. These rows are append-only — no update/delete path.
+- **Log sensitive actions to `activity_logs`**: refunds, voids, manual check-in overrides, role/permission changes, key rotation, exports, impersonation. Record actor, subject, before/after diff, IP, and `request_id`. These rows are append-only — no update/delete path. **Write the log inside the Action, not the controller** — existing code gets this wrong (D8), so a job or console command performing the same operation silently skips the audit trail. New code should not copy that pattern.
 - **API responses use explicit field allowlists (API Resources), never blocklists.** A Volunteer-facing resource must never contain `email`, `mobile`, or money fields — omit them from the resource, don't filter them at render time. Errors use the uniform shape `{ code, message, errors?, request_id }`; never leak stack traces or confirm resource existence to an unauthorized caller (404, not 403, for "not yours").
 - **Authorization is always two-stage**: a permission check (`$user->can('payment.refund')`, catalogue in `config/rbac.php`) *and* a model policy check (`PaymentPolicy::refund()`) — a permission grants the capability in general, the policy decides for that specific record. Check permissions by name, never by role (`if ($user->hasRole(...))` in business logic is wrong).
 - **Query-scope by ownership at the builder, not just in the controller** — e.g. an attendee's own-resource queries should filter `attendee_id = auth()->id()` in the query itself, so a missed controller check can't leak another attendee's data.
@@ -132,3 +206,17 @@ Follow these so new code matches what's already in `app/` and passes CI (Pint, P
 - **Seed data belongs in versioned config/seeders, not ad hoc.** RBAC roles/permissions are seeded from `config/rbac.php` via `RbacSeeder` — add new permissions there, not directly through Spatie's API. `EventSettingSeeder` / `TicketTypeSeeder` follow the same pattern; extend them rather than creating rows manually in migrations.
 - **Test every permission with the two-case pattern**: one authorized actor succeeds, one unauthorized actor gets denied (see `tests/Feature/Rbac/PermissionCatalogueTest.php`). New permissions in `config/rbac.php` should get a matching pair of assertions. Target ≥80% coverage on domain logic (`app/Domain/**`).
 - **Module boundary discipline**: don't import another domain's Eloquent model directly from outside its module — go through its published events or a service interface. If a new feature needs data from another module, that's a signal to add an event/listener, not a cross-module query.
+
+## Admin dashboard conventions (`resources/js`)
+
+Vite + React 19 + TypeScript strict, TanStack Query for all server state, TanStack Table for data grids, Tailwind 4, React Router 7. Match what's there:
+
+- **Feature-folder structure.** Each module is `features/<name>/` with `api.ts` (typed request functions), `types.ts` (response shapes), and `<Name>Page.tsx`. Shared primitives live in `components/` and `lib/`; don't add a second UI kit.
+- **All requests go through `lib/api.ts`.** It attaches the Sanctum bearer token, and a 401 anywhere clears the session via the registered handler. Never call `axios` directly from a feature, and never read the token from `localStorage` yourself.
+- **Errors normalise through `toApiError()`** into the API's `{ code, message, errors?, request_id }` envelope. Surface `errors` as field-level messages and `message` as the toast; a 403 should say which permission is missing.
+- **Server-side pagination, sorting, and filtering only.** The attendee table targets 20,000+ rows — client-side sorting of a full table will not survive real data. Use `lib/pagination.ts` (`PaginatedResponse`, `unwrap`).
+- **Address resources by `ulid`, not `id`.** Some existing filters still pass numeric `ticket_type_id`, which leaks an internal primary key across the API boundary — don't extend that pattern; new filters take ULIDs.
+- **Navigation and actions render from the permission set returned at login**, never from role names — same rule as the backend. A user must not see a control they cannot use.
+- **Types are hand-written today and will drift.** The roadmap's Phase 3 exit criterion requires no drift between client and server validation. Until the client is generated from `public/docs/openapi.json`, treat `types.ts` as needing a manual check whenever you change an API Resource.
+- **Run `npm run typecheck` before committing** — TypeScript is strict and CI does not currently catch SPA type errors.
+- Two pages are unbacked placeholders: **Check-in** and **Notifications** (D10). Check-in admin endpoints were a Phase 2 deliverable and are missing; the notifications dashboard arrives with Phase 5. Don't stub fake data into either — leave the placeholder and flag it.
