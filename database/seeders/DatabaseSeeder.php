@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             TicketTypeSeeder::class,
             EventSessionSeeder::class,
             GateSeeder::class,
+            ContentSeeder::class,
             DummyDataSeeder::class,
         ]);
 

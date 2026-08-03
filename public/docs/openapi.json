@@ -5708,6 +5708,780 @@
                 ]
             }
         },
+        "/public/content/faqs": {
+            "get": {
+                "tags": [
+                    "Content"
+                ],
+                "summary": "List published FAQs, grouped by category order then position",
+                "operationId": "ef193a3e414e422cfda164572e3536fa",
+                "parameters": [
+                    {
+                        "name": "category",
+                        "in": "query",
+                        "description": "Filter to a single category",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "locale",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "en",
+                                "bn"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "If-None-Match",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Published FAQs",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "ulid": {
+                                                        "type": "string"
+                                                    },
+                                                    "question": {
+                                                        "type": "string"
+                                                    },
+                                                    "answer": {
+                                                        "type": "string"
+                                                    },
+                                                    "category": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "position": {
+                                                        "type": "integer"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "304": {
+                        "description": "Not modified"
+                    }
+                }
+            }
+        },
+        "/public/content/gallery": {
+            "get": {
+                "tags": [
+                    "Content"
+                ],
+                "summary": "List published gallery albums with their cover image",
+                "description": "Album items are omitted here — fetch a single album to get them.",
+                "operationId": "4cef42dbf1aff84910c9a2cc046a77f0",
+                "parameters": [
+                    {
+                        "name": "locale",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "en",
+                                "bn"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "If-None-Match",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Published albums",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "ulid": {
+                                                        "type": "string"
+                                                    },
+                                                    "slug": {
+                                                        "type": "string"
+                                                    },
+                                                    "title": {
+                                                        "type": "string"
+                                                    },
+                                                    "description": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "cover": {
+                                                        "type": "object",
+                                                        "nullable": true
+                                                    },
+                                                    "position": {
+                                                        "type": "integer"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "304": {
+                        "description": "Not modified"
+                    }
+                }
+            }
+        },
+        "/public/content/gallery/{slug}": {
+            "get": {
+                "tags": [
+                    "Content"
+                ],
+                "summary": "Fetch one published gallery album with its published items",
+                "operationId": "bfd73d3631ae56e39020a7235b03a427",
+                "parameters": [
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "locale",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "en",
+                                "bn"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "If-None-Match",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The album and its published items"
+                    },
+                    "304": {
+                        "description": "Not modified"
+                    },
+                    "404": {
+                        "description": "No published album with that slug"
+                    }
+                }
+            }
+        },
+        "/public/content/menus": {
+            "get": {
+                "tags": [
+                    "Content"
+                ],
+                "summary": "List active navigation menus with their nested items",
+                "description": "Items linked to a page that is not live are omitted, so the public site never renders a link into a 404.",
+                "operationId": "5c475892e79e4ca9ed0edafabe66358a",
+                "parameters": [
+                    {
+                        "name": "locale",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "en",
+                                "bn"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "If-None-Match",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Active menus",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "ulid": {
+                                                        "type": "string"
+                                                    },
+                                                    "code": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    },
+                                                    "items": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "properties": {
+                                                                "ulid": {
+                                                                    "type": "string"
+                                                                },
+                                                                "label": {
+                                                                    "type": "string"
+                                                                },
+                                                                "url": {
+                                                                    "type": "string"
+                                                                },
+                                                                "target": {
+                                                                    "type": "string"
+                                                                },
+                                                                "position": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "children": {
+                                                                    "type": "array",
+                                                                    "items": {
+                                                                        "type": "object"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "304": {
+                        "description": "Not modified"
+                    }
+                }
+            }
+        },
+        "/public/content/menus/{code}": {
+            "get": {
+                "tags": [
+                    "Content"
+                ],
+                "summary": "Fetch one navigation menu by its stable code (primary, footer)",
+                "operationId": "bda48353e5b0968020d71ccba242d523",
+                "parameters": [
+                    {
+                        "name": "code",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "locale",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "en",
+                                "bn"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "If-None-Match",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The menu and its nested items"
+                    },
+                    "304": {
+                        "description": "Not modified"
+                    },
+                    "404": {
+                        "description": "No active menu with that code"
+                    }
+                }
+            }
+        },
+        "/public/content/pages": {
+            "get": {
+                "tags": [
+                    "Content"
+                ],
+                "summary": "List live content pages (slug, title, excerpt) for sitemaps and link lists",
+                "operationId": "aeed035ac7181b427b1716f14a8eb11f",
+                "parameters": [
+                    {
+                        "name": "locale",
+                        "in": "query",
+                        "description": "Content locale; overrides Accept-Language. Falls back to English per field when a Bangla value is empty.",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "en",
+                                "bn"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "If-None-Match",
+                        "in": "header",
+                        "description": "Conditional request; a matching ETag returns 304",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Live pages",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "ulid": {
+                                                        "type": "string"
+                                                    },
+                                                    "slug": {
+                                                        "type": "string"
+                                                    },
+                                                    "template": {
+                                                        "type": "string"
+                                                    },
+                                                    "locale": {
+                                                        "type": "string"
+                                                    },
+                                                    "title": {
+                                                        "type": "string"
+                                                    },
+                                                    "excerpt": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "is_indexable": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "published_at": {
+                                                        "type": "string",
+                                                        "format": "date-time"
+                                                    },
+                                                    "updated_at": {
+                                                        "type": "string",
+                                                        "format": "date-time"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "304": {
+                        "description": "Not modified"
+                    }
+                }
+            }
+        },
+        "/public/content/pages/{slug}": {
+            "get": {
+                "tags": [
+                    "Content"
+                ],
+                "summary": "Fetch one content page with its typed block tree",
+                "description": "Returns only live pages — published, with a `published_at` in the past. Unpublished, scheduled, archived and soft-deleted pages return 404 (never 403), unless a valid `preview_token` is supplied. Preview responses are `no-store` and `noindex`.",
+                "operationId": "27ea580fa2641d23e2c16d8aa9f687d8",
+                "parameters": [
+                    {
+                        "name": "slug",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "locale",
+                        "in": "query",
+                        "description": "Content locale; overrides Accept-Language",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "en",
+                                "bn"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "preview_token",
+                        "in": "query",
+                        "description": "Reveals an unpublished page to a reviewer",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "If-None-Match",
+                        "in": "header",
+                        "description": "Conditional request; a matching ETag returns 304",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The page and its visible blocks",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "properties": {
+                                                "ulid": {
+                                                    "type": "string"
+                                                },
+                                                "slug": {
+                                                    "type": "string"
+                                                },
+                                                "template": {
+                                                    "type": "string"
+                                                },
+                                                "locale": {
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "type": "string"
+                                                },
+                                                "excerpt": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "seo_title": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "seo_description": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "og_image": {
+                                                    "type": "object",
+                                                    "nullable": true
+                                                },
+                                                "is_indexable": {
+                                                    "type": "boolean"
+                                                },
+                                                "published_at": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "nullable": true
+                                                },
+                                                "blocks": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "properties": {
+                                                            "ulid": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": {
+                                                                "type": "string",
+                                                                "enum": [
+                                                                    "rich_text",
+                                                                    "hero",
+                                                                    "image",
+                                                                    "cta",
+                                                                    "stat_row",
+                                                                    "faq_list",
+                                                                    "sponsor_grid",
+                                                                    "schedule",
+                                                                    "gallery",
+                                                                    "video"
+                                                                ]
+                                                            },
+                                                            "position": {
+                                                                "type": "integer"
+                                                            },
+                                                            "data": {
+                                                                "description": "Localised block payload; shape is fixed by `type`",
+                                                                "type": "object"
+                                                            },
+                                                            "media": {
+                                                                "type": "object",
+                                                                "nullable": true
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "304": {
+                        "description": "Not modified"
+                    },
+                    "404": {
+                        "description": "No live page with that slug, and no valid preview token"
+                    }
+                }
+            }
+        },
+        "/public/content/schedule": {
+            "get": {
+                "tags": [
+                    "Content"
+                ],
+                "summary": "List published schedule items in chronological order",
+                "operationId": "66a462f0621ec19e631dfef282741d8b",
+                "parameters": [
+                    {
+                        "name": "track",
+                        "in": "query",
+                        "description": "Filter to a single track",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "locale",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "en",
+                                "bn"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "If-None-Match",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Published schedule items",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "ulid": {
+                                                        "type": "string"
+                                                    },
+                                                    "title": {
+                                                        "type": "string"
+                                                    },
+                                                    "description": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "speaker_name": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "speaker_title": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "speaker_photo": {
+                                                        "type": "object",
+                                                        "nullable": true
+                                                    },
+                                                    "venue": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "track": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "starts_at": {
+                                                        "type": "string",
+                                                        "format": "date-time"
+                                                    },
+                                                    "ends_at": {
+                                                        "type": "string",
+                                                        "format": "date-time",
+                                                        "nullable": true
+                                                    },
+                                                    "position": {
+                                                        "type": "integer"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "304": {
+                        "description": "Not modified"
+                    }
+                }
+            }
+        },
+        "/public/content/sponsors": {
+            "get": {
+                "tags": [
+                    "Content"
+                ],
+                "summary": "List published sponsors, ordered by tier then position",
+                "operationId": "b3f60caf371b075de9667f5a42f51636",
+                "parameters": [
+                    {
+                        "name": "tier",
+                        "in": "query",
+                        "description": "Filter to a single tier",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "platinum",
+                                "gold",
+                                "silver",
+                                "bronze",
+                                "partner"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "locale",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "en",
+                                "bn"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "If-None-Match",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Published sponsors",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "ulid": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    },
+                                                    "tier": {
+                                                        "type": "string"
+                                                    },
+                                                    "website_url": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "description": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "logo": {
+                                                        "type": "object",
+                                                        "nullable": true
+                                                    },
+                                                    "position": {
+                                                        "type": "integer"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "304": {
+                        "description": "Not modified"
+                    }
+                }
+            }
+        },
         "/public/event": {
             "get": {
                 "tags": [
@@ -7134,6 +7908,9 @@
         {
             "name": "Attendee Self-Service",
             "description": "Authenticated attendee profile, registration, and ticket endpoints"
+        },
+        {
+            "name": "Content"
         },
         {
             "name": "Public",

@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Current Phase Status
 
 **Phase 2 — Backend API Development (Week 2 of 6 weeks) — D1–D4 closed 2026-08-04, sign-off still pending frontend-lead OpenAPI review**
+**Phase 3.5 — CMS: backend foundation slice landed 2026-08-04 (schema + public read API). Admin half still open — see [§Phase 3.5 in progress](#-phase-35-cms--in-progress) below.**
 
 > Reviewed 2026-08-03, defects closed 2026-08-04. The 2026-08-03 architecture/code review found four real defects (D1–D4) plus six doc-vs-code drift items (D5–D10); **D1–D4 are now closed** (see below) with a gateway-path regression test added. Full original detail, evidence, and file references live in [docs/08-development-roadmap.md §"Phase 2 review findings"](docs/08-development-roadmap.md). D5–D10 remain as tracked drift — none of them block sign-off, which now rests solely on the frontend-lead OpenAPI review. The roadmap was revised in the 2026-08-03 pass — Phase 4 split into 4A (SSLCommerz sandbox, unblocked) and 4B (live cutover), and Phase 3.5 (CMS) added.
 
@@ -33,8 +34,8 @@ Scheduled deliverables of Phases 4A/5/6, correctly absent in Phase 2:
 
 ### ✅ Genuinely complete
 
-- Six-module domain structure (Registration, Payment, Ticketing, Notification, CheckIn, Reporting, Shared)
-- All 26 migrations with seeders and realistic factories (`DummyDataSeeder` for demo, `LoadTestSeeder` for volume)
+- Seven-module domain structure (Registration, Payment, Ticketing, Notification, CheckIn, Reporting, Content, Shared)
+- All 38 migrations with seeders and realistic factories (`DummyDataSeeder` for demo, `LoadTestSeeder` for volume, `ContentSeeder` for bilingual CMS baseline)
 - Eloquent models with relationships, casts, and `HasUlid`/`HasStateMachine`/`HasImmutableCreatedAt` traits applied
 - RBAC with roles, permissions, and policies (spatie/laravel-permission), seeded from `config/rbac.php`
 - Sanctum authentication for all three guards (web-admin, attendee, scanner) + TOTP 2FA for staff
@@ -42,12 +43,12 @@ Scheduled deliverables of Phases 4A/5/6, correctly absent in Phase 2:
 - API Resources for all major entities
 - Horizon configuration with four queue lanes *(configured; nothing dispatches to them yet — see D6/Phase 5)*
 - CI pipeline (Pint, PHPStan level 8, tests, `composer audit`)
-- OpenAPI attributes on all ~47 endpoints; spec generates cleanly
+- OpenAPI attributes on all endpoints; spec generates cleanly (75 paths)
 - State machine (`HasStateMachine`) integrated across all models
 - Fake drivers: `FakeGateway`, `FakeSmsDriver`, `FakeEmailDriver`, `FakeWhatsAppDriver`
 - Atomic reservation (`tryReserve`/`confirmSale`/`releaseReservation`) and atomic admission (`tryAdmit`) — verified under concurrency
 - A gateway-verified payment issues a ticket (D1) and idempotency is enforced on registration creation and payment initiation (D4)
-- 115 tests passing, Pint clean, PHPStan level 8 clean, `composer audit` clean
+- 189 tests passing, Pint clean, PHPStan level 8 clean, `composer audit` clean
 
 ### ⚠️ Previously listed as complete — corrected 2026-08-03, D3/D4/D1-related rows resolved 2026-08-04
 
@@ -73,8 +74,30 @@ These were on the "done" list but the code did not support the claim at the time
 - [~] OpenAPI spec published (`public/docs/openapi.json`, regenerate via `php artisan app:generate-open-api-spec`) — **still needs review by the frontend lead**, which is a human sign-off step outside what this session can complete. Phase 3 formally depends on it.
 - [x] D1–D4 closed, with a regression test asserting a `tickets` row after gateway verification
 - [ ] D10's admin check-in endpoints delivered, or explicitly rescheduled — **rescheduled** (see D10 above), not delivered
-- [x] `composer test` green with the new assertions (115 passing), Pint and PHPStan level 8 clean
+- [x] `composer test` green with the new assertions (189 passing), Pint and PHPStan level 8 clean
 - [ ] D1–D4 closed, with a regression test asserting a `tickets` row after **gateway** verification
+
+### 🚧 Phase 3.5 (CMS) — in progress
+
+The **backend foundation slice landed 2026-08-04**, sequenced per docs/08's own note ("schema and public read API in weeks 1–2") so Phase 3's marketing pages build against real content rather than fixtures.
+
+**Shipped:**
+
+- Seventh module `app/Domain/Content/` — `ContentPage`, `ContentBlock`, `ContentPageRevision`, `Menu`, `MenuItem`, `Sponsor`, `ScheduleItem`, `Faq`, `GalleryAlbum`, `GalleryItem`
+- Ten migrations (`2026_08_04_1000*`), factories for every model, and `ContentSeeder` with real bilingual copy — wired into `DatabaseSeeder`
+- `content.*` permissions in `config/rbac.php`, granted to Event Manager except `content.delete` (Super Admin only, matching every other `*.delete`)
+- Public read API under `/api/v1/public/content/` — `pages`, `pages/{slug}`, `menus`, `menus/{code}`, `sponsors`, `schedule`, `faqs`, `gallery`, `gallery/{slug}`
+- 45 new tests (`tests/Feature/Public/ContentApiTest.php`, `tests/Unit/Domain/Content/ContentLocaleTest.php`) plus two `content.*` RBAC pairs
+
+**Still open — the admin half:** CRUD controllers with revision capture/restore, the media upload endpoint (also closes D9 and unblocks Phase 4A's manual payment-proof upload), the SPA CMS screens, and the ISR revalidation hook.
+
+**Conventions this module establishes — follow them, don't re-litigate:**
+
+- **Bilingual is paired `_bn` columns, not a `content_translations` table.** `title`/`title_bn`, `data`/`data_bn`. Matches `ticket_types.name`/`name_bn`, stays type-safe at PHPStan level 8, and keeps a page read to one row with no join — which matters because every content response is ETagged and CDN-cached. Locale resolution and the per-field fallback to English live in `App\Domain\Content\Support\ContentLocale` — never re-implement that fallback in a resource.
+- **Two visibility models, deliberately.** `ContentPage` has the full `draft → in_review → published → archived` state machine plus `published_at` scheduling (`scopeLive()`/`isLive()` are the single definition of "the public may see this"). Every other content type carries a plain `is_published` boolean (`scopePublished()` via `IsPublishableContent`). Don't add a status column to a sponsor or an FAQ.
+- **Unpublished content answers 404, never 403**, and a draft slug's body is byte-identical to a nonexistent one — the response shape must not become a probe for draft slugs. Preview tokens are compared with `hash_equals` and preview responses are `no-store` + `noindex`.
+- **Pages are at `/public/content/pages/{slug}`**, not `/public/content/{slug}` — the latter collides the moment an editor slugs a page `faqs` or `sponsors`.
+- `ScheduleItem::event_session_code` is a **soft** reference to CheckIn's `event_sessions.code`, intentionally not a foreign key — the module boundary forbids Content reaching into another module's tables, and published copy must survive a session being renamed.
 
 ### 💳 Payments — development environment
 
@@ -102,7 +125,7 @@ A single Laravel application at the repo root, which serves **both** the API and
 
 | Path | What lives there |
 |---|---|
-| `app/Domain/{Module}/` | The six domain modules — Actions, Models, Policies, Services, Events, Listeners |
+| `app/Domain/{Module}/` | The seven domain modules — Actions, Models, Policies, Services, Events, Listeners |
 | `app/Http/Controllers/Api/{Public,Attendee,Admin,Scanner}/` | Thin controllers, split by audience |
 | `app/Http/Controllers/Webhooks/` | Gateway IPN endpoints (one per gateway) |
 | `routes/api/` | `public.php`, `attendee.php`, `admin.php`, wired by `v1.php`; plus `scanner.php`, `webhooks.php` at `routes/` |
@@ -176,7 +199,7 @@ php artisan db:seed --class=LoadTestSeeder       # bulk volume for performance w
 
 Full design docs live in `docs/` (`01`–`08`, start at `docs/README.md`). Read the relevant doc before making non-trivial changes to a subsystem — the ADRs in `docs/README.md` explain *why*, and getting them wrong breaks correctness at the gate on event day, not just a test. The load-bearing decisions:
 
-- **Modular monolith.** Laravel organized into six domain modules under `app/Domain/`: `Registration`, `Payment`, `Ticketing`, `Notification`, `CheckIn`, `Reporting`, plus `Shared` for cross-cutting concerns (`User`, `EventSetting`, `ActivityLog`, `IdempotencyKey`, and support traits). Modules communicate through events and service interfaces — **never reach into another module's Eloquent models directly**. ⚠️ **This is the target, not the current state (D6):** the `Events/`/`Listeners/` directories are empty and existing code violates it (`CreateRegistration` creates `Payment` directly; `VerifyManualPayment` calls `IssueTicket` directly). Write *new* cross-module code the right way — an event and a listener — rather than copying the existing violations. Phase 3.5 adds a seventh module, `Content`.
+- **Modular monolith.** Laravel organized into seven domain modules under `app/Domain/`: `Registration`, `Payment`, `Ticketing`, `Notification`, `CheckIn`, `Reporting`, `Content`, plus `Shared` for cross-cutting concerns (`User`, `EventSetting`, `MediaFile`, `ActivityLog`, `IdempotencyKey`, and support traits). Modules communicate through events and service interfaces — **never reach into another module's Eloquent models directly**. ⚠️ **This is the target, not the current state (D6):** most `Events/`/`Listeners/` directories are still empty and existing code violates it (`CreateRegistration` creates `Payment` directly; `VerifyManualPayment` calls `IssueTicket` directly). Write *new* cross-module code the right way — an event and a listener — rather than copying the existing violations. `Content` (added Phase 3.5, 2026-08-04) holds the line: it references CheckIn's event sessions only by a soft `event_session_code` string, never a foreign key or a model import.
 - **Layering within a module:** HTTP (`app/Http/Controllers` — thin, no business logic) → FormRequests (validation + `authorize()`) → Actions/domain services in `app/Domain/*/Actions` and `*/Services` → Repositories/Eloquent → async Jobs for anything slow (gateway calls, PDF/QR rendering, SMS/email/WhatsApp). The queue boundary is deliberate: registration and payment must stay fast and transactional; notification delivery and asset generation are allowed to be slow or briefly broken.
 - **Money is integer paisa, never float/decimal** (`BIGINT UNSIGNED`, 1 BDT = 100 paisa), with an explicit `currency` column. Never introduce a decimal money column.
 - **Public-facing identifiers are ULIDs**; auto-increment BIGINT PKs stay internal only. Routes use `{model:ulid}` binding (see `routes/api/*.php`).

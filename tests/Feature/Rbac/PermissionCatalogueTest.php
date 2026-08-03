@@ -66,6 +66,42 @@ class PermissionCatalogueTest extends TestCase
         $this->assertFalse($eventManager->can('payment.manage_gateway_credentials'));
     }
 
+    public function test_event_manager_can_publish_content_but_not_delete_it(): void
+    {
+        $eventManager = User::factory()->create();
+        $eventManager->assignRole('Event Manager');
+
+        $superAdmin = User::factory()->create();
+        $superAdmin->assignRole('Super Admin');
+
+        // Editing and publishing site content is operational work; hard
+        // deletion follows the same Super-Admin-only rule as every other
+        // `*.delete` permission in the catalogue.
+        $this->assertTrue($eventManager->can('content.create'));
+        $this->assertTrue($eventManager->can('content.update'));
+        $this->assertTrue($eventManager->can('content.publish'));
+        $this->assertTrue($eventManager->can('content.manage_media'));
+        $this->assertFalse($eventManager->can('content.delete'));
+        $this->assertTrue($superAdmin->can('content.delete'));
+    }
+
+    public function test_volunteer_has_no_content_permissions(): void
+    {
+        $volunteer = User::factory()->create();
+        $volunteer->assignRole('Volunteer');
+
+        foreach (config('rbac.permissions') as $permission) {
+            if (! str_starts_with((string) $permission, 'content.')) {
+                continue;
+            }
+
+            $this->assertFalse(
+                $volunteer->can($permission),
+                "Volunteer must not hold [{$permission}]."
+            );
+        }
+    }
+
     public function test_event_manager_can_refund_but_not_rotate_signing_keys(): void
     {
         $eventManager = User::factory()->create();

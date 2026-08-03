@@ -25,12 +25,14 @@ class DummyDataSeeder extends Seeder
         $ticketTypes = TicketType::all();
         if ($ticketTypes->isEmpty()) {
             $this->command->error('Please run TicketTypeSeeder first.');
+
             return;
         }
 
         $gates = Gate::all();
         if ($gates->isEmpty()) {
             $this->command->error('Please run GateSeeder first.');
+
             return;
         }
 
@@ -74,7 +76,7 @@ class DummyDataSeeder extends Seeder
             $adults = fake()->numberBetween(1, 2);
             $children = fake()->numberBetween(0, 2);
             $subtotal = $ticketType->base_price_paisa + ($children * 50000);
-            $regNum = 'REG-100Y-' . str_pad((string) $i, 6, '0', STR_PAD_LEFT);
+            $regNum = 'REG-100Y-'.str_pad((string) $i, 6, '0', STR_PAD_LEFT);
 
             $registration = Registration::create([
                 'ulid' => (string) Str::ulid(),
@@ -97,7 +99,7 @@ class DummyDataSeeder extends Seeder
             // Create Succeeded Payment
             $payment = Payment::create([
                 'ulid' => (string) Str::ulid(),
-                'payment_number' => 'PAY-100Y-' . str_pad((string) $i, 6, '0', STR_PAD_LEFT),
+                'payment_number' => 'PAY-100Y-'.str_pad((string) $i, 6, '0', STR_PAD_LEFT),
                 'registration_id' => $registration->id,
                 'attendee_id' => $attendee->id,
                 'method' => fake()->randomElement(['bkash', 'nagad', 'rocket', 'sslcommerz']),
@@ -107,7 +109,7 @@ class DummyDataSeeder extends Seeder
                 'amount_paid_paisa' => $subtotal,
                 'net_paisa' => $subtotal,
                 'currency' => 'BDT',
-                'gateway_transaction_id' => 'TXN' . strtoupper(Str::random(8)),
+                'gateway_transaction_id' => 'TXN'.strtoupper(Str::random(8)),
                 'initiated_at' => $registration->submitted_at,
                 'paid_at' => $registration->confirmed_at,
                 'idempotency_key' => (string) Str::uuid(),
@@ -116,7 +118,7 @@ class DummyDataSeeder extends Seeder
             // Create Issued Ticket
             $ticket = Ticket::create([
                 'ulid' => (string) Str::ulid(),
-                'ticket_number' => 'DEC100-' . $ticketType->code . '-' . now()->year . '-' . str_pad((string) $i, 5, '0', STR_PAD_LEFT),
+                'ticket_number' => 'DEC100-'.$ticketType->code.'-'.now()->year.'-'.str_pad((string) $i, 5, '0', STR_PAD_LEFT),
                 'registration_id' => $registration->id,
                 'attendee_id' => $attendee->id,
                 'ticket_type_id' => $ticketType->id,
@@ -164,7 +166,7 @@ class DummyDataSeeder extends Seeder
             ]);
 
             $subtotal = $ticketType->base_price_paisa;
-            $regNum = 'REG-100Y-' . str_pad((string) ($confirmedCount + $i), 6, '0', STR_PAD_LEFT);
+            $regNum = 'REG-100Y-'.str_pad((string) ($confirmedCount + $i), 6, '0', STR_PAD_LEFT);
 
             $registration = Registration::create([
                 'ulid' => (string) Str::ulid(),
@@ -185,7 +187,7 @@ class DummyDataSeeder extends Seeder
 
             Payment::create([
                 'ulid' => (string) Str::ulid(),
-                'payment_number' => 'PAY-100Y-' . str_pad((string) ($confirmedCount + $i), 6, '0', STR_PAD_LEFT),
+                'payment_number' => 'PAY-100Y-'.str_pad((string) ($confirmedCount + $i), 6, '0', STR_PAD_LEFT),
                 'registration_id' => $registration->id,
                 'attendee_id' => $attendee->id,
                 'method' => fake()->randomElement(['bkash', 'nagad', 'rocket']),
@@ -207,7 +209,7 @@ class DummyDataSeeder extends Seeder
 
             Registration::create([
                 'ulid' => (string) Str::ulid(),
-                'registration_number' => 'REG-100Y-' . str_pad((string) (45 + $i), 6, '0', STR_PAD_LEFT),
+                'registration_number' => 'REG-100Y-'.str_pad((string) (45 + $i), 6, '0', STR_PAD_LEFT),
                 'attendee_id' => $attendee->id,
                 'ticket_type_id' => $ticketType->id,
                 'participation_type' => 'single',
@@ -254,7 +256,7 @@ class DummyDataSeeder extends Seeder
                 ['email' => $staff['email']],
                 [
                     'name' => $staff['name'],
-                    'phone' => '+8801' . fake()->numerify('#########'),
+                    'phone' => '+8801'.fake()->numerify('#########'),
                     'password' => '$2y$12$eWzXh6zVlQ11.M1O8gXv8.5aN8g1r2A1t5N.1pW0l/Z1n2o3p4q5r', // 'password'
                     'status' => 'active',
                 ]

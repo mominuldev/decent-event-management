@@ -300,29 +300,34 @@ A **structured content CMS**, not a page builder. Editors fill typed fields in k
 
 ### Deliverables
 
-- Seventh domain module `app/Domain/Content/`, following the same Actions/Models/Policies layering
-- Migrations for: `content_pages`, `content_blocks`, `content_translations`, `menus`/`menu_items`, `sponsors`, `schedule_items`, `faqs`, `gallery_albums`/`gallery_items`
-- **Bilingual by construction** — every editable string is `en`/`bn` at the schema level, not a duplicated page tree
-- **Draft → review → published** via `HasStateMachine`, with `published_at` scheduling and a preview token for unpublished content
-- Revision history with restore; `content_pages` rows are versioned, never overwritten in place
-- Media library UI over the **existing** `media_files` table — this also closes D9's missing upload endpoint and unblocks manual payment-proof upload
-- Public read API: `GET /api/v1/public/content/{slug}`, `/menus`, `/sponsors`, `/schedule`, `/faqs`, cache-tagged and CDN-friendly with ETags
-- Admin CMS screens in the React SPA: page list, typed block editor, media picker, menu ordering, publish controls
-- RBAC: new `content.*` permissions in `config/rbac.php` (`view_any`, `create`, `update`, `publish`, `delete`, `manage_media`), seeded via `RbacSeeder`, with allow/deny test pairs
-- `next/image` + ISR revalidation hook so a publish invalidates the public site without a redeploy
+- [x] Seventh domain module `app/Domain/Content/`, following the same Actions/Models/Policies layering
+- [x] Migrations for: `content_pages`, `content_blocks`, `content_page_revisions`, `menus`/`menu_items`, `sponsors`, `schedule_items`, `faqs`, `gallery_albums`/`gallery_items` — ten tables, all shipped 2026-08-04
+- [x] **Bilingual by construction** — every editable string is `en`/`bn` at the schema level, not a duplicated page tree
+- [x] **Draft → review → published** via `HasStateMachine`, with `published_at` scheduling and a preview token for unpublished content
+- [~] Revision history with restore; `content_pages` rows are versioned, never overwritten in place — `content_page_revisions` table and model exist; the capture-on-save and restore actions land with the admin CRUD slice
+- [ ] Media library UI over the **existing** `media_files` table — this also closes D9's missing upload endpoint and unblocks manual payment-proof upload
+- [x] Public read API: `GET /api/v1/public/content/pages/{slug}`, `/menus`, `/sponsors`, `/schedule`, `/faqs`, `/gallery`, cache-tagged and CDN-friendly with ETags
+- [ ] Admin CMS screens in the React SPA: page list, typed block editor, media picker, menu ordering, publish controls
+- [x] RBAC: new `content.*` permissions in `config/rbac.php` (`view_any`, `view`, `create`, `update`, `publish`, `delete`, `manage_media`), seeded via `RbacSeeder`, with allow/deny test pairs
+- [ ] `next/image` + ISR revalidation hook so a publish invalidates the public site without a redeploy
+
+#### Two schema decisions taken on 2026-08-04, differing from the list above
+
+- **No `content_translations` table.** Bilingual content is paired `field`/`field_bn` columns (`title`/`title_bn`, `data`/`data_bn`), not a row-per-(record, locale, field) translation table. This matches how `ticket_types.name`/`name_bn` already works, stays type-safe under PHPStan level 8, and keeps a page read to a single row with no join — which matters because every public content response is ETagged and CDN-cached. The cost is that a third language would need a migration; for a single-event bilingual site that trade is deliberate. `App\Domain\Content\Support\ContentLocale` owns resolution and the per-field fallback to English.
+- **Pages live at `/public/content/pages/{slug}`, not `/public/content/{slug}`.** The original path would collide with the sibling collection routes the moment an editor slugs a page `faqs`, `sponsors`, `schedule`, `menus` or `gallery` — all of which are plausible on an event site.
 
 ### Exit criteria
 
-- [ ] A non-technical editor publishes a new page with an image and a Bangla title, unaided, in under five minutes
-- [ ] Publishing invalidates the CDN and the public site reflects it within 60 seconds
-- [ ] Unpublished content is unreachable without a valid preview token — verified by test, including the 404-not-403 rule
-- [ ] Every `content.*` permission has an allow-case and a deny-case test
+- [ ] A non-technical editor publishes a new page with an image and a Bangla title, unaided, in under five minutes — needs the admin CMS screens
+- [ ] Publishing invalidates the CDN and the public site reflects it within 60 seconds — needs the ISR revalidation hook
+- [x] Unpublished content is unreachable without a valid preview token — verified by test, including the 404-not-403 rule — **met 2026-08-04**: `ContentApiTest` covers draft, in-review, archived, soft-deleted and future-scheduled pages, wrong/empty preview tokens, and asserts a draft page and a nonexistent slug return byte-identical bodies
+- [x] Every `content.*` permission has an allow-case and a deny-case test — **met 2026-08-04** via the catalogue loop in `ComprehensivePermissionTest` plus explicit Event-Manager-can-publish-but-not-delete and Volunteer-holds-no-`content.*` pairs. HTTP round-trips follow with the admin CRUD slice
 - [ ] Phase 3's public marketing pages render entirely from CMS content, with **no hard-coded copy**
-- [ ] Bangla renders correctly through the full path: editor → database → API → rendered page
+- [x] Bangla renders correctly through the full path: editor → database → API → rendered page — **met 2026-08-04** for the database → API half, including inside JSON block payloads; the editor half arrives with the admin screens
 
 ### Notes
 
-Sequence the schema and public read API in weeks 1–2 so Phase 3's week 6 (public marketing pages) builds against real content rather than fixtures it will later have to unpick. Uploads must follow the file rules in [06](06-security-architecture.md) — magic-byte validation, image re-encoding to strip EXIF/GPS, randomised private filenames, signed short-TTL URLs. A CMS is the most common place those rules get quietly skipped.
+Sequence the schema and public read API in weeks 1–2 so Phase 3's week 6 (public marketing pages) builds against real content rather than fixtures it will later have to unpick. **That first slice shipped on 2026-08-04** — schema, models, factories, a bilingual `ContentSeeder`, `content.*` RBAC, and the public read API with locale resolution, ETag revalidation and preview tokens. What remains is the admin half: CRUD controllers with revision capture and restore, the media upload endpoint, the SPA screens, and the ISR hook. Uploads must follow the file rules in [06](06-security-architecture.md) — magic-byte validation, image re-encoding to strip EXIF/GPS, randomised private filenames, signed short-TTL URLs. A CMS is the most common place those rules get quietly skipped.
 
 ---
 

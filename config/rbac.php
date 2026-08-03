@@ -91,6 +91,16 @@ return [
         'notification.manage_templates',
         'notification.view_costs',
 
+        // Content management (Phase 3.5) — pages, blocks, menus, sponsors,
+        // schedule, FAQs, galleries, and the shared media library.
+        'content.view_any',
+        'content.view',
+        'content.create',
+        'content.update',
+        'content.publish',
+        'content.delete',
+        'content.manage_media',
+
         // Reporting
         'report.view_registrations',
         'report.view_revenue',
@@ -148,6 +158,13 @@ return [
 
             'notification.view_any', 'notification.resend',
             'notification.send_broadcast', 'notification.view_costs',
+
+            // Editing and publishing site content is operational work, so it
+            // sits with the Event Manager. `content.delete` does not — it
+            // follows the same no-hard-delete rule as registration.delete,
+            // attendee.delete, ticket_type.delete and gate.delete above.
+            'content.view_any', 'content.view', 'content.create',
+            'content.update', 'content.publish', 'content.manage_media',
 
             'report.view_registrations', 'report.view_revenue', 'report.view_attendance',
             'report.view_tshirt', 'report.view_batch_breakdown',
