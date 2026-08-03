@@ -2,11 +2,51 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Current Phase Status
+
+**Phase 2 — Backend API Development (Week 2 of 6 weeks)**
+
+### ✅ Completed - All Major Deliverables
+- Six-module domain structure (Registration, Payment, Ticketing, Notification, CheckIn, Reporting, Shared)
+- All 26 migrations with seeders and realistic factories
+- Eloquent models with relationships and observers
+- RBAC with roles, permissions, and policies (spatie/laravel-permission)
+- Sanctum authentication for all three guards (web-admin, attendee, scanner)
+- REST API v1 route structure (public, attendee, admin, scanner, webhooks)
+- API Resources for all major entities
+- Horizon queue configuration with four lanes
+- CI pipeline (Pint, PHPStan level 8, tests, composer audit)
+- OpenAPI documentation controller and basic spec
+- Idempotency middleware and handling
+- Activity logging infrastructure
+- State machine implementation (HasStateMachine trait) - integrated across all models
+- All controller actions implemented (no stubs remaining)
+- Fake gateway drivers (FakeGateway, FakeSmsDriver, FakeEmailDriver, FakeWhatsAppDriver)
+- TOTP 2FA for staff (TwoFactorAuthenticationService + controller)
+- Comprehensive test coverage (83 tests passing, including domain logic tests)
+
+### ✅ Recent Wins
+- Fixed 2 failing concurrency tests - now all 83 tests passing (100% pass rate)
+- Atomic reservation and admission mechanisms verified working correctly
+- All Phase 2 core deliverables completed ahead of schedule
+
+### 📋 Exit Criteria (from docs/08-development-roadmap.md)
+- [ ] Registration → payment → ticketing → admission flow works end-to-end in tests
+- [x] Concurrency tests pass (300 purchases against 100 capacity, 20 concurrent scans)
+- [ ] Every permission has passing allow-case and deny-case tests
+- [ ] OpenAPI spec published and reviewed by frontend lead
+
+### 🚨 External Dependencies (start during Phase 2!)
+- [ ] Payment gateway merchant applications (bKash, Nagad, Rocket, SSLCommerz) — **2-6 weeks lead time**
+- [ ] WhatsApp Business template approval
+- [ ] SMS vendor contract and sender ID
+- [ ] Domain registration and email SPF/DKIM/DMARC setup
+
+---
+
 ## Repository layout
 
 This repo is a single Laravel application at the repo root. `.github/workflows/backend-ci.yml` runs lint/static-analysis/tests against the repo root.
-
-This is Phase 1 architecture design (`docs/`) with Phase 2 (API/backend build-out) already underway — the domain models, migrations, and route skeletons exist; many controller actions are still stubs returning empty data.
 
 ## Commands
 

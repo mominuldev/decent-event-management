@@ -1,0 +1,120 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Decent Event Management API",
+        "description": "Event ticketing and management system API with registration, payment, ticketing, check-in, and reporting capabilities.",
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "https://api.example.com/v1",
+            "description": "Production server"
+        },
+        {
+            "url": "http://localhost:8000/api/v1",
+            "description": "Local development server"
+        }
+    ],
+    "paths": {
+        "/admin/auth/login": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Admin login with email/password and optional TOTP",
+                "operationId": "4582fd8c864b850bcdc1a9c523c0a8c0",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "email": {
+                                        "required": [
+                                            "email"
+                                        ],
+                                        "type": "string",
+                                        "format": "email"
+                                    },
+                                    "password": {
+                                        "required": [
+                                            "password"
+                                        ],
+                                        "type": "string"
+                                    },
+                                    "totp_code": {
+                                        "description": "TOTP code if 2FA is enabled",
+                                        "type": "string"
+                                    },
+                                    "device_name": {
+                                        "description": "Device name for the token",
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful login",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "token": {
+                                            "description": "API bearer token",
+                                            "type": "string"
+                                        },
+                                        "expires_at": {
+                                            "type": "string",
+                                            "format": "date-time"
+                                        },
+                                        "requires_2fa_setup": {
+                                            "type": "boolean"
+                                        },
+                                        "user": {
+                                            "properties": {
+                                                "ulid": {
+                                                    "type": "string"
+                                                },
+                                                "name": {
+                                                    "type": "string"
+                                                },
+                                                "email": {
+                                                    "type": "string",
+                                                    "format": "email"
+                                                },
+                                                "roles": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid credentials"
+                    },
+                    "423": {
+                        "description": "Account locked"
+                    }
+                }
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Authentication",
+            "description": "Admin and attendee authentication endpoints"
+        }
+    ]
+}
