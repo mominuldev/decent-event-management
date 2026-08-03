@@ -15,9 +15,12 @@ class InitiatePayment
 {
     public function __construct(private readonly PaymentGatewayResolver $gateways) {}
 
-    public function handle(Payment $payment, string $callbackUrl): Payment
+    /**
+     * @return array{payment: Payment, redirect_url: string}
+     */
+    public function handle(Payment $payment, string $callbackUrl): array
     {
-        return DB::transaction(function () use ($payment, $callbackUrl): Payment {
+        return DB::transaction(function () use ($payment, $callbackUrl): array {
             $gateway = $this->gateways->forMethod($payment->method);
 
             $result = $gateway->createIntent($payment, $callbackUrl);
@@ -39,7 +42,7 @@ class InitiatePayment
                 'response_payload' => $result->rawResponse,
             ]);
 
-            return $payment;
+            return ['payment' => $payment, 'redirect_url' => $result->redirectUrl];
         });
     }
 }

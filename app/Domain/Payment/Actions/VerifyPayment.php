@@ -2,6 +2,7 @@
 
 namespace App\Domain\Payment\Actions;
 
+use App\Domain\Payment\Events\PaymentSucceeded;
 use App\Domain\Payment\Gateways\Contracts\GatewayVerificationResult;
 use App\Domain\Payment\Gateways\PaymentGatewayResolver;
 use App\Domain\Payment\Models\Payment;
@@ -87,6 +88,8 @@ class VerifyPayment
 
             $registration->ticketType?->confirmSale();
         }
+
+        PaymentSucceeded::dispatch($payment);
 
         return self::OUTCOME_SUCCEEDED;
     }

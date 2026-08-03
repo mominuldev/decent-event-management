@@ -71,7 +71,8 @@ class PublicFlowTest extends TestCase
             'idempotency_key' => 'test-key-12345',
         ];
 
-        $response = $this->postJson(route('api.v1.public.registrations.store'), $payload);
+        $response = $this->withHeader('Idempotency-Key', 'test-key-12345')
+            ->postJson(route('api.v1.public.registrations.store'), $payload);
 
         $response->assertStatus(201)
             ->assertJsonPath('data.status', 'pending_payment');

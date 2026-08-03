@@ -4,25 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current Phase Status
 
-**Phase 2 — Backend API Development (Week 2 of 6 weeks) — closing out, 4 known defects open**
+**Phase 2 — Backend API Development (Week 2 of 6 weeks) — D1–D4 closed 2026-08-04, sign-off still pending frontend-lead OpenAPI review**
 
-> Reviewed 2026-08-03. Phase 2 is substantially built but **not signed off**: an architecture/code review found four real defects (D1–D4) plus five doc-vs-code drift items (D5–D9). Full detail, evidence, and file references live in [docs/08-development-roadmap.md §"Phase 2 review findings"](docs/08-development-roadmap.md). The roadmap was revised in the same pass — Phase 4 split into 4A (SSLCommerz sandbox, unblocked) and 4B (live cutover), and Phase 3.5 (CMS) added.
+> Reviewed 2026-08-03, defects closed 2026-08-04. The 2026-08-03 architecture/code review found four real defects (D1–D4) plus six doc-vs-code drift items (D5–D10); **D1–D4 are now closed** (see below) with a gateway-path regression test added. Full original detail, evidence, and file references live in [docs/08-development-roadmap.md §"Phase 2 review findings"](docs/08-development-roadmap.md). D5–D10 remain as tracked drift — none of them block sign-off, which now rests solely on the frontend-lead OpenAPI review. The roadmap was revised in the 2026-08-03 pass — Phase 4 split into 4A (SSLCommerz sandbox, unblocked) and 4B (live cutover), and Phase 3.5 (CMS) added.
 
-### 🔴 Open defects — close these before Phase 2 sign-off
+### ✅ D1–D4 closed 2026-08-04
 
-- **D1 — Gateway-verified payments never issue a ticket.** `VerifyPayment::markSucceeded()` (`app/Domain/Payment/Actions/VerifyPayment.php:75-100`) marks the payment `succeeded` and the registration `paid`, then stops. Only `VerifyManualPayment.php:65` calls `IssueTicket`. **This is the highest-priority bug in the repo** — every SSLCommerz payment will produce a paid registration with no ticket.
-- **D2 — The test suite cannot see D1.** `tests/Feature/EndToEndTest.php:111` reaches `paid` via the *manual* verification endpoint, and `tests/Feature/Payment/VerifyPaymentTest.php` never asserts a `tickets` row. Any fix must add a gateway-path regression test that asserts the ticket exists.
-- **D3 — No payment endpoint exists.** `InitiatePayment` has zero callers; `routes/api/public.php` stops at registration creation. The frontend has no way to start a payment.
-- **D4 — Idempotency is required but unenforced.** `StoreRegistrationRequest` demands `idempotency_key` and `EnsureIdempotency` is aliased in `bootstrap/app.php:34`, but attached to **zero routes**.
+- **D1 — fixed.** `VerifyPayment::markSucceeded()` now dispatches `App\Domain\Payment\Events\PaymentSucceeded`, handled by `App\Domain\Ticketing\Listeners\IssueTicketForSucceededPayment` (registered in `AppServiceProvider::boot()`), which issues the ticket. Deliberately built as an event/listener rather than a direct `IssueTicket` call, per the module-boundary rule below — this does not touch `VerifyManualPayment`'s existing direct call, which is still tracked under D6.
+- **D2 — fixed.** `tests/Feature/Payment/VerifyPaymentTest.php` and `tests/Feature/Payment/WebhookTest.php` now assert a `tickets` row after gateway verification; `tests/Feature/EndToEndTest.php` gained `test_complete_registration_to_admission_flow_via_gateway()`, a full registration → initiate → IPN → ticket → gate-admission run through the actual gateway path (no manual-verification shortcut).
+- **D3 — fixed.** `POST /api/v1/public/registrations/{registration}/payment/initiate` (`App\Http\Controllers\Api\Public\PaymentController::initiate`) calls `InitiatePayment` against the registration's pending payment and returns a `redirect_url`. The callback/return URL is built server-side from `services.frontend.url` (`FRONTEND_URL` env), never accepted from the client, to avoid an open-redirect. `success`/`fail`/`cancel` browser-return *handlers* were **not** added — the existing `GET /api/v1/public/registrations/{registration}` already exposes live payment status for the frontend to poll after redirect, and per docs/06 §6.6 the browser redirect must never itself mutate a payment, so there is nothing for a dedicated handler to do yet.
+- **D4 — fixed.** `idempotent:registration.create` is now attached to `POST /public/registrations` and `idempotent:payment.initiate` to the new initiate route (both require an `Idempotency-Key` header). Existing tests updated to send it; a replay-produces-cached-response regression test was added for both routes.
 
 ### ⚠️ Doc-vs-code drift (D5–D10) — fix the code or fix the docs, don't leave both
 
 - **D5** Reserved capacity leaks: `tryReserve()` on every registration, released only on explicit payment failure. `payments.expires_at` is never written and `routes/console.php` defines no schedule. Sweeper is a Phase 4A deliverable.
-- **D6** The event-driven module boundary described below **does not exist** — all ten `Events/`/`Listeners/` dirs are empty, nothing is dispatched, and modules call each other's actions and models directly.
+- **D6** The event-driven module boundary described below **still only partially exists** — `PaymentSucceeded`/`IssueTicketForSucceededPayment` (added closing D1) is the first real instance; `VerifyManualPayment` still calls `IssueTicket` directly, `CreateRegistration` still creates `Payment` directly, and the other nine `Events/`/`Listeners/` dirs are still empty. Write further cross-module code the right way rather than copying the remaining direct calls.
 - **D7** `payment_method` reaches the DB unvalidated (defaults to `bkash`); no validation of `max_admits`, `allowed_participant_types`, `is_active`/`is_public`, or the sale window.
 - **D8** `ActivityLog::create()` lives in five admin controllers, not in the actions — non-HTTP callers skip the audit trail.
 - **D9** No observers exist; no media upload endpoint (so manual payment proof is unusable); no `config/cors.php` for the Next.js origin; `config/sanctum.php` has `'expiration' => null`, so staff tokens never expire.
-- **D10** `routes/api/admin.php` has **no check-in endpoints**, though Phase 2's deliverable list names them — so the SPA's Check-in page has no backend. Also missing: users/roles, gates, devices, and volunteer CRUD. The notifications dashboard is correctly deferred to Phase 5.
+- **D10** `routes/api/admin.php` has **no check-in endpoints**, though Phase 2's deliverable list names them — so the SPA's Check-in page has no backend. Also missing: users/roles, gates, devices, and volunteer CRUD. **Explicitly rescheduled**, not silently dropped: this is a multi-endpoint slice of its own (check-in, gates, devices, users/roles, volunteer CRUD) rather than a same-day fix like D1–D4, and is tracked as the next follow-up after this close-out, ahead of Phase 3 needing the SPA's Check-in page un-stubbed. The notifications dashboard is correctly deferred to Phase 5.
 
 ### 🚧 Deferred by design — do NOT report these as bugs
 
@@ -42,36 +42,38 @@ Scheduled deliverables of Phases 4A/5/6, correctly absent in Phase 2:
 - API Resources for all major entities
 - Horizon configuration with four queue lanes *(configured; nothing dispatches to them yet — see D6/Phase 5)*
 - CI pipeline (Pint, PHPStan level 8, tests, `composer audit`)
-- OpenAPI attributes on all ~46 endpoints; spec generates cleanly
+- OpenAPI attributes on all ~47 endpoints; spec generates cleanly
 - State machine (`HasStateMachine`) integrated across all models
 - Fake drivers: `FakeGateway`, `FakeSmsDriver`, `FakeEmailDriver`, `FakeWhatsAppDriver`
 - Atomic reservation (`tryReserve`/`confirmSale`/`releaseReservation`) and atomic admission (`tryAdmit`) — verified under concurrency
-- 109 tests passing, Pint clean, PHPStan level 8 clean, `composer audit` clean
+- A gateway-verified payment issues a ticket (D1) and idempotency is enforced on registration creation and payment initiation (D4)
+- 115 tests passing, Pint clean, PHPStan level 8 clean, `composer audit` clean
 
-### ⚠️ Previously listed as complete — corrected 2026-08-03
+### ⚠️ Previously listed as complete — corrected 2026-08-03, D3/D4/D1-related rows resolved 2026-08-04
 
-These were on the "done" list but the code does not support the claim. Do not rely on them:
+These were on the "done" list but the code did not support the claim at the time. D1, D3, and the idempotency half of D4 are now fixed (see above); the rest still apply — do not rely on them:
 
 | Claimed | Reality |
 |---|---|
 | "Eloquent models with … observers" | **No observers exist** anywhere in `app/` |
-| "Idempotency middleware and handling" | Middleware exists and is aliased; attached to **zero routes** (D4) |
-| "All controller actions implemented (no stubs remaining)" | True for existing controllers, but **there is no payment controller at all** (D3) |
 | "Activity logging infrastructure" | Works, but lives in controllers rather than actions, so non-HTTP callers bypass it (D8) |
-| "End-to-end registration → payment → ticketing → admission test" | The test reaches `paid` via the **manual** verification endpoint; the gateway path is untested and broken (D1/D2) |
 
 ### ✅ Recent wins (accurate)
 
 - Closed a real RBAC gap: 14 admin endpoints (registrations, attendees, payments, tickets, ticket types, reports, settings) had no permission check at all — any authenticated staff member of any role could call them. Added the missing checks plus two permissions that didn't exist yet (`attendee.delete`, `ticket_type.delete`).
 - Full permission-catalogue test: allow + deny case for every entry in `config/rbac.php`, plus HTTP round-trips against every enforced endpoint
 - Concurrency tests green: 300 purchases against 100 capacity sells exactly 100; 20 concurrent scans admit exactly once
-- Documented all ~46 API endpoints with OpenAPI attributes (was 1/50)
+- Documented all ~47 API endpoints with OpenAPI attributes (was 1/50)
+- Closed D1–D4 (2026-08-04): gateway payments now issue tickets end-to-end, a public payment-initiate endpoint exists, and idempotency is enforced on registration creation and payment initiation
 
 ### 📋 Exit Criteria (from docs/08-development-roadmap.md)
-- [ ] Registration → payment → ticketing → admission flow works end-to-end in tests — **not met (D1/D2)**: the existing test proves the manual-verification path only, never the gateway path
+- [x] Registration → payment → ticketing → admission flow works end-to-end in tests — **met 2026-08-04**: `EndToEndTest::test_complete_registration_to_admission_flow_via_gateway()` proves the actual gateway path (initiate → IPN → verify → ticket → admission), not just manual verification
 - [x] Concurrency tests pass (300 purchases against 100 capacity, 20 concurrent scans)
 - [x] Every permission has passing allow-case and deny-case tests
 - [~] OpenAPI spec published (`public/docs/openapi.json`, regenerate via `php artisan app:generate-open-api-spec`) — **still needs review by the frontend lead**, which is a human sign-off step outside what this session can complete. Phase 3 formally depends on it.
+- [x] D1–D4 closed, with a regression test asserting a `tickets` row after gateway verification
+- [ ] D10's admin check-in endpoints delivered, or explicitly rescheduled — **rescheduled** (see D10 above), not delivered
+- [x] `composer test` green with the new assertions (115 passing), Pint and PHPStan level 8 clean
 - [ ] D1–D4 closed, with a regression test asserting a `tickets` row after **gateway** verification
 
 ### 💳 Payments — development environment

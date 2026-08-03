@@ -74,7 +74,8 @@ class EndToEndTest extends TestCase
             'idempotency_key' => 'test-e2e-flow-12345',
         ];
 
-        $registrationResponse = $this->postJson(route('api.v1.public.registrations.store'), $registrationPayload);
+        $registrationResponse = $this->withHeader('Idempotency-Key', 'test-e2e-flow-12345')
+            ->postJson(route('api.v1.public.registrations.store'), $registrationPayload);
 
         $registrationResponse->assertStatus(201)
             ->assertJsonPath('data.status', 'pending_payment');
@@ -229,6 +230,155 @@ class EndToEndTest extends TestCase
         $this->assertEquals('fully_admitted', $ticket->status);
     }
 
+    /**
+     * D1/D2 regression: the *gateway* verification path — public initiate
+     * endpoint → server-to-server IPN → VerifyPayment — must issue a
+     * ticket and admit at a gate, not just the manual-verification path
+     * the pre-existing test above exercises.
+     */
+    public function test_complete_registration_to_admission_flow_via_gateway(): void
+    {
+        $this->seed(RbacSeeder::class);
+
+        $ticketType = TicketType::factory()->create([
+            'name' => 'General Alumni',
+            'base_price_paisa' => 100000,
+            'quantity_total' => 100,
+            'quantity_reserved' => 0,
+            'quantity_sold' => 0,
+            'is_active' => true,
+            'is_public' => true,
+            'sale_starts_at' => now()->subDay(),
+            'sale_ends_at' => now()->addDays(10),
+        ]);
+
+        $session = EventSession::factory()->create([
+            'checkin_opens_at' => now()->subHour(),
+            'checkin_closes_at' => now()->addHours(5),
+            'is_active' => true,
+        ]);
+
+        $gate = Gate::factory()->create([
+            'event_session_id' => $session->id,
+            'is_active' => true,
+        ]);
+
+        // STEP 1: Public creates registration
+        $registrationPayload = [
+            'full_name' => 'Salma Khatun',
+            'mobile' => '+8801611223344',
+            'email' => 'salma@example.com',
+            'gender' => 'female',
+            'participant_type' => 'former_student',
+            'ssc_batch_year' => 2011,
+            'ticket_type_ulid' => $ticketType->ulid,
+            'participation_type' => 'single',
+            'adults_count' => 1,
+            'children_count' => 0,
+            'idempotency_key' => 'test-gateway-flow-registration',
+        ];
+
+        $registrationResponse = $this->withHeader('Idempotency-Key', 'test-gateway-flow-registration')
+            ->postJson(route('api.v1.public.registrations.store'), $registrationPayload);
+
+        $registrationResponse->assertStatus(201);
+
+        $attendee = Attendee::where('mobile', '+8801611223344')->first();
+        $registration = Registration::where('attendee_id', $attendee->id)->first();
+        $payment = Payment::where('registration_id', $registration->id)->first();
+
+        $this->assertEquals('pending', $payment->status);
+
+        // STEP 2: Public initiates the gateway payment session
+        $initiateResponse = $this->withHeader('Idempotency-Key', 'test-gateway-flow-initiate')
+            ->postJson(route('api.v1.public.registrations.payment.initiate', ['registration' => $registration->ulid]));
+
+        $initiateResponse->assertStatus(200)
+            ->assertJsonPath('data.payment.status', 'initiated');
+
+        $this->assertNotEmpty($initiateResponse->json('data.redirect_url'));
+
+        $payment->refresh();
+        $this->assertEquals('initiated', $payment->status);
+        $this->assertNotNull($payment->gateway_reference);
+
+        // STEP 3: Gateway sends a server-to-server IPN — the browser
+        // success_url redirect is deliberately never simulated here,
+        // because it must never be the thing that transitions a payment.
+        $signature = hash_hmac(
+            'sha256',
+            "{$payment->gateway_reference}|succeeded",
+            (string) config('services.fake_gateway.webhook_secret')
+        );
+
+        $webhookResponse = $this->postJson(route('webhooks.bkash'), [
+            'gateway_reference' => $payment->gateway_reference,
+            'status' => 'succeeded',
+            'gateway_transaction_id' => 'FAKETXN-GATEWAY-E2E',
+            'signature' => $signature,
+        ]);
+
+        $webhookResponse->assertStatus(200)->assertJsonPath('status', 'received');
+
+        // STEP 4: Payment succeeded, registration confirmed, ticket issued
+        $payment->refresh();
+        $registration->refresh();
+
+        $this->assertEquals('succeeded', $payment->status);
+        $this->assertEquals('confirmed', $registration->status);
+
+        $ticket = Ticket::where('registration_id', $registration->id)->first();
+
+        $this->assertNotNull($ticket, 'Gateway-verified payment did not issue a ticket.');
+        $this->assertEquals('active', $ticket->status);
+        $this->assertEquals($attendee->id, $ticket->attendee_id);
+
+        $qrCode = QrCode::where('ticket_id', $ticket->id)->first();
+        $this->assertNotNull($qrCode);
+
+        // STEP 5: Scanner admits attendee on the gateway-issued ticket
+        $volunteerUser = User::factory()->create(['status' => 'active']);
+        $volunteerUser->assignRole('Volunteer');
+
+        $volunteerProfile = VolunteerProfile::factory()->create([
+            'user_id' => $volunteerUser->id,
+            'is_active' => true,
+        ]);
+
+        VolunteerGateAssignment::create([
+            'volunteer_profile_id' => $volunteerProfile->id,
+            'gate_id' => $gate->id,
+            'event_session_id' => $session->id,
+        ]);
+
+        $token = $volunteerUser->createToken('scanner-device', ['scanner']);
+        $plainTextToken = $token->plainTextToken;
+
+        CheckInDevice::factory()->create([
+            'assigned_volunteer_profile_id' => $volunteerProfile->id,
+            'sanctum_token_id' => $token->accessToken->id,
+            'status' => 'active',
+        ]);
+
+        $scanResponse = $this->withToken($plainTextToken)
+            ->withHeaders(['X-Gate-Id' => $gate->ulid])
+            ->postJson(route('scanner.v1.scans.store'), [
+                'gate_id' => (string) $gate->id,
+                'scans' => [[
+                    'client_scan_uuid' => (string) Str::uuid(),
+                    'raw_payload' => $qrCode->payload,
+                    'party_size' => 1,
+                    'scanned_at' => now()->toIso8601String(),
+                ]],
+            ]);
+
+        $scanResponse->assertStatus(200)->assertJsonPath('results.0.result', 'admitted');
+
+        $ticket->refresh();
+        $this->assertEquals(1, $ticket->admitted_count);
+        $this->assertEquals('fully_admitted', $ticket->status);
+    }
+
     public function test_flow_with_family_registration(): void
     {
         // Setup family ticket type
@@ -265,7 +415,8 @@ class EndToEndTest extends TestCase
             'idempotency_key' => 'test-family-flow-98765',
         ];
 
-        $response = $this->postJson(route('api.v1.public.registrations.store'), $payload);
+        $response = $this->withHeader('Idempotency-Key', 'test-family-flow-98765')
+            ->postJson(route('api.v1.public.registrations.store'), $payload);
 
         $response->assertStatus(201)
             ->assertJsonPath('data.status', 'pending_payment');
@@ -301,7 +452,8 @@ class EndToEndTest extends TestCase
         ];
 
         // First request
-        $firstResponse = $this->postJson(route('api.v1.public.registrations.store'), $payload);
+        $firstResponse = $this->withHeader('Idempotency-Key', 'test-idempotency-key-11111')
+            ->postJson(route('api.v1.public.registrations.store'), $payload);
         $firstResponse->assertStatus(201);
 
         // Different idempotency key should create separate registration
@@ -309,10 +461,20 @@ class EndToEndTest extends TestCase
         $payload2['idempotency_key'] = 'test-idempotency-key-22222';
         $payload2['mobile'] = '+8801912345679';
 
-        $secondResponse = $this->postJson(route('api.v1.public.registrations.store'), $payload2);
+        $secondResponse = $this->withHeader('Idempotency-Key', 'test-idempotency-key-22222')
+            ->postJson(route('api.v1.public.registrations.store'), $payload2);
         $secondResponse->assertStatus(201);
 
         // Should create two registrations with different idempotency keys
+        $this->assertDatabaseCount('registrations', 2);
+        $this->assertDatabaseCount('payments', 2);
+
+        // A retried request with the SAME header and body replays the
+        // cached response rather than creating a second registration (D4).
+        $retryResponse = $this->withHeader('Idempotency-Key', 'test-idempotency-key-11111')
+            ->postJson(route('api.v1.public.registrations.store'), $payload);
+        $retryResponse->assertStatus(201);
+
         $this->assertDatabaseCount('registrations', 2);
         $this->assertDatabaseCount('payments', 2);
     }

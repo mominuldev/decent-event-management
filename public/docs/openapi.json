@@ -4388,6 +4388,97 @@
                 }
             }
         },
+        "/public/registrations/{registration}/payment/initiate": {
+            "post": {
+                "tags": [
+                    "Public"
+                ],
+                "summary": "Start a gateway payment session for a registration's pending payment",
+                "description": "Creates a gateway session via the payment method chosen at registration time and returns the URL to redirect the payer's browser to. This never marks the payment `succeeded` — only a server-to-server webhook ({@see \\App\\Http\\Controllers\\Webhooks}) or the expiry sweeper can do that.",
+                "operationId": "a8357f62726c8503c1e3a52076343009",
+                "parameters": [
+                    {
+                        "name": "registration",
+                        "in": "path",
+                        "description": "Registration ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "description": "Client-generated key; a retried initiate call with the same key and body replays the cached response",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Gateway session created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "properties": {
+                                                "redirect_url": {
+                                                    "type": "string"
+                                                },
+                                                "payment": {
+                                                    "properties": {
+                                                        "ulid": {
+                                                            "type": "string"
+                                                        },
+                                                        "status": {
+                                                            "type": "string"
+                                                        },
+                                                        "method": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Missing Idempotency-Key header"
+                    },
+                    "404": {
+                        "description": "Registration not found"
+                    },
+                    "422": {
+                        "description": "Registration has no payment awaiting initiation",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "string",
+                                            "example": "no_payable_payment"
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/public/registrations": {
             "post": {
                 "tags": [

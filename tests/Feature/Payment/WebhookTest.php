@@ -6,6 +6,7 @@ use App\Domain\Payment\Models\Payment;
 use App\Domain\Payment\Models\PaymentTransaction;
 use App\Domain\Registration\Models\Attendee;
 use App\Domain\Registration\Models\Registration;
+use App\Domain\Ticketing\Models\Ticket;
 use App\Domain\Ticketing\Models\TicketType;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -77,9 +78,12 @@ class WebhookTest extends TestCase
             'net_paisa' => 50000,
         ]);
 
+        // D1/D2 regression: a webhook-verified payment must carry the
+        // registration all the way to `confirmed` with a ticket issued —
+        // not stop at `paid`.
         $this->assertDatabaseHas('registrations', [
             'ulid' => $this->registration->ulid,
-            'status' => 'paid',
+            'status' => 'confirmed',
         ]);
 
         $this->assertDatabaseHas('ticket_types', [
@@ -87,6 +91,8 @@ class WebhookTest extends TestCase
             'quantity_reserved' => 0,
             'quantity_sold' => 1,
         ]);
+
+        $this->assertTrue(Ticket::where('registration_id', $this->registration->id)->exists());
     }
 
     public function test_webhook_with_invalid_signature_is_ignored(): void

@@ -42,4 +42,12 @@ return [
         'webhook_secret' => env('FAKE_GATEWAY_WEBHOOK_SECRET', 'fake-gateway-webhook-secret'),
     ],
 
+    // Public site origin (separate Next.js repo). Used only to build the
+    // gateway return URL in InitiatePayment — never accepted from a
+    // request, since a client-supplied redirect target is an open-redirect
+    // risk.
+    'frontend' => [
+        'url' => env('FRONTEND_URL', env('APP_URL', 'http://localhost')),
+    ],
+
 ];

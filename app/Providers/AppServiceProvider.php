@@ -3,15 +3,18 @@
 namespace App\Providers;
 
 use App\Domain\Notification\Channels\NotificationChannelResolver;
+use App\Domain\Payment\Events\PaymentSucceeded;
 use App\Domain\Payment\Gateways\PaymentGatewayResolver;
 use App\Domain\Payment\Models\Payment;
 use App\Domain\Registration\Models\Attendee;
 use App\Domain\Registration\Models\Registration;
+use App\Domain\Ticketing\Listeners\IssueTicketForSucceededPayment;
 use App\Domain\Ticketing\Models\Ticket;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
@@ -45,6 +48,8 @@ class AppServiceProvider extends ServiceProvider
             'ticket' => Ticket::class,
             'attendee' => Attendee::class,
         ]);
+
+        Event::listen(PaymentSucceeded::class, IssueTicketForSucceededPayment::class);
 
         RateLimiter::for('api', fn ($request) => Limit::perMinute(60)->by($request->user()?->id ?: $request->ip()));
 
