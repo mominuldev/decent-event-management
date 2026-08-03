@@ -5,9 +5,11 @@ namespace Tests\Feature\Rbac;
 use App\Domain\CheckIn\Models\CheckIn;
 use App\Domain\CheckIn\Models\Gate;
 use App\Domain\CheckIn\Models\VolunteerProfile;
+use App\Domain\Notification\Models\Notification;
 use App\Domain\Payment\Models\Payment;
 use App\Domain\Registration\Models\Attendee;
 use App\Domain\Registration\Models\Registration;
+use App\Domain\Shared\Models\EventSetting;
 use App\Domain\Shared\Models\User;
 use App\Domain\Ticketing\Models\Ticket;
 use App\Domain\Ticketing\Models\TicketType;
@@ -23,7 +25,7 @@ use Tests\TestCase;
  * Two layers of coverage:
  *  1. Every catalogued permission is exercised at the Gate level
  *     ($user->can()) — this covers permissions that don't yet have a wired
- *     HTTP endpoint (notification management remains unbuilt in Phase 2).
+ *     HTTP endpoint.
  *  2. Every admin route that DOES exist gets a real HTTP allow/deny
  *     round-trip, to prove the permission is actually enforced in the
  *     controller/FormRequest and not just declared in the catalogue.
@@ -475,5 +477,69 @@ class ComprehensivePermissionTest extends TestCase
 
         Sanctum::actingAs($this->noRoleUser, ['*'], 'web-admin');
         $this->getJson(route('api.v1.admin.check-ins.live-dashboard'))->assertStatus(403);
+    }
+
+    public function test_notification_view_any_http(): void
+    {
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.notifications.index'))->assertStatus(200);
+
+        Sanctum::actingAs($this->volunteer, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.notifications.index'))->assertStatus(403);
+    }
+
+    public function test_notification_view_http(): void
+    {
+        $notification = Notification::factory()->create();
+
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.notifications.show', ['notification' => $notification->ulid]))->assertStatus(200);
+
+        Sanctum::actingAs($this->volunteer, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.notifications.show', ['notification' => $notification->ulid]))->assertStatus(403);
+    }
+
+    public function test_notification_resend_http(): void
+    {
+        $notification = Notification::factory()->create(['status' => 'failed']);
+
+        Sanctum::actingAs($this->volunteer, ['*'], 'web-admin');
+        $this->postJson(route('api.v1.admin.notifications.resend', ['notification' => $notification->ulid]))->assertStatus(403);
+
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->postJson(route('api.v1.admin.notifications.resend', ['notification' => $notification->ulid]))->assertStatus(200);
+    }
+
+    public function test_notification_view_costs_http(): void
+    {
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.notifications.costs'))->assertStatus(200);
+
+        Sanctum::actingAs($this->volunteer, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.notifications.costs'))->assertStatus(403);
+    }
+
+    public function test_notification_send_broadcast_http(): void
+    {
+        EventSetting::factory()->create(['key' => 'notification.sms_enabled', 'group' => 'notification', 'type' => 'bool', 'value' => '1']);
+
+        Sanctum::actingAs($this->volunteer, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.notifications.kill-switches'))->assertStatus(403);
+
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.notifications.kill-switches'))->assertStatus(200);
+        $this->patchJson(route('api.v1.admin.notifications.kill-switches.update'), [
+            'channel' => 'sms',
+            'enabled' => false,
+        ])->assertStatus(200);
+    }
+
+    public function test_notification_manage_templates_http(): void
+    {
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.notifications.templates'))->assertStatus(403);
+
+        Sanctum::actingAs($this->superAdmin, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.notifications.templates'))->assertStatus(200);
     }
 }

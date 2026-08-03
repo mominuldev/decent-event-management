@@ -443,6 +443,16 @@ Make the outbox actually deliver, with cost visibility and per-channel kill swit
 ### Notes
 Bangla SMS rendering is the classic failure here — it looks correct in the vendor's web console and arrives as boxes on an actual handset. Test on physical devices across all four operators, not on a simulator.
 
+### Buildable-now slice closed 2026-08-04
+
+Applied the same split Phase 4A used for SSLCommerz: none of the three external dependencies below (WhatsApp template approval, SMS vendor contract, verified email domain) are secured, so pull forward everything that's pure engineering and explicitly flag the rest — don't silently drop it, and don't guess at a vendor-specific webhook contract that doesn't exist yet.
+
+**Built:** the full outbox → dispatcher job → channel driver → delivery-receipt pipeline for all seven channel-matrix events, a real `MailDriver` (works against `MAIL_MAILER=log` today, swaps to Postmark/SES/Resend on credentials alone), GSM-7/Unicode SMS segment budgeting, the T-7/T-1/T-0 reminder scheduler, bilingual draft templates, per-channel kill switches enforced at send-time, and the admin delivery-log/costs/kill-switches/templates dashboard (backend + SPA, browser-verified).
+
+**Exit criteria this closes:** "A kill switch flip stops sending within 60 seconds" and "No duplicate sends under job retry" are met — both have passing regression tests. Cost/segment tracking is real infrastructure, tested against `FakeSmsDriver`'s real budgeting math; it has no live numbers to reconcile against a vendor dashboard yet.
+
+**Exit criteria still open, and why:** "End-to-end delivery confirmed on real Bangladeshi numbers" and "Bangla SMS renders correctly on physical handsets" need a live SMS vendor, which is unpicked. "Cost per message reconciles against the vendor's dashboard" needs the same. None of these are engineering gaps — see CLAUDE.md's Phase 5 section for the exact deferred list (real `SmsDriver`/`WhatsAppDriver`, DLR webhooks, automated bounce handling).
+
 ---
 
 ## Phase 6 — QR Ticket Generation
@@ -752,6 +762,28 @@ D10 (missing admin check-in/gates/devices/users/volunteer endpoints) was reviewe
 **Verification:** 115 tests passing (up from 109, all new assertions/tests green), Pint clean, PHPStan level 8 clean, `composer audit` clean, OpenAPI regenerated (47 endpoints, up from 46).
 
 **What's left for Phase 2 sign-off:** only the frontend-lead OpenAPI review — a human step outside engineering's control.
+
+---
+
+### 2026-08-04 — Phase 5 buildable-now slice closed
+
+Applied the same split [Phase 4A](#phase-4a--sslcommerz-sandbox-integration) used for payments: none of Phase 5's three external dependencies (WhatsApp template approval, SMS vendor contract, verified email domain — all still unchecked) are secured, so the pure-engineering slice was built now and the vendor-blocked pieces were explicitly flagged rather than guessed at or silently dropped.
+
+**What changed**
+
+| Area | What shipped |
+|---|---|
+| Outbox pipeline | Six new domain events (`RegistrationCreated`, `PaymentFailed`, `ManualPaymentVerified`, `RefundIssued`, `TicketIssued`, plus the existing `PaymentSucceeded`) each wired to a `Notification\Listeners\Queue*Notification` → `Notification\Actions\QueueNotification`, which writes the outbox row and dispatches `app/Jobs/SendNotificationJob` (first job in the codebase) after commit |
+| Retry/backoff | `SendNotificationJob` follows the exact ADR-07 schedule (`60,300,900,3600,21600`s, 5 attempts) already configured in `config/horizon.php`'s `notifications` lane, and checks the per-channel kill switch at send-time so a flip cancels anything still queued |
+| Real email | `Notification\Channels\MailDriver` wired into `NotificationChannelResolver` for `email` — works today against `MAIL_MAILER=log`, needs only credentials (not a rebuild) to point at Postmark/SES/Resend |
+| SMS cost accounting | `SmsSegmentCalculator` — real GSM-7/Unicode segment budgeting per [§1.6](01-system-architecture.md#16-notification-architecture), replacing `FakeSmsDriver`'s hardcoded rate |
+| Reminders | `QueueEventReminders` console command, scheduled daily, queues T-7/T-1/T-0 per `EventSession`; per-window `template_key`s make the outbox's dedupe constraint handle same-day re-runs |
+| Templates & kill switches | Bilingual (EN/BN) draft templates for all 9 (event, channel) combos via `NotificationTemplateSeeder`; three kill-switch `event_settings` rows |
+| Admin surface | 7-endpoint `NotificationController` (log, detail, resend, costs, kill-switches, templates), with `ResendNotification`/`SetChannelKillSwitch` Actions writing their own `ActivityLog` entry (new code following the D8 discipline); SPA `features/notifications/` replaces the placeholder, browser-verified against a real login |
+
+**Explicitly deferred, not silently dropped:** real `SmsDriver`/`WhatsAppDriver` (no vendor named, no approved templates — `NotificationChannelResolver` keeps both on `Fake*Driver`), DLR/delivery-status webhook endpoints (vendor-specific payload/signature shape, unknown without a chosen vendor), automated bounce/opt-out handling via provider webhooks, and live cross-carrier delivery verification. Full list and rationale in CLAUDE.md's Phase 5 section.
+
+**Verification:** 219 tests passing (up from 189, 31 new), Pint clean, PHPStan level 8 clean, `composer audit` clean, OpenAPI regenerated (81 paths). SPA changes verified with `npm run typecheck` and a real browser session (login → delivery log/costs/kill-switches/templates tabs → a live kill-switch flip round-tripped through the API with a toast and UI update).
 
 ---
 

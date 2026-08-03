@@ -2,6 +2,7 @@
 
 namespace App\Domain\Payment\Actions;
 
+use App\Domain\Payment\Events\RefundIssued;
 use App\Domain\Payment\Models\Payment;
 use App\Domain\Payment\Models\Refund;
 use App\Domain\Shared\Models\User;
@@ -66,6 +67,8 @@ class RefundPayment
                     }
                 }
             }
+
+            RefundIssued::dispatch($refund);
 
             return $refund;
         });

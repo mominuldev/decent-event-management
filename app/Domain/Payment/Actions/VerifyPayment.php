@@ -2,6 +2,7 @@
 
 namespace App\Domain\Payment\Actions;
 
+use App\Domain\Payment\Events\PaymentFailed;
 use App\Domain\Payment\Events\PaymentSucceeded;
 use App\Domain\Payment\Gateways\Contracts\GatewayVerificationResult;
 use App\Domain\Payment\Gateways\PaymentGatewayResolver;
@@ -103,6 +104,8 @@ class VerifyPayment
         $payment->transitionTo('failed', ['failed_at' => now()]);
 
         $payment->registration?->ticketType?->releaseReservation();
+
+        PaymentFailed::dispatch($payment);
 
         return self::OUTCOME_FAILED;
     }

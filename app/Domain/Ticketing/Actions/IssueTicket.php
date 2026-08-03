@@ -3,6 +3,7 @@
 namespace App\Domain\Ticketing\Actions;
 
 use App\Domain\Registration\Models\Registration;
+use App\Domain\Ticketing\Events\TicketIssued;
 use App\Domain\Ticketing\Models\Ticket;
 use Illuminate\Support\Facades\DB;
 
@@ -62,6 +63,8 @@ class IssueTicket
 
             $registration->transitionTo('confirmed');
             $registration->save();
+
+            TicketIssued::dispatch($ticket);
 
             return $ticket;
         });

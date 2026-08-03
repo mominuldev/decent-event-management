@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\Admin\AttendeeController;
 use App\Http\Controllers\Api\Admin\CheckInController;
 use App\Http\Controllers\Api\Admin\DeviceController;
 use App\Http\Controllers\Api\Admin\GateController;
+use App\Http\Controllers\Api\Admin\NotificationController;
 use App\Http\Controllers\Api\Admin\PaymentController;
 use App\Http\Controllers\Api\Admin\RegistrationController;
 use App\Http\Controllers\Api\Admin\ReportController;
@@ -26,6 +27,15 @@ Route::apiResource('payments', PaymentController::class)->only(['index', 'show']
 Route::post('payments/{payment:ulid}/verify-manual', [PaymentController::class, 'verifyManual'])->name('payments.verify-manual');
 Route::post('payments/{payment:ulid}/reject-manual', [PaymentController::class, 'rejectManual'])->name('payments.reject-manual');
 Route::post('payments/{payment:ulid}/refund', [PaymentController::class, 'refund'])->name('payments.refund');
+
+// Static sub-paths registered before the `{notification}` binding so
+// `costs`/`kill-switches`/`templates` never get swallowed as a ULID.
+Route::get('notifications/costs', [NotificationController::class, 'costs'])->name('notifications.costs');
+Route::get('notifications/kill-switches', [NotificationController::class, 'killSwitches'])->name('notifications.kill-switches');
+Route::patch('notifications/kill-switches', [NotificationController::class, 'updateKillSwitch'])->name('notifications.kill-switches.update');
+Route::get('notifications/templates', [NotificationController::class, 'templates'])->name('notifications.templates');
+Route::apiResource('notifications', NotificationController::class)->only(['index', 'show']);
+Route::post('notifications/{notification:ulid}/resend', [NotificationController::class, 'resend'])->name('notifications.resend');
 
 Route::get('reports/{reportKey}', [ReportController::class, 'show'])->name('reports.show');
 Route::post('reports/{reportKey}/export', [ReportController::class, 'export'])->name('reports.export');

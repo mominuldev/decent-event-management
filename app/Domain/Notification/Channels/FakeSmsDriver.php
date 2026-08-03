@@ -5,13 +5,16 @@ namespace App\Domain\Notification\Channels;
 use App\Domain\Notification\Channels\Contracts\ChannelSendResult;
 use App\Domain\Notification\Channels\Contracts\NotificationChannelInterface;
 use App\Domain\Notification\Models\Notification;
+use App\Domain\Notification\Support\SmsSegmentCalculator;
 use Illuminate\Support\Str;
 
 /**
- * Deterministic stand-in for the real Bangladesh SMS gateway (Phase 5).
- * Segment/cost accounting mirrors the real budgeting model (docs §1.6)
- * so cost-tracking code can be built and tested against it now: a fixed
- * per-segment rate, one segment per 160 characters.
+ * Deterministic stand-in for the real Bangladesh SMS gateway. Kept as
+ * `sms`'s driver until a vendor is chosen — see
+ * {@see NotificationChannelResolver}.
+ * Segment/cost accounting uses the real GSM-7/Unicode budgeting rule
+ * ({@see SmsSegmentCalculator}) so cost-tracking code can be built and
+ * tested against it now.
  *
  * Simulates a delivery failure when the recipient matches
  * {@see self::FAILURE_TRIGGER_RECIPIENT}.
@@ -19,8 +22,6 @@ use Illuminate\Support\Str;
 class FakeSmsDriver implements NotificationChannelInterface
 {
     public const string FAILURE_TRIGGER_RECIPIENT = '8801700000000';
-
-    private const int CHARACTERS_PER_SEGMENT = 160;
 
     private const int COST_PAISA_PER_SEGMENT = 50;
 
@@ -36,13 +37,14 @@ class FakeSmsDriver implements NotificationChannelInterface
             );
         }
 
-        $segments = max(1, (int) ceil(mb_strlen((string) $notification->body_rendered) / self::CHARACTERS_PER_SEGMENT));
+        $segments = SmsSegmentCalculator::segmentCount((string) $notification->body_rendered);
 
         return new ChannelSendResult(
             status: ChannelSendResult::STATUS_SENT,
             providerMessageId: 'FAKE-SMS-'.strtoupper(Str::random(16)),
             segmentCount: $segments,
             costPaisa: $segments * self::COST_PAISA_PER_SEGMENT,
+            provider: 'fake_sms',
         );
     }
 }

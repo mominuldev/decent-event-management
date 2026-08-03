@@ -23,6 +23,7 @@ final readonly class ChannelSendResult
         public ?int $costPaisa,
         public ?string $errorMessage = null,
         public array $rawResponse = [],
+        public ?string $provider = null,
     ) {}
 
     public function isSent(): bool

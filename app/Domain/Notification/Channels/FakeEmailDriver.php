@@ -8,10 +8,10 @@ use App\Domain\Notification\Models\Notification;
 use Illuminate\Support\Str;
 
 /**
- * Deterministic stand-in for the real transactional email provider
- * (Phase 5). Simulates a bounce when the recipient matches
- * {@see self::FAILURE_TRIGGER_RECIPIENT}, so failure handling can be
- * tested without mocking a provider SDK.
+ * Deterministic double for {@see MailDriver},
+ * the real email channel since Phase 5. Bound explicitly in tests that
+ * need failure-path coverage without mocking `Mail`. Simulates a bounce
+ * when the recipient matches {@see self::FAILURE_TRIGGER_RECIPIENT}.
  */
 class FakeEmailDriver implements NotificationChannelInterface
 {
@@ -34,6 +34,7 @@ class FakeEmailDriver implements NotificationChannelInterface
             providerMessageId: 'FAKE-EMAIL-'.strtoupper(Str::random(16)),
             segmentCount: null,
             costPaisa: 0,
+            provider: 'fake_email',
         );
     }
 }

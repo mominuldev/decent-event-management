@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             EventSessionSeeder::class,
             GateSeeder::class,
             ContentSeeder::class,
+            NotificationTemplateSeeder::class,
             DummyDataSeeder::class,
         ]);
 
@@ -27,7 +28,7 @@ class DatabaseSeeder extends Seeder
             [
                 'name' => 'Super Admin',
                 'phone' => '+8801700000000',
-                'password' => '$2y$12$eWzXh6zVlQ11.M1O8gXv8.5aN8g1r2A1t5N.1pW0l/Z1n2o3p4q5r',
+                'password' => 'password',
                 'status' => 'active',
             ]
         );

@@ -257,7 +257,7 @@ class DummyDataSeeder extends Seeder
                 [
                     'name' => $staff['name'],
                     'phone' => '+8801'.fake()->numerify('#########'),
-                    'password' => '$2y$12$eWzXh6zVlQ11.M1O8gXv8.5aN8g1r2A1t5N.1pW0l/Z1n2o3p4q5r', // 'password'
+                    'password' => 'password',
                     'status' => 'active',
                 ]
             );

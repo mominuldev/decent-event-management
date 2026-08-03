@@ -34,6 +34,7 @@ class EventSettingSeeder extends Seeder
 
             ['key' => 'qr.active_signing_key_id', 'group' => 'checkin', 'value' => 'key-1', 'type' => 'string', 'is_public' => false, 'label' => 'Active QR signing key'],
 
+            ['key' => 'notification.email_enabled', 'group' => 'notification', 'value' => '1', 'type' => 'bool', 'is_public' => false, 'label' => 'Email channel enabled'],
             ['key' => 'notification.sms_enabled', 'group' => 'notification', 'value' => '1', 'type' => 'bool', 'is_public' => false, 'label' => 'SMS channel enabled'],
             ['key' => 'notification.whatsapp_enabled', 'group' => 'notification', 'value' => '1', 'type' => 'bool', 'is_public' => false, 'label' => 'WhatsApp channel enabled'],
         ];

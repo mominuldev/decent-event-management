@@ -4,6 +4,7 @@ namespace App\Domain\Registration\Actions;
 
 use App\Domain\CheckIn\Models\EventSession;
 use App\Domain\Payment\Models\Payment;
+use App\Domain\Registration\Events\RegistrationCreated;
 use App\Domain\Registration\Models\Attendee;
 use App\Domain\Registration\Models\Registration;
 use App\Domain\Registration\Models\RegistrationGuest;
@@ -133,6 +134,8 @@ class CreateRegistration
             ]);
 
             $registration->load(['attendee', 'guests', 'ticketType', 'payments']);
+
+            RegistrationCreated::dispatch($registration);
 
             return $registration;
         });

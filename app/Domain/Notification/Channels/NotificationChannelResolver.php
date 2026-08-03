@@ -7,9 +7,12 @@ use Illuminate\Contracts\Foundation\Application;
 use InvalidArgumentException;
 
 /**
- * Maps a `notifications.channel` value to its driver. Every case resolves
- * to a `Fake*Driver` until Phase 5 swaps in the real provider — this is
- * the one place that changes, dispatch code never branches on channel name.
+ * Maps a `notifications.channel` value to its driver — the one place
+ * that branches on channel name, dispatch code never does. `email` is
+ * real ({@see MailDriver}) since Phase 5. `sms`/`whatsapp` stay on their
+ * `Fake*Driver` because no Bangladesh SMS vendor is chosen and Meta
+ * hasn't approved WhatsApp templates yet — both unchecked external
+ * dependencies in CLAUDE.md, not missing engineering.
  */
 class NotificationChannelResolver
 {
@@ -18,7 +21,7 @@ class NotificationChannelResolver
     public function forChannel(string $channel): NotificationChannelInterface
     {
         return match ($channel) {
-            'email' => $this->app->make(FakeEmailDriver::class),
+            'email' => $this->app->make(MailDriver::class),
             'sms' => $this->app->make(FakeSmsDriver::class),
             'whatsapp' => $this->app->make(FakeWhatsAppDriver::class),
             default => throw new InvalidArgumentException("Unsupported notification channel [{$channel}]."),

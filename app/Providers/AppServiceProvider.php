@@ -3,11 +3,22 @@
 namespace App\Providers;
 
 use App\Domain\Notification\Channels\NotificationChannelResolver;
+use App\Domain\Notification\Listeners\QueueManualPaymentVerifiedNotification;
+use App\Domain\Notification\Listeners\QueuePaymentFailedNotification;
+use App\Domain\Notification\Listeners\QueuePaymentSucceededNotification;
+use App\Domain\Notification\Listeners\QueueRefundIssuedNotification;
+use App\Domain\Notification\Listeners\QueueRegistrationReceivedNotification;
+use App\Domain\Notification\Listeners\QueueTicketDeliveredNotification;
+use App\Domain\Payment\Events\ManualPaymentVerified;
+use App\Domain\Payment\Events\PaymentFailed;
 use App\Domain\Payment\Events\PaymentSucceeded;
+use App\Domain\Payment\Events\RefundIssued;
 use App\Domain\Payment\Gateways\PaymentGatewayResolver;
 use App\Domain\Payment\Models\Payment;
+use App\Domain\Registration\Events\RegistrationCreated;
 use App\Domain\Registration\Models\Attendee;
 use App\Domain\Registration\Models\Registration;
+use App\Domain\Ticketing\Events\TicketIssued;
 use App\Domain\Ticketing\Listeners\IssueTicketForSucceededPayment;
 use App\Domain\Ticketing\Models\Ticket;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -50,6 +61,15 @@ class AppServiceProvider extends ServiceProvider
         ]);
 
         Event::listen(PaymentSucceeded::class, IssueTicketForSucceededPayment::class);
+
+        // Notification outbox writers (docs/01 §1.6) — thin listeners, one
+        // per business event, all delegating to Notification\Actions\QueueNotification.
+        Event::listen(RegistrationCreated::class, QueueRegistrationReceivedNotification::class);
+        Event::listen(PaymentSucceeded::class, QueuePaymentSucceededNotification::class);
+        Event::listen(PaymentFailed::class, QueuePaymentFailedNotification::class);
+        Event::listen(ManualPaymentVerified::class, QueueManualPaymentVerifiedNotification::class);
+        Event::listen(RefundIssued::class, QueueRefundIssuedNotification::class);
+        Event::listen(TicketIssued::class, QueueTicketDeliveredNotification::class);
 
         RateLimiter::for('api', fn ($request) => Limit::perMinute(60)->by($request->user()?->id ?: $request->ip()));
 

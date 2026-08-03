@@ -6,6 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Phase 2 — Backend API Development (Week 2 of 6 weeks) — D1–D4 closed 2026-08-04, sign-off still pending frontend-lead OpenAPI review**
 **Phase 3.5 — CMS: backend foundation slice landed 2026-08-04 (schema + public read API). Admin half still open — see [§Phase 3.5 in progress](#-phase-35-cms--in-progress) below.**
+**Phase 5 — Email/SMS/WhatsApp: buildable-now slice landed 2026-08-04 (outbox, dispatcher, real email, admin dashboard). Real SMS/WhatsApp drivers and DLR webhooks stay deferred — no vendor is chosen and Meta hasn't approved templates. See [§Phase 5 below](#-phase-5-emailsmswhatsapp--buildable-now-slice-closed-2026-08-04).**
 
 > Reviewed 2026-08-03, defects closed 2026-08-04. The 2026-08-03 architecture/code review found four real defects (D1–D4) plus six doc-vs-code drift items (D5–D10); **D1–D4 are now closed** (see below) with a gateway-path regression test added. Full original detail, evidence, and file references live in [docs/08-development-roadmap.md §"Phase 2 review findings"](docs/08-development-roadmap.md). D5–D10 remain as tracked drift — none of them block sign-off, which now rests solely on the frontend-lead OpenAPI review. The roadmap was revised in the 2026-08-03 pass — Phase 4 split into 4A (SSLCommerz sandbox, unblocked) and 4B (live cutover), and Phase 3.5 (CMS) added.
 
@@ -27,8 +28,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### 🚧 Deferred by design — do NOT report these as bugs
 
-Scheduled deliverables of Phases 4A/5/6, correctly absent in Phase 2:
-`placeholder_sig` QR signature and the missing `QrSigner`; `ProcessCheckIn` not verifying signatures; ticket PDF rendering; the interim O(n) ticket-number counter in `IssueTicket.php:19`; notification delivery (the outbox is never written); the expiry sweeper and reconciliation jobs; real gateway adapters other than `FakeGateway`.
+Scheduled deliverables of Phases 4A/6, correctly absent in Phase 2:
+`placeholder_sig` QR signature and the missing `QrSigner`; `ProcessCheckIn` not verifying signatures; ticket PDF rendering; the interim O(n) ticket-number counter in `IssueTicket.php:19`; the expiry sweeper and reconciliation jobs; real gateway adapters other than `FakeGateway`.
+
+Vendor-blocked pieces of Phase 5 (engineering is done; only a vendor pick or Meta approval is missing — see [§Phase 5](#-phase-5-emailsmswhatsapp--buildable-now-slice-closed-2026-08-04)): real `SmsDriver`/`WhatsAppDriver` (no Bangladesh SMS vendor named, no approved WhatsApp templates — both unchecked in External Dependencies below); DLR/delivery-webhook endpoints (the payload/signature shape is vendor-specific and unknown without one).
 
 **Security constraint until Phase 6 lands:** QR admission is unauthenticated — `ProcessCheckIn.php:176` hardcodes `signature_valid => true` and verifies nothing. No ticket PDF may be delivered to a real attendee before the Ed25519 signing scheme ships.
 
@@ -41,14 +44,15 @@ Scheduled deliverables of Phases 4A/5/6, correctly absent in Phase 2:
 - Sanctum authentication for all three guards (web-admin, attendee, scanner) + TOTP 2FA for staff
 - REST API v1 route structure (public, attendee, admin, scanner, webhooks)
 - API Resources for all major entities
-- Horizon configuration with four queue lanes *(configured; nothing dispatches to them yet — see D6/Phase 5)*
+- Horizon configuration with four queue lanes — `notifications` is live and draining (Phase 5); `payments`/`tickets`/`reports` are configured but nothing dispatches to them yet
 - CI pipeline (Pint, PHPStan level 8, tests, `composer audit`)
-- OpenAPI attributes on all endpoints; spec generates cleanly (75 paths)
+- OpenAPI attributes on all endpoints; spec generates cleanly (81 paths)
 - State machine (`HasStateMachine`) integrated across all models
-- Fake drivers: `FakeGateway`, `FakeSmsDriver`, `FakeEmailDriver`, `FakeWhatsAppDriver`
+- Real `MailDriver` (Phase 5) plus fake drivers for the vendor-blocked channels: `FakeGateway`, `FakeSmsDriver`, `FakeWhatsAppDriver`
 - Atomic reservation (`tryReserve`/`confirmSale`/`releaseReservation`) and atomic admission (`tryAdmit`) — verified under concurrency
 - A gateway-verified payment issues a ticket (D1) and idempotency is enforced on registration creation and payment initiation (D4)
-- 189 tests passing, Pint clean, PHPStan level 8 clean, `composer audit` clean
+- The notification outbox is real: 6 domain events write outbox rows via `Notification\Actions\QueueNotification`, `app/Jobs/SendNotificationJob` drains them with the ADR-07 backoff schedule, per-channel kill switches are enforced at send-time (Phase 5)
+- 219 tests passing, Pint clean, PHPStan level 8 clean, `composer audit` clean
 
 ### ⚠️ Previously listed as complete — corrected 2026-08-03, D3/D4/D1-related rows resolved 2026-08-04
 
@@ -98,6 +102,28 @@ The **backend foundation slice landed 2026-08-04**, sequenced per docs/08's own 
 - **Unpublished content answers 404, never 403**, and a draft slug's body is byte-identical to a nonexistent one — the response shape must not become a probe for draft slugs. Preview tokens are compared with `hash_equals` and preview responses are `no-store` + `noindex`.
 - **Pages are at `/public/content/pages/{slug}`**, not `/public/content/{slug}` — the latter collides the moment an editor slugs a page `faqs` or `sponsors`.
 - `ScheduleItem::event_session_code` is a **soft** reference to CheckIn's `event_sessions.code`, intentionally not a foreign key — the module boundary forbids Content reaching into another module's tables, and published copy must survive a session being renamed.
+
+### ✅ Phase 5 (Email/SMS/WhatsApp) — buildable-now slice closed 2026-08-04
+
+Split the same way Phase 4A split off SSLCommerz sandbox work from live merchant onboarding: build everything that's pure engineering now, flag what needs a vendor pick or Meta approval rather than guessing at it. None of Phase 5's three external dependencies (WhatsApp template approval, SMS vendor contract, verified email domain) are secured yet — see External Dependencies below — so this is deliberately a subset of the full phase, not a claim that Phase 5 is done.
+
+**Shipped:**
+
+- Six domain events (`Registration\Events\RegistrationCreated`, `Payment\Events\{PaymentFailed,ManualPaymentVerified}`, `Payment\Events\RefundIssued`, `Ticketing\Events\TicketIssued`, plus the existing `Payment\Events\PaymentSucceeded`) each wired to a thin `Notification\Listeners\Queue*Notification` that delegates to `Notification\Actions\QueueNotification` — the outbox-write choke point for every trigger in docs/01 §1.6's channel matrix. `TicketIssued` fires from `IssueTicket::execute()` itself, so it covers both the gateway and manual-verification payment paths without touching D6's module-boundary debt.
+- `app/Jobs/SendNotificationJob` (the first job in the codebase) drains the outbox: checks the per-channel kill switch at send-time (not enqueue-time, so a flip cancels anything already queued), resolves the driver via the existing `NotificationChannelResolver`, and retries on the exact ADR-07 schedule (`60,300,900,3600,21600`s, 5 attempts) already configured in `config/horizon.php`'s `supervisor-notifications` lane.
+- Real `Notification\Channels\MailDriver` — Laravel `Mail`, works today against the `log` driver and needs no code change to point at Postmark/SES/Resend (already scaffolded in `config/services.php`) once real keys land, same pattern as `SslCommerzClient` only needing credentials. `NotificationChannelResolver` resolves `email` → `MailDriver`; `sms`/`whatsapp` stay on their `Fake*Driver`.
+- `App\Domain\Notification\Support\SmsSegmentCalculator` — real GSM-7/Unicode segment budgeting (160 vs 70 chars/segment) per docs/01 §1.6; `FakeSmsDriver` uses it instead of a hardcoded rate, so cost-tracking code is tested against the real rule.
+- `app/Console/Commands/QueueEventReminders`, scheduled daily in `routes/console.php`, queues T-7/T-1/T-0 reminders per `EventSession`; each window is its own `template_key` so the outbox's dedupe constraint makes a same-day re-run a no-op.
+- Bilingual (EN/BN) draft templates seeded for all 9 (event, channel) combos in the channel matrix via `NotificationTemplateSeeder`; three kill-switch rows (`notification.{email,sms,whatsapp}_enabled`) in `EventSettingSeeder`.
+- Admin `NotificationController` (7 endpoints: delivery log, detail, resend, costs, kill-switches get/patch, templates) — `Notification\Actions\{ResendNotification,SetChannelKillSwitch}` write their own `ActivityLog` entry (D8 discipline: new code logs from the Action, not the controller). SPA `resources/js/features/notifications/` replaces the placeholder with delivery-log/costs/kill-switches/templates tabs, verified against a real login in a browser.
+- 31 new backend tests (outbox dedupe and per-event queuing, job success/retry/exhaustion/kill-switch-cancel, `MailDriver` via `Mail::fake()`, reminder dedupe) plus 6 new `notification.*` HTTP permission round-trips.
+
+**Still deferred, not silently dropped** — the same vendor-blocked items are listed under "Deferred by design" above:
+
+- Real `SmsDriver` (no Bangladesh vendor named in any doc) and real `WhatsAppDriver` (Meta template approval still pending) — `NotificationChannelResolver` keeps both on `Fake*Driver`.
+- DLR/delivery-status webhook endpoints — the signature/payload shape depends on which SMS/WhatsApp vendor gets picked; building one now would be guessing. The `NotificationEvent` model and delivery-timeline UI exist and are ready to receive real receipts once a webhook lands.
+- Automated bounce/opt-out handling via provider webhooks — same reason. The `sent → bounced` state machine transition and `FakeEmailDriver`'s simulated bounce already exercise the state, just not from a real provider yet.
+- Live cross-carrier delivery verification (GP/Robi/Banglalink/Teletalk) — inherently unmeetable without a live SMS vendor.
 
 ### 💳 Payments — development environment
 
@@ -209,9 +235,9 @@ Full design docs live in `docs/` (`01`–`08`, start at `docs/README.md`). Read 
 - **RBAC:** `spatie/laravel-permission` under the `web-admin` guard, catalogue seeded from the versioned `config/rbac.php` (never created ad hoc — this is what keeps staging/production provably in sync). Code must check **permissions** (`payment.verify_manual`), never role names. Staff (`users`) and attendees (`attendees`) are separate identity domains/guards — do not conflate them. Volunteer (`scanner` guard) access is additionally scoped server-side by enrolled device, assigned gate, and the check-in time window — see `docs/02-rbac-permissions.md` §2.4 for the full authorization flow (permission check **and** model policy must both pass).
 - **Routes** are split by audience under `routes/api/`: `public.php` (unauthenticated browse/register), `attendee.php` (attendee self-service, `auth:attendee`), `admin.php` (staff console, `auth:web-admin`), wired together in `routes/api/v1.php`; plus `routes/scanner.php` (volunteer devices) and `routes/webhooks.php` (payment gateway IPNs). `routes/api.php` just mounts `v1.php` under the `api/v1` prefix.
 - **Payments:** four gateways (bKash, Nagad, Rocket, SSLCommerz) behind one adapter contract (`createIntent`, `verify`, `refund`, `parseWebhook`) under `app/Domain/Payment/Gateways/`. A browser return-callback is **never** trusted to mark a payment succeeded — only a server-to-server verify call or a signature-validated IPN can do that. `payments` (the money intent) and `payment_transactions` (every gateway interaction, append-only) are deliberately separate tables — don't collapse them. ⚠️ Today **every** gateway name resolves to `FakeGateway` (`PaymentGatewayResolver::forMethod()`); `SslCommerzClient` is the Phase 4A deliverable — see the sandbox section above. `PaymentGatewayResolver` is the *only* place that may branch on gateway name; domain code never does.
-- **Notifications** go through a database outbox (`notifications`/`notification_events`) written in the same transaction as the triggering business event, then drained by queue workers via provider-agnostic channel drivers (Email/SMS/WhatsApp). Don't call a notification provider directly from request-handling code. ⚠️ Nothing writes to the outbox yet and there is no `app/Jobs` — delivery is Phase 5.
+- **Notifications** go through a database outbox (`notifications`/`notification_events`) written in the same transaction as the triggering business event (via `Notification\Actions\QueueNotification`), then drained by `app/Jobs/SendNotificationJob` on the `notifications` Horizon lane via provider-agnostic channel drivers (`NotificationChannelResolver`). Don't call a notification provider directly from request-handling code — dispatch a domain event and add a `Notification\Listeners\Queue*Notification` instead, following the six existing examples. ⚠️ `email` is real (`MailDriver`); `sms`/`whatsapp` still resolve to `Fake*Driver` pending a vendor pick and Meta template approval (see Phase 5 above).
 
-Queue lanes (Horizon) are named by urgency — `payments` (<5s), `tickets` (<30s), `notifications` (<60s), `reports` (minutes) — keep jobs on the queue that matches their latency budget, since notification volume must never delay a payment webhook. ⚠️ There is no `app/Jobs` directory yet and nothing is dispatched; the first jobs land in Phase 4A/5. When you add one, put it on the lane matching its latency budget rather than the default.
+Queue lanes (Horizon) are named by urgency — `payments` (<5s), `tickets` (<30s), `notifications` (<60s), `reports` (minutes) — keep jobs on the queue that matches their latency budget, since notification volume must never delay a payment webhook. `app/Jobs/SendNotificationJob` is the first job in the codebase and lives on the `notifications` lane; `payments`/`tickets`/`reports` still have nothing dispatched to them. When you add one, put it on the lane matching its latency budget rather than the default.
 
 ## Development conventions
 
@@ -244,4 +270,4 @@ Vite + React 19 + TypeScript strict, TanStack Query for all server state, TanSta
 - **Navigation and actions render from the permission set returned at login**, never from role names — same rule as the backend. A user must not see a control they cannot use.
 - **Types are hand-written today and will drift.** The roadmap's Phase 3 exit criterion requires no drift between client and server validation. Until the client is generated from `public/docs/openapi.json`, treat `types.ts` as needing a manual check whenever you change an API Resource.
 - **Run `npm run typecheck` before committing** — TypeScript is strict and CI does not currently catch SPA type errors.
-- Two pages are unbacked placeholders: **Check-in** and **Notifications** (D10). Check-in admin endpoints were a Phase 2 deliverable and are missing; the notifications dashboard arrives with Phase 5. Don't stub fake data into either — leave the placeholder and flag it.
+- No pages are unbacked placeholders anymore: Check-in (D10, closed 2026-08-04) and Notifications (Phase 5, closed 2026-08-04) both have real backends and full SPA screens. If you add a new module ahead of its backend, don't stub fake data — leave a `Placeholder` (`resources/js/features/misc/Placeholder.tsx`) and flag it, matching how these two were handled while open.

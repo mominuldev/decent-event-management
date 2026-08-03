@@ -2,6 +2,7 @@
 
 namespace App\Domain\Payment\Actions;
 
+use App\Domain\Payment\Events\ManualPaymentVerified;
 use App\Domain\Payment\Models\Payment;
 use App\Domain\Shared\Models\User;
 use App\Domain\Ticketing\Actions\IssueTicket;
@@ -64,6 +65,8 @@ class VerifyManualPayment
             if ($registration !== null) {
                 app(IssueTicket::class)->execute($registration);
             }
+
+            ManualPaymentVerified::dispatch($payment, $verifiedBy);
 
             return $payment->refresh();
         });

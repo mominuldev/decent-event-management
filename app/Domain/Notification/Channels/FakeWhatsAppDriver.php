@@ -8,9 +8,12 @@ use App\Domain\Notification\Models\Notification;
 use Illuminate\Support\Str;
 
 /**
- * Deterministic stand-in for Meta's WhatsApp Cloud API (Phase 5). Cost is
- * a flat per-conversation rate, matching how Meta actually bills template
- * messages (per conversation, not per character).
+ * Deterministic stand-in for Meta's WhatsApp Cloud API. Kept as
+ * `whatsapp`'s driver until Meta approves the utility-category templates
+ * (an unchecked external dependency in CLAUDE.md) — see
+ * {@see NotificationChannelResolver}.
+ * Cost is a flat per-conversation rate, matching how Meta actually bills
+ * template messages (per conversation, not per character).
  *
  * Simulates a delivery failure when the recipient matches
  * {@see self::FAILURE_TRIGGER_RECIPIENT}.
@@ -38,6 +41,7 @@ class FakeWhatsAppDriver implements NotificationChannelInterface
             providerMessageId: 'FAKE-WA-'.strtoupper(Str::random(16)),
             segmentCount: null,
             costPaisa: self::COST_PAISA_PER_CONVERSATION,
+            provider: 'fake_whatsapp',
         );
     }
 }
