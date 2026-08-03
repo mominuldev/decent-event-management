@@ -2,13 +2,16 @@
 
 use App\Http\Controllers\Api\Admin\AttendeeController;
 use App\Http\Controllers\Api\Admin\CheckInController;
+use App\Http\Controllers\Api\Admin\DeviceController;
 use App\Http\Controllers\Api\Admin\GateController;
 use App\Http\Controllers\Api\Admin\PaymentController;
 use App\Http\Controllers\Api\Admin\RegistrationController;
 use App\Http\Controllers\Api\Admin\ReportController;
+use App\Http\Controllers\Api\Admin\RoleController;
 use App\Http\Controllers\Api\Admin\SettingController;
 use App\Http\Controllers\Api\Admin\TicketController;
 use App\Http\Controllers\Api\Admin\TicketTypeController;
+use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\Admin\VolunteerController;
 use Illuminate\Support\Facades\Route;
 
@@ -30,8 +33,19 @@ Route::post('reports/{reportKey}/export', [ReportController::class, 'export'])->
 Route::get('settings', [SettingController::class, 'index'])->name('settings.index');
 Route::patch('settings/{key}', [SettingController::class, 'update'])->name('settings.update');
 
+Route::apiResource('volunteers', VolunteerController::class)->only(['index', 'store', 'show', 'update']);
 Route::post('volunteers/{volunteer:ulid}/enrolment-token', [VolunteerController::class, 'issueEnrolmentToken'])
     ->name('volunteers.enrolment-token');
+Route::post('volunteers/{volunteer:ulid}/assign-gate', [VolunteerController::class, 'assignGate'])->name('volunteers.assign-gate');
+Route::post('volunteers/{volunteer:ulid}/revoke-access', [VolunteerController::class, 'revokeAccess'])->name('volunteers.revoke-access');
+
+Route::apiResource('devices', DeviceController::class)->only(['index', 'show']);
+Route::post('devices/{device:ulid}/revoke', [DeviceController::class, 'revoke'])->name('devices.revoke');
+Route::get('devices/{device:ulid}/sync-status', [DeviceController::class, 'syncStatus'])->name('devices.sync-status');
+
+Route::get('roles', [RoleController::class, 'index'])->name('roles.index');
+Route::apiResource('users', UserController::class)->only(['index', 'show']);
+Route::post('users/{user:ulid}/assign-role', [UserController::class, 'assignRole'])->name('users.assign-role');
 
 Route::apiResource('gates', GateController::class);
 

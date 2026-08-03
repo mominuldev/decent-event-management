@@ -23,11 +23,13 @@ use Tests\TestCase;
  * Two layers of coverage:
  *  1. Every catalogued permission is exercised at the Gate level
  *     ($user->can()) — this covers permissions that don't yet have a wired
- *     HTTP endpoint (several admin surfaces are still unbuilt in Phase 2:
- *     volunteer/device/notification/user management, live dashboard).
+ *     HTTP endpoint (notification management remains unbuilt in Phase 2).
  *  2. Every admin route that DOES exist gets a real HTTP allow/deny
  *     round-trip, to prove the permission is actually enforced in the
  *     controller/FormRequest and not just declared in the catalogue.
+ *     Volunteer/device/user/role management endpoints have their own
+ *     HTTP coverage in tests/Feature/Admin/{Volunteer,Device,UserRole}Test.php
+ *     rather than duplicating it here.
  */
 class ComprehensivePermissionTest extends TestCase
 {

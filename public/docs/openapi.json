@@ -1028,6 +1028,202 @@
                 ]
             }
         },
+        "/admin/devices": {
+            "get": {
+                "tags": [
+                    "Devices"
+                ],
+                "summary": "List enrolled scanner devices",
+                "operationId": "9e935f6331a6327a53601df62f76eb83",
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "description": "Filter by device status",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "volunteer_ulid",
+                        "in": "query",
+                        "description": "Filter by assigned volunteer ULID",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "Results per page, capped at 100",
+                        "schema": {
+                            "type": "integer",
+                            "default": 15
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated list of devices"
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Missing device.view_any permission"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/devices/{device}": {
+            "get": {
+                "tags": [
+                    "Devices"
+                ],
+                "summary": "Get a single enrolled device by ULID",
+                "operationId": "e14cd39b71b626f0e28250a1bfbe544d",
+                "parameters": [
+                    {
+                        "name": "device",
+                        "in": "path",
+                        "description": "Device ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Device details"
+                    },
+                    "403": {
+                        "description": "Missing device.view_any permission"
+                    },
+                    "404": {
+                        "description": "Device not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/devices/{device}/sync-status": {
+            "get": {
+                "tags": [
+                    "Devices"
+                ],
+                "summary": "Get a device's offline-sync health",
+                "operationId": "40c94eb32f4b99352910613c0a19e7fe",
+                "parameters": [
+                    {
+                        "name": "device",
+                        "in": "path",
+                        "description": "Device ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Sync status detail",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "string"
+                                        },
+                                        "manifest_version": {
+                                            "type": "integer"
+                                        },
+                                        "last_sync_at": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "nullable": true
+                                        },
+                                        "last_seen_at": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "nullable": true
+                                        },
+                                        "pending_scan_count": {
+                                            "type": "integer"
+                                        },
+                                        "battery_level": {
+                                            "type": "integer",
+                                            "nullable": true
+                                        },
+                                        "total_scans": {
+                                            "type": "integer"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Missing device.view_sync_status permission"
+                    },
+                    "404": {
+                        "description": "Device not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/devices/{device}/revoke": {
+            "post": {
+                "tags": [
+                    "Devices"
+                ],
+                "summary": "Revoke an enrolled device",
+                "description": "Locks the device out immediately (EnsureDeviceActive checks status on every scanner request) and deletes its bound Sanctum token as belt-and-braces.",
+                "operationId": "6cb49036ae4abdd076305eaba9615ce4",
+                "parameters": [
+                    {
+                        "name": "device",
+                        "in": "path",
+                        "description": "Device ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Device revoked"
+                    },
+                    "403": {
+                        "description": "Missing device.revoke permission"
+                    },
+                    "404": {
+                        "description": "Device not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/admin/gates": {
             "get": {
                 "tags": [
@@ -2690,6 +2886,32 @@
                 ]
             }
         },
+        "/admin/roles": {
+            "get": {
+                "tags": [
+                    "Roles"
+                ],
+                "summary": "List the roles in the RBAC catalogue and their permissions",
+                "description": "Read-only. Roles and permissions are seeded exclusively from config/rbac.php — there is no endpoint to create or edit them ad hoc.",
+                "operationId": "1fbe54def12159b19db06ae306e57c85",
+                "responses": {
+                    "200": {
+                        "description": "List of roles"
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Missing role.view_any permission"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/admin/settings": {
             "get": {
                 "tags": [
@@ -4073,6 +4295,498 @@
                     },
                     "422": {
                         "description": "Missing or incorrect password"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/users": {
+            "get": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "List staff users",
+                "operationId": "80c2e09d986ac49741d14d9fe9e3f35b",
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "description": "Filter by status",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "role",
+                        "in": "query",
+                        "description": "Filter by role name",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "Results per page, capped at 100",
+                        "schema": {
+                            "type": "integer",
+                            "default": 15
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated list of staff users"
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Missing user.view_any permission"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/users/{user}": {
+            "get": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Get a single staff user by ULID",
+                "operationId": "eef30323383cea4423cff5755a5ab150",
+                "parameters": [
+                    {
+                        "name": "user",
+                        "in": "path",
+                        "description": "User ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "User details"
+                    },
+                    "403": {
+                        "description": "Missing user.view_any permission"
+                    },
+                    "404": {
+                        "description": "User not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/users/{user}/assign-role": {
+            "post": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Replace a staff user's role",
+                "description": "Roles come only from the versioned catalogue in config/rbac.php — this endpoint assigns an existing role, it never creates one.",
+                "operationId": "e1dc06ea3877e8d9d5523e17457bad86",
+                "parameters": [
+                    {
+                        "name": "user",
+                        "in": "path",
+                        "description": "User ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "role": {
+                                        "required": [
+                                            "role"
+                                        ],
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Role assigned"
+                    },
+                    "403": {
+                        "description": "Missing user.assign_role permission"
+                    },
+                    "404": {
+                        "description": "User not found"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/volunteers": {
+            "get": {
+                "tags": [
+                    "Volunteers"
+                ],
+                "summary": "List volunteers",
+                "operationId": "f9d37fe67f2d613aa31110fae27bc377",
+                "parameters": [
+                    {
+                        "name": "is_active",
+                        "in": "query",
+                        "description": "Filter by active status",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "team",
+                        "in": "query",
+                        "description": "Filter by team",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "Results per page, capped at 100",
+                        "schema": {
+                            "type": "integer",
+                            "default": 15
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated list of volunteers"
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Missing volunteer.view_any permission"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Volunteers"
+                ],
+                "summary": "Create a volunteer (a staff User plus a linked VolunteerProfile)",
+                "operationId": "a1c41c46a44ab5ca940afde3e5dc814c",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "required": [
+                                            "name"
+                                        ],
+                                        "type": "string"
+                                    },
+                                    "email": {
+                                        "required": [
+                                            "email"
+                                        ],
+                                        "type": "string",
+                                        "format": "email"
+                                    },
+                                    "phone": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "password": {
+                                        "required": [
+                                            "password"
+                                        ],
+                                        "type": "string"
+                                    },
+                                    "volunteer_code": {
+                                        "required": [
+                                            "volunteer_code"
+                                        ],
+                                        "type": "string"
+                                    },
+                                    "team": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "shift_starts_at": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "nullable": true
+                                    },
+                                    "shift_ends_at": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Volunteer created"
+                    },
+                    "403": {
+                        "description": "Missing volunteer.create permission"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/volunteers/{volunteer}": {
+            "get": {
+                "tags": [
+                    "Volunteers"
+                ],
+                "summary": "Get a single volunteer by ULID",
+                "operationId": "781db82e92c0c3ae07ea8831653d3216",
+                "parameters": [
+                    {
+                        "name": "volunteer",
+                        "in": "path",
+                        "description": "Volunteer profile ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Volunteer details"
+                    },
+                    "403": {
+                        "description": "Missing volunteer.view_any permission"
+                    },
+                    "404": {
+                        "description": "Volunteer not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "patch": {
+                "tags": [
+                    "Volunteers"
+                ],
+                "summary": "Update a volunteer profile",
+                "operationId": "a4ccf086cdcd7057818e2ecaf856cc44",
+                "parameters": [
+                    {
+                        "name": "volunteer",
+                        "in": "path",
+                        "description": "Volunteer profile ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "team": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "shift_starts_at": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "nullable": true
+                                    },
+                                    "shift_ends_at": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "nullable": true
+                                    },
+                                    "is_active": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Volunteer updated"
+                    },
+                    "403": {
+                        "description": "Missing volunteer.update permission"
+                    },
+                    "404": {
+                        "description": "Volunteer not found"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/volunteers/{volunteer}/assign-gate": {
+            "post": {
+                "tags": [
+                    "Volunteers"
+                ],
+                "summary": "Assign a volunteer to a gate",
+                "operationId": "20e271e867be86f390b1beb7275d2cb6",
+                "parameters": [
+                    {
+                        "name": "volunteer",
+                        "in": "path",
+                        "description": "Volunteer profile ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "gate_ulid": {
+                                        "required": [
+                                            "gate_ulid"
+                                        ],
+                                        "type": "string"
+                                    },
+                                    "event_session_ulid": {
+                                        "type": "string",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Gate assigned"
+                    },
+                    "403": {
+                        "description": "Missing volunteer.assign_gate permission"
+                    },
+                    "404": {
+                        "description": "Volunteer or gate not found"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/volunteers/{volunteer}/revoke-access": {
+            "post": {
+                "tags": [
+                    "Volunteers"
+                ],
+                "summary": "Revoke a volunteer's access",
+                "description": "Deactivates the volunteer profile. Does not revoke bound devices — use the devices revoke endpoint separately for those.",
+                "operationId": "5310a77bf3b180f9fc43fcd4ed20aedf",
+                "parameters": [
+                    {
+                        "name": "volunteer",
+                        "in": "path",
+                        "description": "Volunteer profile ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "reason": {
+                                        "type": "string",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Access revoked"
+                    },
+                    "403": {
+                        "description": "Missing volunteer.revoke_access permission"
+                    },
+                    "404": {
+                        "description": "Volunteer not found"
                     }
                 },
                 "security": [
@@ -6374,6 +7088,9 @@
             "name": "Check-ins"
         },
         {
+            "name": "Devices"
+        },
+        {
             "name": "Gates"
         },
         {
@@ -6387,6 +7104,9 @@
         {
             "name": "Reports",
             "description": "Reporting and analytics"
+        },
+        {
+            "name": "Roles"
         },
         {
             "name": "Settings",
@@ -6403,6 +7123,9 @@
         {
             "name": "Two-Factor",
             "description": "Staff TOTP two-factor authentication"
+        },
+        {
+            "name": "Users"
         },
         {
             "name": "Volunteers",

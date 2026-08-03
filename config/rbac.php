@@ -76,6 +76,7 @@ return [
         // Devices & volunteers
         'volunteer.view_any',
         'volunteer.create',
+        'volunteer.update',
         'volunteer.assign_gate',
         'volunteer.revoke_access',
         'device.enrol',
@@ -106,6 +107,7 @@ return [
         'user.update',
         'user.assign_role',
         'user.deactivate',
+        'role.view_any',
         'role.manage',
         'settings.view',
         'settings.update',
@@ -140,7 +142,7 @@ return [
             'checkin.view_any', 'checkin.view', 'checkin.view_live_dashboard', 'checkin.resolve_conflict',
             'gate.view_any', 'gate.view',
 
-            'volunteer.view_any', 'volunteer.create', 'volunteer.assign_gate',
+            'volunteer.view_any', 'volunteer.create', 'volunteer.update', 'volunteer.assign_gate',
             'volunteer.revoke_access', 'device.enrol', 'device.view_any',
             'device.revoke', 'device.view_sync_status',
 
