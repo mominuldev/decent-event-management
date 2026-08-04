@@ -5,10 +5,17 @@ namespace App\Domain\Ticketing\Actions;
 use App\Domain\Registration\Models\Registration;
 use App\Domain\Ticketing\Events\TicketIssued;
 use App\Domain\Ticketing\Models\Ticket;
+use App\Domain\Ticketing\Services\QrSigner;
+use App\Domain\Ticketing\Services\TicketNumberGenerator;
 use Illuminate\Support\Facades\DB;
 
 class IssueTicket
 {
+    public function __construct(
+        private readonly TicketNumberGenerator $ticketNumbers,
+        private readonly QrSigner $qrSigner,
+    ) {}
+
     public function execute(Registration $registration): Ticket
     {
         return DB::transaction(function () use ($registration): Ticket {
@@ -16,9 +23,9 @@ class IssueTicket
             $ticketType = $registration->ticketType;
             $admitsTotal = $registration->adults_count + $registration->children_count;
 
-            $batchYear = $attendee->ssc_batch_year ?? 'XXXX';
+            $batchYear = $attendee?->ssc_batch_year !== null ? (string) $attendee->ssc_batch_year : 'XXXX';
 
-            $seq = str_pad((string) (Ticket::query()->where('ticket_type_id', $ticketType?->id)->lockForUpdate()->count() + 1), 5, '0', STR_PAD_LEFT);
+            $seq = str_pad((string) $this->ticketNumbers->next((int) $ticketType?->id, $batchYear), 5, '0', STR_PAD_LEFT);
             $ticketNumber = "DEC100-{$ticketType?->code}-{$batchYear}-{$seq}";
 
             $ticket = Ticket::create([
@@ -42,16 +49,16 @@ class IssueTicket
             if ($eventSession !== null) {
                 $expiresAt = $eventSession->ends_at;
             }
-            $expUnix = $expiresAt->timestamp;
+            $expUnix = (int) $expiresAt->timestamp;
 
-            $payload = "DTM1.{$ticket->ulid}.{$admitsTotal}.{$expUnix}.K1.placeholder_sig";
+            $signed = $this->qrSigner->sign($ticket->ulid, $admitsTotal, $expUnix);
 
             $ticket->qrCode()->create([
                 'payload_version' => 1,
-                'payload' => $payload,
-                'payload_hash' => hash('sha256', $payload),
-                'signature' => 'placeholder_sig',
-                'signing_key_id' => 'K1',
+                'payload' => $signed['payload'],
+                'payload_hash' => $signed['payload_hash'],
+                'signature' => $signed['signature'],
+                'signing_key_id' => $signed['signing_key_id'],
                 'issued_at' => now(),
                 'expires_at' => $expiresAt,
                 'is_active' => true,

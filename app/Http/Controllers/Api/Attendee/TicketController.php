@@ -83,7 +83,7 @@ class TicketController extends Controller
             ], 404);
         }
 
-        $ticket->load(['ticketType', 'qrCode', 'registration']);
+        $ticket->load(['ticketType', 'qrCode.image', 'registration']);
 
         return new TicketResource($ticket);
     }
@@ -91,7 +91,7 @@ class TicketController extends Controller
     #[OAT\Get(
         path: '/attendee/tickets/{ticket}/pdf',
         summary: 'Get the short-TTL signed URL for an owned ticket\'s generated PDF',
-        description: 'Returns a JSON object with the stored media `path` for the ticket PDF, not the binary itself — the PDF is served separately via a short-TTL signed URL, per docs/06 file-serving conventions.',
+        description: 'Returns a short-TTL (15 minute) signed URL for the ticket PDF, not the binary itself — per docs/06 file-serving conventions. GET that URL directly to download.',
         security: [['bearerAuth' => []]],
         tags: ['Attendee Self-Service'],
         parameters: [
@@ -111,7 +111,7 @@ class TicketController extends Controller
                     mediaType: 'application/json',
                     schema: new OAT\Schema(
                         properties: [
-                            new OAT\Property(property: 'path', type: 'string', nullable: true),
+                            new OAT\Property(property: 'url', type: 'string', nullable: true, description: 'Short-TTL signed URL; GET it directly to download the PDF'),
                         ]
                     )
                 )
@@ -152,6 +152,6 @@ class TicketController extends Controller
 
         $ticket->load('pdf');
 
-        return response()->json(['path' => $ticket->pdf?->path]);
+        return response()->json(['url' => $ticket->pdf?->temporarySignedUrl()]);
     }
 }

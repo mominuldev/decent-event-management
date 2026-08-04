@@ -3,6 +3,7 @@ export type CheckInResult =
     | 'manual_override'
     | 'duplicate'
     | 'invalid_format'
+    | 'invalid_signature'
     | 'revoked'
     | 'unpaid'
     | 'expired'

@@ -21,6 +21,7 @@ use App\Domain\Registration\Events\RegistrationCreated;
 use App\Domain\Registration\Models\Attendee;
 use App\Domain\Registration\Models\Registration;
 use App\Domain\Ticketing\Events\TicketIssued;
+use App\Domain\Ticketing\Listeners\GenerateTicketAssets;
 use App\Domain\Ticketing\Listeners\IssueTicketForSucceededPayment;
 use App\Domain\Ticketing\Models\Ticket;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -72,6 +73,10 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(ManualPaymentVerified::class, QueueManualPaymentVerifiedNotification::class);
         Event::listen(RefundIssued::class, QueueRefundIssuedNotification::class);
         Event::listen(TicketIssued::class, QueueTicketDeliveredNotification::class);
+
+        // First dispatch to the `tickets` Horizon lane (docs/08 Phase 6):
+        // renders the QR PNG and bilingual PDF off the issuance transaction.
+        Event::listen(TicketIssued::class, GenerateTicketAssets::class);
 
         // CMS → public site cache invalidation (docs/08 Phase 3.5). Content
         // publishes the event; only this listener knows a Next.js site exists.

@@ -61,6 +61,17 @@ return [
         'ipn_ip_allowlist' => array_filter(array_map('trim', explode(',', (string) env('SSLCOMMERZ_IPN_IP_ALLOWLIST', '')))),
     ],
 
+    // Phase 6 — QrSigner (docs/06 §6.5). `active_private_key` signs new
+    // tickets under `active_key_id`; `retired_public_keys` keeps prior
+    // keys' public component around so tickets signed before a rotation
+    // keep verifying. Store the private key in a secret manager in
+    // staging/production, never committed.
+    'qr_signing' => [
+        'active_key_id' => env('QR_SIGNING_KEY_ID', 'key-1'),
+        'active_private_key' => env('QR_SIGNING_PRIVATE_KEY'),
+        'retired_public_keys' => json_decode((string) env('QR_SIGNING_PUBLIC_KEYS', '{}'), true) ?: [],
+    ],
+
     // Public site origin (separate Next.js repo). Used only to build the
     // gateway return URL in InitiatePayment — never accepted from a
     // request, since a client-supplied redirect target is an open-redirect

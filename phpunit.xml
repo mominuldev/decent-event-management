@@ -39,5 +39,9 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!-- Fixed Ed25519 test keypair for QrSigner (Phase 6) — not a real
+             secret, generated solely for deterministic test signing. -->
+        <env name="QR_SIGNING_KEY_ID" value="test-key-1"/>
+        <env name="QR_SIGNING_PRIVATE_KEY" value="TzOafhfmwB2Wo+SKyrvdVf/xYGeUDJkHwKlBVXF8Gj5apQkA9mdUfMbd3Yg1XyLV/53f93d1Ng9GVkRfWp+S6A=="/>
     </php>
 </phpunit>

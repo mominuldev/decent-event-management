@@ -38,6 +38,7 @@ class TicketResource extends JsonResource
             'created_at' => $this->created_at?->toISOString(),
             'ticket_type' => new TicketTypeResource($this->whenLoaded('ticketType')),
             'qr_code_payload' => $this->whenLoaded('qrCode', fn () => $this->qrCode?->payload),
+            'qr_code_image_url' => $this->whenLoaded('qrCode', fn () => $this->qrCode?->image?->temporarySignedUrl()),
             'replaces' => new TicketResource($this->whenLoaded('replaces')),
         ];
     }

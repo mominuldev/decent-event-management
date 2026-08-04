@@ -159,6 +159,7 @@ class TicketController extends Controller
                             new OAT\Property(property: 'created_at', type: 'string', format: 'date-time', nullable: true),
                             new OAT\Property(property: 'ticket_type', type: 'object', description: 'Ticket type this ticket belongs to (see Ticket Types schema)'),
                             new OAT\Property(property: 'qr_code_payload', type: 'string', nullable: true, description: 'Signed QR payload, when loaded'),
+                            new OAT\Property(property: 'qr_code_image_url', type: 'string', nullable: true, description: 'Short-TTL signed URL for the rendered QR PNG, when generated'),
                             new OAT\Property(property: 'replaces', type: 'object', nullable: true, description: 'The ticket this one replaced via reissue, if any'),
                         ]
                     )
@@ -172,7 +173,7 @@ class TicketController extends Controller
     {
         abort_unless((bool) $request->user()?->can('ticket.view'), Response::HTTP_FORBIDDEN);
 
-        $ticket->load(['registration', 'attendee', 'ticketType', 'qrCode', 'checkIns']);
+        $ticket->load(['registration', 'attendee', 'ticketType', 'qrCode.image', 'checkIns']);
 
         return new TicketResource($ticket);
     }
@@ -271,7 +272,7 @@ class TicketController extends Controller
             });
 
             return response()->json([
-                'data' => new TicketResource($ticket->refresh()->load(['ticketType', 'qrCode'])),
+                'data' => new TicketResource($ticket->refresh()->load(['ticketType', 'qrCode.image'])),
                 'message' => 'Ticket voided successfully.',
             ]);
         } catch (InvalidArgumentException $e) {
@@ -375,7 +376,7 @@ class TicketController extends Controller
             });
 
             return response()->json([
-                'data' => new TicketResource($newTicket->load(['ticketType', 'qrCode'])),
+                'data' => new TicketResource($newTicket->load(['ticketType', 'qrCode.image'])),
                 'message' => 'Ticket reissued successfully.',
             ]);
         } catch (InvalidArgumentException $e) {

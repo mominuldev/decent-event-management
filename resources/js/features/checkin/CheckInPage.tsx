@@ -33,6 +33,7 @@ const resultTone: Record<string, Tone> = {
     manual_override: 'warning',
     duplicate: 'critical',
     invalid_format: 'critical',
+    invalid_signature: 'critical',
     revoked: 'critical',
     unpaid: 'critical',
     expired: 'critical',

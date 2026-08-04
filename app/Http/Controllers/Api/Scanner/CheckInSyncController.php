@@ -77,7 +77,7 @@ class CheckInSyncController extends Controller
                                         new OAT\Property(
                                             property: 'result',
                                             type: 'string',
-                                            enum: ['admitted', 'manual_override', 'duplicate', 'invalid_format', 'revoked', 'unpaid', 'expired', 'wrong_gate', 'wrong_session', 'over_capacity']
+                                            enum: ['admitted', 'manual_override', 'duplicate', 'invalid_format', 'invalid_signature', 'revoked', 'unpaid', 'expired', 'wrong_gate', 'wrong_session', 'over_capacity']
                                         ),
                                         new OAT\Property(property: 'admitted_count', type: 'integer'),
                                         new OAT\Property(property: 'scan_mode', type: 'string'),

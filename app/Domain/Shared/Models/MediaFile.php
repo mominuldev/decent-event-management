@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 
 /**
  * One table for every uploaded and generated file — profile photos,
@@ -63,5 +64,16 @@ class MediaFile extends Model
         }
 
         return Storage::disk($this->disk)->url($this->path);
+    }
+
+    /**
+     * The short-TTL signed URL for a private file (docs/06 §6.4 — 15
+     * minutes). Callers are responsible for the policy check *before*
+     * minting this — the signature is the only check the serving route
+     * itself makes.
+     */
+    public function temporarySignedUrl(int $minutes = 15): string
+    {
+        return URL::temporarySignedRoute('api.v1.media.show', now()->addMinutes($minutes), ['mediaFile' => $this->ulid]);
     }
 }

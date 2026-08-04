@@ -5858,6 +5858,11 @@
                                             "type": "string",
                                             "nullable": true
                                         },
+                                        "qr_code_image_url": {
+                                            "description": "Short-TTL signed URL for the rendered QR PNG, when generated",
+                                            "type": "string",
+                                            "nullable": true
+                                        },
                                         "replaces": {
                                             "description": "The ticket this one replaced via reissue, if any",
                                             "type": "object",
@@ -8210,7 +8215,7 @@
                     "Attendee Self-Service"
                 ],
                 "summary": "Get the short-TTL signed URL for an owned ticket's generated PDF",
-                "description": "Returns a JSON object with the stored media `path` for the ticket PDF, not the binary itself — the PDF is served separately via a short-TTL signed URL, per docs/06 file-serving conventions.",
+                "description": "Returns a short-TTL (15 minute) signed URL for the ticket PDF, not the binary itself — per docs/06 file-serving conventions. GET that URL directly to download.",
                 "operationId": "cdd9b30a1e36a948bbc431ef2849b576",
                 "parameters": [
                     {
@@ -8230,7 +8235,8 @@
                             "application/json": {
                                 "schema": {
                                     "properties": {
-                                        "path": {
+                                        "url": {
+                                            "description": "Short-TTL signed URL; GET it directly to download the PDF",
                                             "type": "string",
                                             "nullable": true
                                         }
@@ -9906,6 +9912,7 @@
                                                             "manual_override",
                                                             "duplicate",
                                                             "invalid_format",
+                                                            "invalid_signature",
                                                             "revoked",
                                                             "unpaid",
                                                             "expired",
@@ -10080,16 +10087,24 @@
                     {
                         "name": "If-None-Match",
                         "in": "header",
-                        "description": "ETag returned by a previous manifest fetch; when it still matches, a 304 is returned with no body",
+                        "description": "ETag returned by a previous manifest fetch; when it still matches, a 304 is returned with no body. Only applies to a cold-start fetch (no `since`).",
                         "required": false,
                         "schema": {
                             "type": "string"
+                        }
+                    },
+                    {
+                        "name": "since",
+                        "in": "query",
+                        "description": "The device's last-known manifest version. When given, only tickets with a manifest_version greater than this are returned — voided/refunded/expired tickets included, so revocations reach the device. Omit for a cold start, which returns every currently admissible ticket.",
+                        "schema": {
+                            "type": "integer"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Full manifest of admissible tickets, with a fresh ETag response header",
+                        "description": "Manifest entries (full on cold start, delta when `since` is given), plus the signing keys needed to verify a QR offline",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -10134,6 +10149,22 @@
                                                 },
                                                 "type": "object"
                                             }
+                                        },
+                                        "meta": {
+                                            "properties": {
+                                                "manifest_version": {
+                                                    "description": "Highest manifest_version across all tickets right now — pass back as `since` next fetch",
+                                                    "type": "integer"
+                                                },
+                                                "active_key_id": {
+                                                    "type": "string"
+                                                },
+                                                "keys": {
+                                                    "description": "signing_key_id => base64 Ed25519 public key, every key still needed to verify a ticket that might be in circulation",
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
                                         }
                                     },
                                     "type": "object"

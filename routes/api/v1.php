@@ -3,10 +3,19 @@
 use App\Http\Controllers\Api\Admin\AuthController as AdminAuthController;
 use App\Http\Controllers\Api\Admin\TwoFactorController;
 use App\Http\Controllers\Api\Attendee\AuthController as AttendeeAuthController;
+use App\Http\Controllers\Api\SignedMediaController;
 use Illuminate\Support\Facades\Route;
 
 // Public + attendee-facing browse endpoints (no auth)
 Route::prefix('public')->name('public.')->group(base_path('routes/api/public.php'));
+
+// Private media (ticket PDFs, QR images) — the signature itself is the
+// authorization, minted only after a policy check by the issuing endpoint
+// (e.g. Attendee\TicketController::downloadPdf), so this route carries no
+// auth middleware of its own. docs/06 §6.4 file-serving rules.
+Route::get('media/{mediaFile:ulid}', [SignedMediaController::class, 'show'])
+    ->middleware('signed')
+    ->name('media.show');
 
 // Admin console — unauthenticated
 Route::prefix('admin')->name('admin.')->group(function (): void {

@@ -8,12 +8,15 @@ use App\Domain\CheckIn\Models\Gate;
 use App\Domain\CheckIn\Services\AdmissionPolicy;
 use App\Domain\Shared\Models\User;
 use App\Domain\Ticketing\Models\Ticket;
+use App\Domain\Ticketing\Services\QrSigner;
+use App\Domain\Ticketing\Support\QrPayload;
 use Illuminate\Support\Carbon;
 
 class ProcessCheckIn
 {
     public function __construct(
-        private readonly AdmissionPolicy $policy
+        private readonly AdmissionPolicy $policy,
+        private readonly QrSigner $qrSigner,
     ) {}
 
     public function execute(
@@ -77,6 +80,75 @@ class ProcessCheckIn
             );
         }
 
+        // Stages 1-2 of the four-stage scan decision (docs/01 §1.5): format
+        // and signature verification. A manual override has no real scanned
+        // payload — CheckInController builds a synthetic marker string
+        // purely to carry the ticket ulid through this same code path — so
+        // it skips straight to the policy/admission stages instead.
+        $signatureValid = null;
+        if (! $isManualOverride) {
+            $payload = QrPayload::parse($rawPayload);
+
+            if ($payload === null) {
+                return $this->createCheckIn(
+                    clientScanUuid: $clientScanUuid,
+                    rawPayload: $rawPayload,
+                    gate: $gate,
+                    result: 'invalid_format',
+                    admittedCount: 0,
+                    device: $device,
+                    scannedBy: $scannedBy,
+                    scannedAt: $scannedAt,
+                    latitude: $latitude,
+                    longitude: $longitude,
+                    isManualOverride: false,
+                    ticket: $ticket,
+                    rejectionDetail: 'Malformed QR payload',
+                    signatureValid: false
+                );
+            }
+
+            $signatureValid = $this->qrSigner->verify($payload);
+
+            if (! $signatureValid) {
+                return $this->createCheckIn(
+                    clientScanUuid: $clientScanUuid,
+                    rawPayload: $rawPayload,
+                    gate: $gate,
+                    result: 'invalid_signature',
+                    admittedCount: 0,
+                    device: $device,
+                    scannedBy: $scannedBy,
+                    scannedAt: $scannedAt,
+                    latitude: $latitude,
+                    longitude: $longitude,
+                    isManualOverride: false,
+                    ticket: $ticket,
+                    rejectionDetail: 'QR signature does not verify against any known signing key',
+                    signatureValid: false
+                );
+            }
+
+            if ($payload->isExpired($scannedAt)) {
+                return $this->createCheckIn(
+                    clientScanUuid: $clientScanUuid,
+                    rawPayload: $rawPayload,
+                    gate: $gate,
+                    result: 'expired',
+                    admittedCount: 0,
+                    device: $device,
+                    scannedBy: $scannedBy,
+                    scannedAt: $scannedAt,
+                    latitude: $latitude,
+                    longitude: $longitude,
+                    isManualOverride: false,
+                    ticket: $ticket,
+                    rejectionDetail: 'QR payload expiry has passed',
+                    signatureValid: true
+                );
+            }
+        }
+
         $policyResult = $this->policy->evaluate($ticket, $gate, $partySize);
 
         if ($policyResult !== 'admitted' && ! $isManualOverride) {
@@ -92,7 +164,8 @@ class ProcessCheckIn
                 latitude: $latitude,
                 longitude: $longitude,
                 isManualOverride: false,
-                ticket: $ticket
+                ticket: $ticket,
+                signatureValid: $signatureValid
             );
         }
 
@@ -120,7 +193,8 @@ class ProcessCheckIn
                 rejectionDetail: null,
                 scanMode: 'online',
                 overrideReason: $isManualOverride ? 'Manual override by operator' : null,
-                overrideByUserId: $isManualOverride ? $scannedBy?->id : null
+                overrideByUserId: $isManualOverride ? $scannedBy?->id : null,
+                signatureValid: $signatureValid
             );
         }
 
@@ -137,7 +211,8 @@ class ProcessCheckIn
             longitude: $longitude,
             isManualOverride: $isManualOverride,
             ticket: $ticket,
-            rejectionDetail: 'Atomic update failed; ticket already fully admitted at another gate'
+            rejectionDetail: 'Atomic update failed; ticket already fully admitted at another gate',
+            signatureValid: $signatureValid
         );
     }
 
@@ -157,7 +232,8 @@ class ProcessCheckIn
         ?string $rejectionDetail = null,
         string $scanMode = 'online',
         ?string $overrideReason = null,
-        ?int $overrideByUserId = null
+        ?int $overrideByUserId = null,
+        ?bool $signatureValid = null
     ): CheckIn {
         /** @var CheckIn $checkIn */
         $checkIn = CheckIn::create([
@@ -173,7 +249,7 @@ class ProcessCheckIn
             'rejection_detail' => $rejectionDetail,
             'admitted_count' => $admittedCount,
             'raw_payload' => $rawPayload,
-            'signature_valid' => true,
+            'signature_valid' => $signatureValid,
             'scan_mode' => $scanMode,
             'is_manual_override' => $isManualOverride,
             'override_by_user_id' => $overrideByUserId,

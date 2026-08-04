@@ -469,22 +469,25 @@ Implement the signing scheme, ticket assets, and the manifest endpoint the scann
 > This phase also replaces the interim ticket-number counter — `Ticket::…->lockForUpdate()->count() + 1` in `IssueTicket.php:19`, which full-scans on every issuance and can collide under concurrency — with `TicketNumberGenerator`.
 
 ### Deliverables
-- Ed25519 key generation and secret-manager storage; key ID scheme
-- `QrSigner` service — the only code path that touches the private key
-- Payload encoding/decoding with version support ([06 §6.5](06-security-architecture.md#65-qr-code-security))
-- QR image rendering: ECC level M, 512px, generous quiet zone
-- Bilingual A5 PDF ticket with photo, print-tested on low-quality output
-- `TicketNumberGenerator` with the `DEC100-{TYPE}-{BATCH}-{SEQ}` format
-- Void, reissue, and revocation flows with `manifest_version` bumping
-- **Manifest endpoint** with ETag-based delta sync — the scanner's dependency
-- Key rotation procedure, documented and rehearsed on staging
-- Server-side verification endpoint for online scans
+
+> **Buildable-now slice closed 2026-08-04** — same split as Phase 3.5/4A/5: everything that's pure engineering is done; physical print/scan testing and a live device-rotation rehearsal remain outstanding, since neither can be simulated. See CLAUDE.md §"Phase 6 (QR & PDF Tickets)" for full detail.
+
+- [x] Ed25519 key generation — `QrSigner` + `php artisan qr-signing:generate-key`. **Secret-manager storage is not this**: the private key lives in `QR_SIGNING_PRIVATE_KEY` (env), the same stand-in used for `SSLCOMMERZ_STORE_PASSWORD` elsewhere in this environment — swap for a real secret manager before production
+- [x] `QrSigner` service — the only code path that touches the private key
+- [x] Payload encoding/decoding with version support ([06 §6.5](06-security-architecture.md#65-qr-code-security)) — `QrPayload`
+- [x] QR image rendering: ECC level M, 512px, generous quiet zone — `RenderTicketQrImage`
+- [x] Bilingual A5 PDF ticket with photo — `GenerateTicketPdf`, real Bangla conjunct shaping verified (mpdf's bundled `freeserif`, not a downloaded Noto build — see CLAUDE.md for why). **Not print-tested on low-quality output** — needs a real printer
+- [x] `TicketNumberGenerator` with the `DEC100-{TYPE}-{BATCH}-{SEQ}` format — race-safety proven under real concurrent-process load, not just reasoned about
+- [x] Void, reissue, and revocation flows with `manifest_version` bumping — predates this slice (`TicketController::void`/`reissue` already did this); unchanged here
+- [x] **Manifest endpoint** with ETag-based delta sync — the scanner's dependency; now a real `?since=` delta plus published signing keys
+- [~] Key rotation procedure — documented and tooled (`qr-signing:generate-key`, multi-key `QrSigner`, CLAUDE.md checklist); **not rehearsed on staging**, since no staging environment exists here
+- [x] Server-side verification endpoint for online scans — `ProcessCheckIn` via the scanner sync endpoint
 
 ### Exit criteria
-- QR scans reliably from: a cracked phone screen, 40% screen brightness, a laser print, an inkjet print, and a photocopy
-- A signature verifies with the public key alone, and fails on a single-bit payload mutation
-- Manifest delta sync returns only changed tickets and correctly handles a 12,000-ticket cold start
-- Key rotation completes on staging without invalidating existing tickets
+- [ ] QR scans reliably from: a cracked phone screen, 40% screen brightness, a laser print, an inkjet print, and a photocopy — **needs real hardware and a printer, not met in this environment**
+- [x] A signature verifies with the public key alone, and fails on a single-bit payload mutation — `QrSignerTest`
+- [~] Manifest delta sync returns only changed tickets — met (`?since=` param, tested); **correctly handles a 12,000-ticket cold start is unverified** — no load test at that scale was run
+- [ ] Key rotation completes on staging without invalidating existing tickets — no staging environment to rehearse against
 
 ### Notes
 Physical scan testing is not optional and cannot be simulated. Print real tickets, damage them, and scan them in daylight and under fluorescent light. This is the cheapest possible time to discover a QR that is too dense or a quiet zone that is too small.
@@ -786,6 +789,28 @@ Applied the same split [Phase 4A](#phase-4a--sslcommerz-sandbox-integration) use
 **Explicitly deferred, not silently dropped:** real `SmsDriver`/`WhatsAppDriver` (no vendor named, no approved templates — `NotificationChannelResolver` keeps both on `Fake*Driver`), DLR/delivery-status webhook endpoints (vendor-specific payload/signature shape, unknown without a chosen vendor), automated bounce/opt-out handling via provider webhooks, and live cross-carrier delivery verification. Full list and rationale in CLAUDE.md's Phase 5 section.
 
 **Verification:** 219 tests passing (up from 189, 31 new), Pint clean, PHPStan level 8 clean, `composer audit` clean, OpenAPI regenerated (81 paths). SPA changes verified with `npm run typecheck` and a real browser session (login → delivery log/costs/kill-switches/templates tabs → a live kill-switch flip round-tripped through the API with a toast and UI update).
+
+---
+
+### 2026-08-04 — Phase 6 buildable-now slice closed
+
+Applied the same split [Phase 3.5](#-phase-6-qr--pdf-tickets)/[4A](#phase-4a--sslcommerz-sandbox-integration)/5 used throughout: build everything that's pure engineering now, flag what needs real hardware, a printer, or a staged human/ops procedure rather than guessing at it. This was the next unblocked slice on the critical path (Phase 2 → Phase 4A → **Phase 6** → Phase 7 → Phase 8 → Phase 9, docs/08 §9.0) once Phase 4A closed.
+
+**What changed**
+
+| Area | What shipped |
+|---|---|
+| Signing | `QrPayload` (parse/encode) + `QrSigner` (Ed25519 via libsodium, the only code path touching the private key, multi-key so a rotation doesn't invalidate prior tickets). `IssueTicket` signs for real instead of writing `'placeholder_sig'` |
+| Verification | `ProcessCheckIn` now verifies the signature and payload expiry via `QrSigner`/`QrPayload` *before* a ticket ever reaches `AdmissionPolicy` — closing the gap where a ticket's ULID alone was a valid admission credential. New `invalid_signature` check-in result; `signature_valid` is a real boolean, not hardcoded `true` |
+| Ticket numbering | `TicketNumberGenerator` + `ticket_number_sequences` table replace the O(n) `lockForUpdate()->count()` scan — one narrow row per (type, batch), incremented under `SELECT … FOR UPDATE`. Proven race-free under real concurrent-process load (20 processes → exactly 1..20, zero collisions); a `LAST_INSERT_ID(expr)` single-round-trip alternative was tried first and found to be unreliable for a genuinely new row on this MySQL version — see CLAUDE.md's Phase 6 section for the specific failure mode |
+| QR + PDF assets | `RenderTicketQrImage` (bacon/bacon-qr-code, ECC level M, 512px) and `GenerateTicketPdf` (mpdf) — a real bilingual A5 ticket with correct Bangla conjunct shaping, using mpdf's bundled `freeserif` rather than a downloaded Noto Sans Bengali build (which crashes/silently mis-shapes under mpdf's OTL engine — see CLAUDE.md for the exact incompatibility). `GenerateTicketAssetsJob` is the first job on the `tickets` Horizon lane, dispatched from the existing `TicketIssued` event, idempotent by construction |
+| Serving | `MediaFile::temporarySignedUrl()` + `SignedMediaController` (`GET /api/v1/media/{mediaFile:ulid}`, signed-route-only auth, real `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff`) — a generic private-media primitive, reusable by the still-open manual-payment-proof work from Phase 4A. `Attendee\TicketController::downloadPdf()` now returns an actual signed URL instead of a bare storage path |
+| Manifest | `ManifestController` gained real `?since=` delta sync (unfiltered by status, so a post-sync void/refund/expiry still reaches the device) alongside the existing cold-start + ETag path, plus published signing keys (`meta.active_key_id`, `meta.keys`) so a scanner can verify offline without a second endpoint. A fetch now updates `check_in_devices.manifest_version`/`last_sync_at` |
+| Rotation tooling | `php artisan qr-signing:generate-key` prints a fresh keypair and the rotation checklist; `--if-missing` provisions a per-environment key during `composer setup` instead of shipping one shared secret across every clone |
+
+**Explicitly deferred, not silently dropped:** physical print/scan testing (needs a real printer and devices — Phase 8 gate-rehearsal territory); the live device-rotation rehearsal (crypto and tooling exist, but the staged publish → confirm-device-sync → switch-active ops procedure has no admin-API/SPA surface yet); load-testing manifest delta sync at the 12,000-ticket cold-start scale named in this phase's exit criteria. Full list and rationale in CLAUDE.md's Phase 6 section.
+
+**Verification:** 334 tests passing (up from 309, 25 new — `QrSignerTest`, `TicketNumberGeneratorTest`, `ProcessCheckInSignatureTest`, manifest delta/key cases in `ScannerFlowTest`, `GenerateTicketAssetsJobTest`, `TicketPdfDownloadTest`), Pint clean, PHPStan level 8 clean, `composer audit` clean, OpenAPI regenerated (104 paths — unchanged, since the new media-serving route is deliberately undocumented infrastructure, matching how Laravel's own equivalent built-in route isn't documented either). SPA changes (`invalid_signature` added to the Check-in result union and its status-colour map) verified with `npm run typecheck`.
 
 ---
 
