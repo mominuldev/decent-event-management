@@ -22,7 +22,7 @@ class UpdateAttendeeRequest extends FormRequest
             'full_name_bn' => ['nullable', 'string', 'max:200'],
             'mobile' => ['sometimes', 'string', 'max:20'],
             'email' => ['nullable', 'email', 'max:254'],
-            'participant_type' => ['sometimes', 'string', Rule::in(['current_student', 'former_student', 'teacher', 'staff', 'guardian', 'other'])],
+            'participant_type' => ['sometimes', 'string', Rule::in(['current_student', 'former_student', 'teacher', 'staff', 'guardian', 'guest', 'sponsor', 'other'])],
             'ssc_batch_year' => ['nullable', 'integer'],
             'is_verified' => ['sometimes', 'boolean'],
             'notes' => ['nullable', 'string', 'max:1000'],

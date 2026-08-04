@@ -14,9 +14,34 @@ use Mpdf\Output\Destination;
  * build — current Noto Sans Bengali releases use an OpenType GPOS lookup
  * (Type 5, Format 3) that mpdf's font engine can't parse, which silently
  * drops complex-script shaping (conjuncts render as broken base+virama
- * sequences instead of the correct ligature). FreeSerif is mpdf's own
- * verified choice for Indic scripts (see vendor mpdf-examples
- * example32_indic.php) and needs no custom font registration.
+ * sequences instead of the correct ligature).
+ *
+ * Phase 8 finding, 2026-08-04, worse than the paragraph above previously
+ * claimed: FreeSerif is *not* a fully verified Indic choice, on two counts
+ * confirmed with `hb-shape` and `pdftotext` against this exact pipeline —
+ *   1. FreeSerifBold.ttf has zero Bengali glyph coverage (every Bengali
+ *      codepoint maps to .notdef). Any Bangla text rendered bold does not
+ *      degrade, it disappears from the page entirely. resources/views/
+ *      tickets/pdf.blade.php's `.bn-value` class works around this for the
+ *      one dynamic Bangla field (holder_name_bn) by opting it out of the
+ *      `.value` class's bold weight — any *other* template that puts
+ *      Bangla text in a bold context needs the same treatment.
+ *   2. Independent of bold: mpdf's built-in Bengali OTL/ligature engine
+ *      does not emit a correct ToUnicode CMap entry for consonant-conjunct
+ *      clusters (e.g. `দ্দ`) — the PDF's extractable text layer gets a
+ *      private-use-area codepoint in place of the conjunct, not the real
+ *      characters. Pre-base vowel signs (ি/ে/ৈ) also extract in visual
+ *      rather than logical order. Visually the print may still look
+ *      approximately right (unverified — physical print testing per
+ *      docs/08 is still out of scope here); what's proven broken is
+ *      text-layer fidelity: copy-paste, search, and accessibility tooling
+ *      see garbage for any conjunct-bearing name, which covers a large
+ *      share of real Bengali names. No fix is implemented for this —  it
+ *      needs either a HarfBuzz-based pre-shaping pass feeding mpdf
+ *      pre-shaped glyph runs, or a different PDF rendering engine
+ *      entirely. Tracked, not silently dropped: see
+ *      tests/Feature/Ticketing/GenerateTicketAssetsJobTest.php's Bangla
+ *      test for what is and is not asserted as a result.
  */
 class GenerateTicketPdf
 {

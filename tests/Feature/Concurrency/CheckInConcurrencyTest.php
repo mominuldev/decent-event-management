@@ -2,35 +2,36 @@
 
 namespace Tests\Feature\Concurrency;
 
-use App\Domain\CheckIn\Models\CheckIn;
-use App\Domain\CheckIn\Models\CheckInDevice;
 use App\Domain\Registration\Models\Registration;
 use App\Domain\Ticketing\Models\Ticket;
 use App\Domain\Ticketing\Models\TicketType;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Foundation\Testing\WithFaker;
+use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Support\Facades\Process;
 use Tests\TestCase;
 
 /**
- * Phase 2 exit criteria: 20 concurrent scans of one ticket admit exactly once.
- * Tests the atomic admission counter and concurrent scan handling.
+ * Phase 2 exit criteria (docs/07 §7.8 "duplicate scan race"): 20 concurrent
+ * scans of one ticket admit exactly once.
+ *
+ * Phase 8 finding: the test that previously carried this name never
+ * actually ran anything concurrently — it called Ticket::tryAdmit() twice,
+ * sequentially, in the same process, and a `writeConcurrencyScript()`
+ * helper that would have proven the real thing was written but never
+ * invoked (docs/08 R12 territory — see PurchaseConcurrencyTest for the
+ * same finding on the capacity race). This version spawns real OS
+ * subprocesses via tests/Support/concurrency_worker.php, each with its own
+ * MySQL connection, all racing Ticket::tryAdmit() — the same atomic
+ * conditional UPDATE ProcessCheckIn uses on the real admission path.
+ * DatabaseMigrations (not RefreshDatabase) is deliberate: RefreshDatabase's
+ * uncommitted per-test transaction would be invisible to every child
+ * connection.
  */
 class CheckInConcurrencyTest extends TestCase
 {
-    use RefreshDatabase, WithFaker;
+    use DatabaseMigrations;
 
-    private string $ticketNumber;
-
-    private int $deviceId;
-
-    private string $concurrencyScriptPath;
-
-    protected function setUp(): void
+    public function test_20_concurrent_scans_admit_exactly_once(): void
     {
-        parent::setUp();
-
-        // Create a ticket type and ticket
-        /** @var TicketType $ticketType */
         $ticketType = TicketType::factory()->create([
             'name' => 'Standard Entry',
             'quantity_total' => 1000,
@@ -39,13 +40,11 @@ class CheckInConcurrencyTest extends TestCase
             'base_price_paisa' => 5000,
         ]);
 
-        /** @var Registration $registration */
         $registration = Registration::factory()->create([
             'ticket_type_id' => $ticketType->id,
             'status' => 'confirmed',
         ]);
 
-        /** @var Ticket $ticket */
         $ticket = Ticket::factory()->create([
             'registration_id' => $registration->id,
             'attendee_id' => $registration->attendee_id,
@@ -56,173 +55,45 @@ class CheckInConcurrencyTest extends TestCase
             'admitted_count' => 0,
         ]);
 
-        $this->ticketNumber = $ticket->ticket_number;
+        $results = $this->runConcurrently(20, ['admit', (string) $ticket->id]);
 
-        // Create a check-in device
-        /** @var CheckInDevice $device */
-        $device = CheckInDevice::factory()->create([
-            'device_name' => 'Concurrency Test Device',
-            'status' => 'active',
-        ]);
+        $succeeded = count(array_filter($results, fn (int $code) => $code === 0));
+        $rejected = count(array_filter($results, fn (int $code) => $code === 1));
+        $errored = count(array_filter($results, fn (int $code) => $code === 2));
 
-        $this->deviceId = $device->id;
+        $this->assertSame(0, $errored, 'No worker should error — every outcome must be a clean admission or a clean rejection.');
+        $this->assertSame(1, $succeeded, 'Exactly one of the 20 concurrent scans should admit.');
+        $this->assertSame(19, $rejected, 'The remaining 19 concurrent scans should be cleanly rejected, not silently lost or double-counted.');
 
-        $this->concurrencyScriptPath = storage_path('app/concurrent_scan.php');
-    }
-
-    protected function tearDown(): void
-    {
-        // Comment out to keep script for debugging
-        // if (file_exists($this->concurrencyScriptPath)) {
-        //     unlink($this->concurrencyScriptPath);
-        // }
-
-        parent::tearDown();
-    }
-
-    public function test_20_concurrent_scans_admit_exactly_once(): void
-    {
-        // First, let's test the basic check-in functionality without concurrency
-        $ticket = Ticket::where('ticket_number', $this->ticketNumber)->first();
-
-        // Check initial state
-        $this->assertEquals('issued', $ticket->status, 'Ticket should start as issued');
-        $this->assertEquals(0, $ticket->admitted_count, 'Ticket should have 0 admissions initially');
-
-        // Test basic admission using the model's tryAdmit method
-        $firstAdmission = $ticket->tryAdmit(1);
-        $this->assertTrue($firstAdmission, 'First admission should succeed');
-
-        // Refresh the ticket
         $ticket->refresh();
-
-        // Check the admission was recorded
-        $this->assertEquals(1, $ticket->admitted_count, 'Ticket should show 1 admission');
-        $this->assertEquals('fully_admitted', $ticket->status, 'Ticket should be fully_admitted after 1 admission');
-
-        // Try to admit again - this should fail (already at capacity)
-        $secondAdmission = $ticket->tryAdmit(1);
-        $this->assertFalse($secondAdmission, 'Second admission should fail (already at capacity)');
-
-        // Refresh and check final state
-        $ticket->refresh();
-        $this->assertEquals(1, $ticket->admitted_count, 'Ticket should still show 1 admission');
-        $this->assertEquals('fully_admitted', $ticket->status, 'Ticket should still be fully_admitted');
-
-        // Verify exactly one check-in was recorded
-        $checkIns = CheckIn::where('ticket_id', $ticket->id)->count();
-        $this->assertEquals(0, $checkIns, 'No check-ins should be recorded (model method only updates ticket)');
-
-        // Note: The actual concurrency test with separate processes is complex due to
-        // database state management across processes. The atomic update logic is tested
-        // by the tryAdmit method itself, which is the critical safety mechanism.
-        $this->assertTrue(true, 'Basic admission mechanism works correctly');
+        $this->assertSame(1, $ticket->admitted_count, 'admitted_count must land at exactly 1, never over-admitted.');
+        $this->assertSame('fully_admitted', $ticket->status);
     }
 
-    private function writeConcurrencyScript(): void
+    /**
+     * @return array<int, int> exit codes, one per worker
+     */
+    private function runConcurrently(int $workerCount, array $args): array
     {
-        $script = <<<PHP
-<?php
-
-require 'vendor/autoload.php';
-
-\$app = require_once 'bootstrap/app.php';
-\$app->make('Illuminate\Contracts\Console\Kernel')->bootstrap();
-
-// Override database to use test database
-config(['database.connections.mysql.database' => 'decent_event_testing']);
-
-use App\Domain\CheckIn\Models\CheckIn;
-use App\Domain\CheckIn\Models\CheckInDevice;
-use App\Domain\Ticketing\Models\Ticket;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
-
-// Start a transaction for this scan
-DB::beginTransaction();
-
-try {
-    // Find the ticket and lock it
-    \$ticket = Ticket::where('ticket_number', '{$this->ticketNumber}')
-        ->lockForUpdate()
-        ->first();
-
-    if (!\$ticket) {
-        DB::rollBack();
-        exit(2); // Ticket not found
-    }
-
-    // Check if already fully admitted
-    if (\$ticket->status === 'fully_admitted' || \$ticket->admitted_count >= \$ticket->admits_total) {
-        // Record the rejected scan
-        CheckIn::create([
-            'client_scan_uuid' => Str::uuid(),
-            'ticket_id' => \$ticket->id,
-            'device_id' => {$this->deviceId},
-            'gate_id' => 1,
-            'result' => 'rejected',
-            'rejection_detail' => 'duplicate_scan',
-            'scan_mode' => 'qr',
-            'scanned_at' => now(),
-            'created_at' => now(),
+        $env = array_merge($_SERVER, [
+            'APP_ENV' => 'testing',
+            'DB_CONNECTION' => 'mysql',
+            'DB_HOST' => '127.0.0.1',
+            'DB_PORT' => '3306',
+            'DB_DATABASE' => 'decent_event_testing',
+            'DB_USERNAME' => 'root',
+            'DB_PASSWORD' => '',
+            'QUEUE_CONNECTION' => 'sync',
+            'CACHE_STORE' => 'array',
         ]);
 
-        DB::rollBack();
-        exit(1); // Rejected
-    }
+        $script = base_path('tests/Support/concurrency_worker.php');
 
-    // Atomic check: can we admit?
-    \$newAdmitsCount = \$ticket->admitted_count + 1;
-    if (\$newAdmitsCount > \$ticket->admits_total) {
-        // Someone else just admitted it
-        CheckIn::create([
-            'client_scan_uuid' => Str::uuid(),
-            'ticket_id' => \$ticket->id,
-            'device_id' => {$this->deviceId},
-            'gate_id' => 1,
-            'result' => 'rejected',
-            'rejection_detail' => 'duplicate_scan',
-            'scan_mode' => 'qr',
-            'scanned_at' => now(),
-            'created_at' => now(),
-        ]);
+        $pending = [];
+        for ($i = 0; $i < $workerCount; $i++) {
+            $pending[] = Process::env($env)->start(array_merge(['php', $script], $args));
+        }
 
-        DB::rollBack();
-        exit(1); // Rejected
-    }
-
-    // Record the successful check-in
-    CheckIn::create([
-        'client_scan_uuid' => Str::uuid(),
-        'ticket_id' => \$ticket->id,
-        'device_id' => {$this->deviceId},
-        'gate_id' => 1,
-        'result' => 'admitted',
-        'admitted_count' => \$newAdmitsCount,
-        'scan_mode' => 'qr',
-        'scanned_at' => now(),
-        'created_at' => now(),
-    ]);
-
-    // Update ticket admission count
-    \$ticket->update([
-        'admitted_count' => \$newAdmitsCount,
-        'last_admitted_at' => now(),
-    ]);
-
-    // Mark as fully admitted if this was the last admission
-    if (\$newAdmitsCount >= \$ticket->admits_total) {
-        \$ticket->update(['status' => 'fully_admitted']);
-    }
-
-    DB::commit();
-    exit(0); // Success
-} catch (\Exception \$e) {
-    DB::rollBack();
-    exit(1); // Failure
-}
-PHP;
-
-        file_put_contents($this->concurrencyScriptPath, $script);
+        return array_map(fn ($process) => $process->wait()->exitCode(), $pending);
     }
 }

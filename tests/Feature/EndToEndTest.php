@@ -478,4 +478,169 @@ class EndToEndTest extends TestCase
         $this->assertDatabaseCount('registrations', 2);
         $this->assertDatabaseCount('payments', 2);
     }
+
+    public function test_flow_with_couple_registration(): void
+    {
+        $this->seed(RbacSeeder::class);
+
+        $ticketType = TicketType::factory()->create([
+            'name' => 'Couple Package',
+            'base_price_paisa' => 200000,
+            'quantity_total' => 50,
+            'quantity_sold' => 0,
+            'is_active' => true,
+            'is_public' => true,
+            'sale_starts_at' => now()->subDay(),
+        ]);
+
+        $payload = [
+            'full_name' => 'Nasrin Akter',
+            'mobile' => '+8801711220011',
+            'email' => 'nasrin@example.com',
+            'gender' => 'female',
+            'participant_type' => 'former_student',
+            'ssc_batch_year' => 2008,
+            'ticket_type_ulid' => $ticketType->ulid,
+            'participation_type' => 'couple',
+            'adults_count' => 2,
+            'children_count' => 0,
+            'idempotency_key' => 'test-couple-flow-55555',
+        ];
+
+        $response = $this->withHeader('Idempotency-Key', 'test-couple-flow-55555')
+            ->postJson(route('api.v1.public.registrations.store'), $payload);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('data.status', 'pending_payment');
+
+        $registration = Registration::whereHas('attendee', function ($q) {
+            $q->where('mobile', '+8801711220011');
+        })->first();
+
+        $this->assertEquals('couple', $registration->participation_type);
+        $this->assertEquals(2, $registration->adults_count);
+    }
+
+    /**
+     * Regression test: TicketTypeSeeder seeds Sponsor/VIP ticket types with
+     * `allowed_participant_types` of `sponsor`/`guest`, but the request
+     * validation for `participant_type` only accepted the six alumni-facing
+     * values — so nobody could ever register for those ticket types through
+     * the public API. Fixed by adding `guest`/`sponsor` to the validated
+     * enum in StoreRegistrationRequest, UpdateAttendeeRequest, and both
+     * ticket-type requests. This proves the full path now issues a ticket.
+     */
+    public function test_flow_with_sponsor_ticket_registration(): void
+    {
+        $this->seed(RbacSeeder::class);
+
+        $ticketType = TicketType::factory()->create([
+            'name' => 'Sponsor',
+            'base_price_paisa' => 1000000,
+            'quantity_total' => 100,
+            'quantity_sold' => 0,
+            'is_active' => true,
+            'is_public' => false,
+            'allowed_participant_types' => ['sponsor'],
+            'sale_starts_at' => now()->subDay(),
+        ]);
+
+        $registrationPayload = [
+            'full_name' => 'Bengal Traders Ltd',
+            'mobile' => '+8801511998877',
+            'email' => 'sponsor@example.com',
+            'gender' => 'male',
+            'participant_type' => 'sponsor',
+            'ticket_type_ulid' => $ticketType->ulid,
+            'participation_type' => 'single',
+            'adults_count' => 1,
+            'children_count' => 0,
+            'idempotency_key' => 'test-sponsor-flow-77777',
+        ];
+
+        $registrationResponse = $this->withHeader('Idempotency-Key', 'test-sponsor-flow-77777')
+            ->postJson(route('api.v1.public.registrations.store'), $registrationPayload);
+
+        $registrationResponse->assertStatus(201);
+
+        $attendee = Attendee::where('mobile', '+8801511998877')->first();
+        $registration = Registration::where('attendee_id', $attendee->id)->first();
+        $payment = Payment::where('registration_id', $registration->id)->first();
+
+        $payment->update([
+            'status' => 'awaiting_verification',
+            'manual_trx_id' => 'TRX-SPONSOR-TEST-001',
+        ]);
+
+        $admin = User::factory()->create(['status' => 'active']);
+        $admin->assignRole('Event Manager');
+        Sanctum::actingAs($admin, ['*'], 'web-admin');
+
+        $this->postJson(route('api.v1.admin.payments.verify-manual', [
+            'payment' => $payment->ulid,
+        ]), ['verification_note' => 'Sponsor payment confirmed'])
+            ->assertStatus(200);
+
+        $ticket = Ticket::where('registration_id', $registration->id)->first();
+
+        $this->assertNotNull($ticket, 'Sponsor registration did not issue a ticket.');
+        $this->assertEquals('active', $ticket->status);
+    }
+
+    public function test_flow_with_vip_ticket_registration(): void
+    {
+        $this->seed(RbacSeeder::class);
+
+        $ticketType = TicketType::factory()->create([
+            'name' => 'VIP Guest',
+            'base_price_paisa' => 500000,
+            'quantity_total' => 200,
+            'quantity_sold' => 0,
+            'is_active' => true,
+            'is_public' => false,
+            'allowed_participant_types' => ['guest'],
+            'sale_starts_at' => now()->subDay(),
+        ]);
+
+        $registrationPayload = [
+            'full_name' => 'Chief Guest',
+            'mobile' => '+8801611998877',
+            'email' => 'vip@example.com',
+            'gender' => 'male',
+            'participant_type' => 'guest',
+            'ticket_type_ulid' => $ticketType->ulid,
+            'participation_type' => 'single',
+            'adults_count' => 1,
+            'children_count' => 0,
+            'idempotency_key' => 'test-vip-flow-88888',
+        ];
+
+        $registrationResponse = $this->withHeader('Idempotency-Key', 'test-vip-flow-88888')
+            ->postJson(route('api.v1.public.registrations.store'), $registrationPayload);
+
+        $registrationResponse->assertStatus(201);
+
+        $attendee = Attendee::where('mobile', '+8801611998877')->first();
+        $registration = Registration::where('attendee_id', $attendee->id)->first();
+        $payment = Payment::where('registration_id', $registration->id)->first();
+
+        $payment->update([
+            'status' => 'awaiting_verification',
+            'manual_trx_id' => 'TRX-VIP-TEST-001',
+        ]);
+
+        $admin = User::factory()->create(['status' => 'active']);
+        $admin->assignRole('Event Manager');
+        Sanctum::actingAs($admin, ['*'], 'web-admin');
+
+        $this->postJson(route('api.v1.admin.payments.verify-manual', [
+            'payment' => $payment->ulid,
+        ]), ['verification_note' => 'VIP payment confirmed'])
+            ->assertStatus(200);
+
+        $ticket = Ticket::where('registration_id', $registration->id)->first();
+
+        $this->assertNotNull($ticket, 'VIP registration did not issue a ticket.');
+        $this->assertEquals('active', $ticket->status);
+    }
 }

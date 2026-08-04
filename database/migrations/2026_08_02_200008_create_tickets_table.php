@@ -22,6 +22,7 @@ return new class extends Migration
             $table->unsignedBigInteger('price_paid_paisa');
             $table->char('currency', 3)->default('BDT');
             $table->string('holder_name', 150);
+            $table->string('holder_name_bn', 150)->nullable();
             $table->unsignedSmallInteger('holder_batch_year')->nullable();
             $table->string('holder_type_label', 64);
             $table->timestamp('issued_at')->nullable();

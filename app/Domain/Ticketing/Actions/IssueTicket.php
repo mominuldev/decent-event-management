@@ -38,6 +38,7 @@ class IssueTicket
                 'admitted_count' => 0,
                 'admits_total' => $admitsTotal,
                 'holder_name' => $attendee?->full_name,
+                'holder_name_bn' => $attendee?->full_name_bn,
                 'holder_batch_year' => $attendee?->ssc_batch_year,
                 'holder_type_label' => $attendee?->participant_type,
                 'price_paid_paisa' => $registration->total_paisa,

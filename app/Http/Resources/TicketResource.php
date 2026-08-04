@@ -27,6 +27,7 @@ class TicketResource extends JsonResource
             'price_paid_paisa' => $this->price_paid_paisa,
             'currency' => $this->currency,
             'holder_name' => $this->holder_name,
+            'holder_name_bn' => $this->holder_name_bn,
             'holder_batch_year' => $this->holder_batch_year,
             'holder_type_label' => $this->holder_type_label,
             'issued_at' => $this->issued_at?->toISOString(),

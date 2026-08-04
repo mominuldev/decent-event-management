@@ -27,7 +27,7 @@ class StoreRegistrationRequest extends FormRequest
             'occupation' => ['nullable', 'string', 'max:100'],
             'designation' => ['nullable', 'string', 'max:100'],
             'organization' => ['nullable', 'string', 'max:200'],
-            'participant_type' => ['required', 'string', Rule::in(['current_student', 'former_student', 'teacher', 'staff', 'guardian', 'other'])],
+            'participant_type' => ['required', 'string', Rule::in(['current_student', 'former_student', 'teacher', 'staff', 'guardian', 'guest', 'sponsor', 'other'])],
             'ssc_batch_year' => ['required_if:participant_type,current_student,former_student', 'nullable', 'integer', 'min:1971', 'max:'.date('Y')],
             'current_class' => ['nullable', 'string', 'max:50'],
             'ticket_type_ulid' => ['required', 'string', Rule::exists('ticket_types', 'ulid')],

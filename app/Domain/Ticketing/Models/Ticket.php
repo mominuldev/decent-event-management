@@ -47,6 +47,7 @@ class Ticket extends Model
         'price_paid_paisa',
         'currency',
         'holder_name',
+        'holder_name_bn',
         'holder_batch_year',
         'holder_type_label',
         'replaces_ticket_id',

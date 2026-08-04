@@ -1,4 +1,4 @@
-export type ParticipantType = 'current_student' | 'former_student' | 'teacher' | 'staff' | 'guardian' | 'other';
+export type ParticipantType = 'current_student' | 'former_student' | 'teacher' | 'staff' | 'guardian' | 'guest' | 'sponsor' | 'other';
 
 export interface Attendee {
     ulid: string;
@@ -44,5 +44,7 @@ export const PARTICIPANT_TYPES: { value: ParticipantType; label: string }[] = [
     { value: 'teacher', label: 'Teacher' },
     { value: 'staff', label: 'Staff' },
     { value: 'guardian', label: 'Guardian' },
+    { value: 'guest', label: 'Guest' },
+    { value: 'sponsor', label: 'Sponsor' },
     { value: 'other', label: 'Other' },
 ];

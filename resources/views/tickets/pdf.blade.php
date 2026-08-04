@@ -8,6 +8,12 @@
     .details td { padding: 3px 0; }
     .label { color: #555555; width: 40%; }
     .value { font-weight: bold; }
+    /* FreeSerifBold.ttf (mpdf's bundled bold weight) has zero glyph coverage
+       for the Bengali block — bolding Bangla text does not degrade it, it
+       makes it disappear outright (confirmed via hb-shape: every codepoint
+       maps to .notdef). holder_name_bn is the one dynamic field here that
+       is genuinely Bangla script, so it opts back out of the bold weight. */
+    .value.bn-value { font-weight: normal; }
     .qr-cell { text-align: center; width: 40%; padding-left: 12px; }
     .qr-cell img { width: 130px; height: 130px; }
     .qr-caption { font-size: 8pt; color: #555555; margin-top: 4px; }
@@ -30,7 +36,7 @@
             <table class="details">
                 <tr>
                     <td class="label">Holder &middot; ধারণকারী</td>
-                    <td class="value">{{ $ticket->holder_name }}</td>
+                    <td class="value{{ $ticket->holder_name_bn ? ' bn-value' : '' }}">{{ $ticket->holder_name_bn ?: $ticket->holder_name }}</td>
                 </tr>
                 @if ($ticket->holder_batch_year)
                     <tr>
