@@ -25,7 +25,7 @@ class Payment extends Model
     use HasFactory, HasStateMachine, HasUlid;
 
     public const array TRANSITIONS = [
-        'pending' => ['initiated', 'awaiting_verification'],
+        'pending' => ['initiated', 'awaiting_verification', 'expired'],
         'initiated' => ['processing', 'expired', 'cancelled'],
         'processing' => ['succeeded', 'failed'],
         'awaiting_verification' => ['succeeded', 'rejected'],

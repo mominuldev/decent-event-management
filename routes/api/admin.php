@@ -2,6 +2,15 @@
 
 use App\Http\Controllers\Api\Admin\AttendeeController;
 use App\Http\Controllers\Api\Admin\CheckInController;
+use App\Http\Controllers\Api\Admin\Content\FaqController;
+use App\Http\Controllers\Api\Admin\Content\GalleryAlbumController;
+use App\Http\Controllers\Api\Admin\Content\GalleryItemController;
+use App\Http\Controllers\Api\Admin\Content\MediaController;
+use App\Http\Controllers\Api\Admin\Content\MenuController;
+use App\Http\Controllers\Api\Admin\Content\MenuItemController;
+use App\Http\Controllers\Api\Admin\Content\PageController;
+use App\Http\Controllers\Api\Admin\Content\ScheduleItemController;
+use App\Http\Controllers\Api\Admin\Content\SponsorController;
 use App\Http\Controllers\Api\Admin\DeviceController;
 use App\Http\Controllers\Api\Admin\GateController;
 use App\Http\Controllers\Api\Admin\NotificationController;
@@ -58,6 +67,38 @@ Route::apiResource('users', UserController::class)->only(['index', 'show']);
 Route::post('users/{user:ulid}/assign-role', [UserController::class, 'assignRole'])->name('users.assign-role');
 
 Route::apiResource('gates', GateController::class);
+
+// CMS admin API (docs/08 Phase 3.5). Mirrors the public read API's shape:
+// pages live under `content/pages/{page}` rather than `content/{page}`, so a
+// page can be slugged `faqs` without colliding with the sibling collections.
+Route::prefix('content')->name('content.')->group(function (): void {
+    // Static and nested sub-paths first — `pages/{page}` would otherwise
+    // swallow them and 404 on the failed ULID lookup.
+    Route::get('media', [MediaController::class, 'index'])->name('media.index');
+    Route::post('media', [MediaController::class, 'store'])->name('media.store');
+    Route::delete('media/{media:ulid}', [MediaController::class, 'destroy'])->name('media.destroy');
+
+    Route::post('pages/{page:ulid}/status', [PageController::class, 'changeStatus'])->name('pages.status');
+    Route::post('pages/{page:ulid}/preview-token', [PageController::class, 'previewToken'])->name('pages.preview-token');
+    Route::get('pages/{page:ulid}/revisions', [PageController::class, 'revisions'])->name('pages.revisions');
+    Route::post('pages/{page:ulid}/revisions/{revision:ulid}/restore', [PageController::class, 'restoreRevision'])
+        ->name('pages.revisions.restore');
+    Route::apiResource('pages', PageController::class)->parameters(['pages' => 'page:ulid']);
+
+    Route::post('menus/{menu:ulid}/items', [MenuItemController::class, 'store'])->name('menus.items.store');
+    Route::patch('menus/{menu:ulid}/items/{item:ulid}', [MenuItemController::class, 'update'])->name('menus.items.update');
+    Route::delete('menus/{menu:ulid}/items/{item:ulid}', [MenuItemController::class, 'destroy'])->name('menus.items.destroy');
+    Route::apiResource('menus', MenuController::class)->parameters(['menus' => 'menu:ulid']);
+
+    Route::post('gallery/{album:ulid}/items', [GalleryItemController::class, 'store'])->name('gallery.items.store');
+    Route::patch('gallery/{album:ulid}/items/{item:ulid}', [GalleryItemController::class, 'update'])->name('gallery.items.update');
+    Route::delete('gallery/{album:ulid}/items/{item:ulid}', [GalleryItemController::class, 'destroy'])->name('gallery.items.destroy');
+    Route::apiResource('gallery', GalleryAlbumController::class)->parameters(['gallery' => 'album:ulid']);
+
+    Route::apiResource('sponsors', SponsorController::class)->parameters(['sponsors' => 'sponsor:ulid']);
+    Route::apiResource('schedule', ScheduleItemController::class)->parameters(['schedule' => 'schedule_item:ulid']);
+    Route::apiResource('faqs', FaqController::class)->parameters(['faqs' => 'faq:ulid']);
+});
 
 // live-dashboard and manual-override must be registered before the
 // apiResource below, or its {check_in} show route greedily matches them

@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\Public\Content\SponsorController;
 use App\Http\Controllers\Api\Public\EventSettingController;
 use App\Http\Controllers\Api\Public\PaymentController;
 use App\Http\Controllers\Api\Public\RegistrationController;
+use App\Http\Controllers\Api\Public\SslCommerzReturnController;
 use App\Http\Controllers\Api\Public\TicketTypeController;
 use Illuminate\Support\Facades\Route;
 
@@ -23,6 +24,13 @@ Route::get('registrations/{registration:ulid}', [RegistrationController::class, 
 Route::post('registrations/{registration:ulid}/payment/initiate', [PaymentController::class, 'initiate'])
     ->middleware('idempotent:payment.initiate')
     ->name('registrations.payment.initiate');
+
+// Browser return leg for SSLCommerz (docs/08 Phase 4A). Read-only — never
+// trusted to transition a payment; the IPN at routes/webhooks.php is the
+// only signal that does that (docs/06 §6.6).
+Route::match(['get', 'post'], 'payments/sslcommerz/return/{status}', SslCommerzReturnController::class)
+    ->where('status', 'success|fail|cancel')
+    ->name('payments.sslcommerz.return');
 
 // CMS read API (docs/08 Phase 3.5). Pages live under `content/pages/{slug}`
 // rather than `content/{slug}` so an editor can slug a page `faqs` or

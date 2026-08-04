@@ -1,15 +1,16 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
-    LayoutDashboard, Users, ClipboardList, Wallet, Ticket, QrCode, Bell,
-    BarChart3, Settings, Search, BellRing, Menu, X, Sun, Moon, LogOut, ChevronRight,
+    LayoutDashboard, Users, ClipboardList, Wallet, Ticket, QrCode, Bell, FileText,
+    BarChart3, Settings, Search, BellRing, Menu, X, Sun, Moon, LogOut, ChevronRight, ChevronDown,
+    Globe, Award, CalendarClock, HelpCircle, Images, Image as ImageIcon, Compass,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useTheme } from '@/app/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { IconButton } from '@/components/ui';
 
-type Item = { to: string; label: string; icon: typeof LayoutDashboard; permission?: string };
+type Item = { to: string; label: string; icon: typeof LayoutDashboard; permission?: string; children?: Item[] };
 type Group = { heading?: string; items: Item[] };
 
 const NAV: Group[] = [
@@ -38,6 +39,26 @@ const NAV: Group[] = [
         items: [{ to: '/notifications', label: 'Notifications', icon: Bell, permission: 'notification.view_any' }],
     },
     {
+        heading: 'Website',
+        items: [
+            {
+                to: '/cms',
+                label: 'Content',
+                icon: Globe,
+                permission: 'content.view_any',
+                children: [
+                    { to: '/cms/pages', label: 'Pages', icon: FileText, permission: 'content.view_any' },
+                    { to: '/cms/menus', label: 'Navigation', icon: Compass, permission: 'content.view_any' },
+                    { to: '/cms/sponsors', label: 'Sponsors', icon: Award, permission: 'content.view_any' },
+                    { to: '/cms/schedule', label: 'Schedule', icon: CalendarClock, permission: 'content.view_any' },
+                    { to: '/cms/faqs', label: 'FAQs', icon: HelpCircle, permission: 'content.view_any' },
+                    { to: '/cms/gallery', label: 'Gallery', icon: Images, permission: 'content.view_any' },
+                    { to: '/cms/media', label: 'Media', icon: ImageIcon, permission: 'content.manage_media' },
+                ],
+            },
+        ],
+    },
+    {
         heading: 'Reports',
         items: [{ to: '/reports', label: 'Reports', icon: BarChart3, permission: 'report.view_registrations' }],
     },
@@ -47,21 +68,87 @@ const NAV: Group[] = [
     },
 ];
 
+/** Sub-items stand in for their parent as navigation targets — the parent
+ * (e.g. `Content`) is a container, not its own destination. */
+function flatNavItems(): Item[] {
+    return NAV.flatMap((g) => g.items.flatMap((i) => (i.children && i.children.length > 0 ? i.children : [i])));
+}
+
 function breadcrumbLabel(pathname: string): string {
-    for (const group of NAV) {
-        const item = group.items.find((i) => i.to === pathname || (i.to !== '/' && pathname.startsWith(i.to + '/')));
-        if (item) return item.label;
-    }
-    return 'Overview';
+    const item = flatNavItems().find((i) => i.to === pathname || (i.to !== '/' && pathname.startsWith(i.to + '/')));
+    return item?.label ?? 'Overview';
+}
+
+function isWithin(pathname: string, to: string): boolean {
+    return pathname === to || pathname.startsWith(to + '/');
+}
+
+function NavItemLink({ item, indent, onNavigate }: { item: Item; indent?: boolean; onNavigate?: () => void }) {
+    return (
+        <NavLink
+            to={item.to}
+            end={item.to === '/'}
+            onClick={onNavigate}
+            className={({ isActive }) =>
+                cn(
+                    'group flex items-center gap-3 rounded-xl px-3 py-2 text-[13.5px] font-medium transition-colors',
+                    indent && 'py-1.5 text-[13px]',
+                    isActive ? 'bg-accent text-accent-fg shadow-[var(--shadow-soft)]' : 'text-text-muted hover:bg-surface-2 hover:text-text',
+                )
+            }
+        >
+            {({ isActive }) => (
+                <>
+                    <item.icon size={indent ? 16 : 18} strokeWidth={2.1} className={cn(isActive ? '' : 'text-text-faint group-hover:text-text')} />
+                    {item.label}
+                </>
+            )}
+        </NavLink>
+    );
+}
+
+/** A parent with sub-items: the row expands to its children whenever the
+ * current route is inside it, so landing on `/cms/gallery` from a bookmark
+ * or the browser back button shows "Gallery" nested under "Content" without
+ * the user having to click anything first. */
+function NavGroupItem({ item, pathname, onNavigate }: { item: Item; pathname: string; onNavigate?: () => void }) {
+    const expanded = isWithin(pathname, item.to);
+
+    return (
+        <div>
+            <NavLink
+                to={item.to}
+                onClick={onNavigate}
+                className={cn(
+                    'group flex items-center gap-3 rounded-xl px-3 py-2 text-[13.5px] font-medium transition-colors',
+                    expanded ? 'text-text' : 'text-text-muted hover:bg-surface-2 hover:text-text',
+                )}
+            >
+                <item.icon size={18} strokeWidth={2.1} className={cn(expanded ? '' : 'text-text-faint group-hover:text-text')} />
+                <span className="flex-1">{item.label}</span>
+                <ChevronDown size={14} className={cn('text-text-faint transition-transform', !expanded && '-rotate-90')} />
+            </NavLink>
+
+            {expanded && (
+                <div className="ml-4 mt-0.5 space-y-0.5 border-l border-border pl-3">
+                    {item.children?.map((child) => <NavItemLink key={child.to} item={child} indent onNavigate={onNavigate} />)}
+                </div>
+            )}
+        </div>
+    );
 }
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     const { can } = useAuth();
+    const location = useLocation();
     const groups = useMemo(
         () =>
-            NAV.map((g) => ({ ...g, items: g.items.filter((i) => !i.permission || can(i.permission)) })).filter(
-                (g) => g.items.length > 0,
-            ),
+            NAV.map((g) => ({
+                ...g,
+                items: g.items
+                    .filter((i) => !i.permission || can(i.permission))
+                    .map((i) => ({ ...i, children: i.children?.filter((c) => !c.permission || can(c.permission)) })),
+            })).filter((g) => g.items.length > 0),
         [can],
     );
 
@@ -86,27 +173,13 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                             </div>
                         )}
                         <div className="space-y-0.5">
-                            {group.items.map((it) => (
-                                <NavLink
-                                    key={it.to}
-                                    to={it.to}
-                                    end={it.to === '/'}
-                                    onClick={onNavigate}
-                                    className={({ isActive }) =>
-                                        cn(
-                                            'group flex items-center gap-3 rounded-xl px-3 py-2 text-[13.5px] font-medium transition-colors',
-                                            isActive ? 'bg-accent text-accent-fg shadow-[var(--shadow-soft)]' : 'text-text-muted hover:bg-surface-2 hover:text-text',
-                                        )
-                                    }
-                                >
-                                    {({ isActive }) => (
-                                        <>
-                                            <it.icon size={18} strokeWidth={2.1} className={cn(isActive ? '' : 'text-text-faint group-hover:text-text')} />
-                                            {it.label}
-                                        </>
-                                    )}
-                                </NavLink>
-                            ))}
+                            {group.items.map((it) =>
+                                it.children && it.children.length > 0 ? (
+                                    <NavGroupItem key={it.to} item={it} pathname={location.pathname} onNavigate={onNavigate} />
+                                ) : (
+                                    <NavItemLink key={it.to} item={it} onNavigate={onNavigate} />
+                                ),
+                            )}
                         </div>
                     </div>
                 ))}

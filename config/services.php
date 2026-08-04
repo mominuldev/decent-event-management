@@ -42,12 +42,37 @@ return [
         'webhook_secret' => env('FAKE_GATEWAY_WEBHOOK_SECRET', 'fake-gateway-webhook-secret'),
     ],
 
+    // Phase 4A — SslCommerzClient. Sandbox credentials are self-service
+    // (developer.sslcommerz.com), no merchant onboarding required; the
+    // default sandbox demo store is `testbox` / `qwerty1234`. Swap the
+    // three URLs to the live hosts only once a real merchant account
+    // exists (Phase 4B) — never flip `sandbox` without also swapping the
+    // credentials, or a real amount could hit the demo store.
+    'sslcommerz' => [
+        'store_id' => env('SSLCOMMERZ_STORE_ID', 'testbox'),
+        'store_password' => env('SSLCOMMERZ_STORE_PASSWORD'),
+        'sandbox' => env('SSLCOMMERZ_SANDBOX', true),
+        'base_url' => env('SSLCOMMERZ_BASE_URL', 'https://sandbox-gw.sslcommerz.com'),
+        'validation_base_url' => env('SSLCOMMERZ_VALIDATION_BASE_URL', 'https://sandbox.sslcommerz.com'),
+
+        // Source-IP allowlist for the IPN (docs/06 §6.6), on top of
+        // signature verification — empty (the default) is a deliberate
+        // no-op rather than a guessed range; see EnsureIpnFromAllowlistedIp.
+        'ipn_ip_allowlist' => array_filter(array_map('trim', explode(',', (string) env('SSLCOMMERZ_IPN_IP_ALLOWLIST', '')))),
+    ],
+
     // Public site origin (separate Next.js repo). Used only to build the
     // gateway return URL in InitiatePayment — never accepted from a
     // request, since a client-supplied redirect target is an open-redirect
     // risk.
     'frontend' => [
         'url' => env('FRONTEND_URL', env('APP_URL', 'http://localhost')),
+
+        // ISR revalidation hook (Phase 3.5). Left unset until the Next.js
+        // repo exposes the route — RevalidateFrontendContent is a no-op
+        // without it, so the CMS is fully usable in the meantime.
+        'revalidate_url' => env('CONTENT_REVALIDATE_URL'),
+        'revalidate_secret' => env('CONTENT_REVALIDATE_SECRET'),
     ],
 
 ];

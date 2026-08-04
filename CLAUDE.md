@@ -5,10 +5,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Current Phase Status
 
 **Phase 2 — Backend API Development (Week 2 of 6 weeks) — D1–D4 closed 2026-08-04, sign-off still pending frontend-lead OpenAPI review**
-**Phase 3.5 — CMS: backend foundation slice landed 2026-08-04 (schema + public read API). Admin half still open — see [§Phase 3.5 in progress](#-phase-35-cms--in-progress) below.**
+**Phase 3.5 — CMS: closed 2026-08-04. Backend foundation (schema + public read API) and admin half (CRUD with revision capture/restore, media upload, SPA screens, ISR revalidation hook) both landed — see [§Phase 3.5 below](#-phase-35-cms--closed-2026-08-04).**
 **Phase 5 — Email/SMS/WhatsApp: buildable-now slice landed 2026-08-04 (outbox, dispatcher, real email, admin dashboard). Real SMS/WhatsApp drivers and DLR webhooks stay deferred — no vendor is chosen and Meta hasn't approved templates. See [§Phase 5 below](#-phase-5-emailsmswhatsapp--buildable-now-slice-closed-2026-08-04).**
+**Phase 4A — SSLCommerz Sandbox: buildable-now slice landed 2026-08-04 (real `SslCommerzClient`, expiry sweeper closing D5, nightly reconciliation, refund-to-gateway wiring). Not yet smoke-tested against a live sandbox transaction — no `SSLCOMMERZ_STORE_PASSWORD` has been provisioned in this environment. See [§Phase 4A below](#-phase-4a-sslcommerz-sandbox--buildable-now-slice-closed-2026-08-04).**
 
-> Reviewed 2026-08-03, defects closed 2026-08-04. The 2026-08-03 architecture/code review found four real defects (D1–D4) plus six doc-vs-code drift items (D5–D10); **D1–D4 are now closed** (see below) with a gateway-path regression test added. Full original detail, evidence, and file references live in [docs/08-development-roadmap.md §"Phase 2 review findings"](docs/08-development-roadmap.md). D5–D10 remain as tracked drift — none of them block sign-off, which now rests solely on the frontend-lead OpenAPI review. The roadmap was revised in the 2026-08-03 pass — Phase 4 split into 4A (SSLCommerz sandbox, unblocked) and 4B (live cutover), and Phase 3.5 (CMS) added.
+> Reviewed 2026-08-03, defects closed 2026-08-04. The 2026-08-03 architecture/code review found four real defects (D1–D4) plus six doc-vs-code drift items (D5–D10); **D1–D4 are now closed** (see below) with a gateway-path regression test added. Full original detail, evidence, and file references live in [docs/08-development-roadmap.md §"Phase 2 review findings"](docs/08-development-roadmap.md). D5 closed 2026-08-04 as part of Phase 4A; D6–D10 remain as tracked drift — none of them block sign-off, which now rests solely on the frontend-lead OpenAPI review. The roadmap was revised in the 2026-08-03 pass — Phase 4 split into 4A (SSLCommerz sandbox, unblocked) and 4B (live cutover), and Phase 3.5 (CMS) added.
 
 ### ✅ D1–D4 closed 2026-08-04
 
@@ -17,19 +18,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **D3 — fixed.** `POST /api/v1/public/registrations/{registration}/payment/initiate` (`App\Http\Controllers\Api\Public\PaymentController::initiate`) calls `InitiatePayment` against the registration's pending payment and returns a `redirect_url`. The callback/return URL is built server-side from `services.frontend.url` (`FRONTEND_URL` env), never accepted from the client, to avoid an open-redirect. `success`/`fail`/`cancel` browser-return *handlers* were **not** added — the existing `GET /api/v1/public/registrations/{registration}` already exposes live payment status for the frontend to poll after redirect, and per docs/06 §6.6 the browser redirect must never itself mutate a payment, so there is nothing for a dedicated handler to do yet.
 - **D4 — fixed.** `idempotent:registration.create` is now attached to `POST /public/registrations` and `idempotent:payment.initiate` to the new initiate route (both require an `Idempotency-Key` header). Existing tests updated to send it; a replay-produces-cached-response regression test was added for both routes.
 
-### ⚠️ Doc-vs-code drift (D5–D10) — fix the code or fix the docs, don't leave both
+### ⚠️ Doc-vs-code drift (D6–D10) — fix the code or fix the docs, don't leave both
 
-- **D5** Reserved capacity leaks: `tryReserve()` on every registration, released only on explicit payment failure. `payments.expires_at` is never written and `routes/console.php` defines no schedule. Sweeper is a Phase 4A deliverable.
+D5 closed 2026-08-04 — see [§Phase 4A](#-phase-4a-sslcommerz-sandbox--buildable-now-slice-closed-2026-08-04).
+
 - **D6** The event-driven module boundary described below **still only partially exists** — `PaymentSucceeded`/`IssueTicketForSucceededPayment` (added closing D1) is the first real instance; `VerifyManualPayment` still calls `IssueTicket` directly, `CreateRegistration` still creates `Payment` directly, and the other nine `Events/`/`Listeners/` dirs are still empty. Write further cross-module code the right way rather than copying the remaining direct calls.
 - **D7** `payment_method` reaches the DB unvalidated (defaults to `bkash`); no validation of `max_admits`, `allowed_participant_types`, `is_active`/`is_public`, or the sale window.
 - **D8** `ActivityLog::create()` lives in five admin controllers, not in the actions — non-HTTP callers skip the audit trail.
-- **D9** No observers exist; no media upload endpoint (so manual payment proof is unusable); no `config/cors.php` for the Next.js origin; `config/sanctum.php` has `'expiration' => null`, so staff tokens never expire.
+- **D9** *Partially closed 2026-08-04.* The CMS media upload endpoint now exists (`POST /admin/content/media`, Phase 3.5) with magic-byte validation and image re-encoding — but it is **public-disk, CMS-collections only** and deliberately refuses anything else, so **manual payment proof is still unusable**: that needs a private-disk upload path with short-TTL signed URLs, which is Phase 4A's to build (reuse `UploadContentMedia`'s validation, not its storage settings). Still open: no observers exist; no `config/cors.php` for the Next.js origin; `config/sanctum.php` has `'expiration' => null`, so staff tokens never expire.
 - **D10** `routes/api/admin.php` has **no check-in endpoints**, though Phase 2's deliverable list names them — so the SPA's Check-in page has no backend. Also missing: users/roles, gates, devices, and volunteer CRUD. **Explicitly rescheduled**, not silently dropped: this is a multi-endpoint slice of its own (check-in, gates, devices, users/roles, volunteer CRUD) rather than a same-day fix like D1–D4, and is tracked as the next follow-up after this close-out, ahead of Phase 3 needing the SPA's Check-in page un-stubbed. The notifications dashboard is correctly deferred to Phase 5.
 
 ### 🚧 Deferred by design — do NOT report these as bugs
 
-Scheduled deliverables of Phases 4A/6, correctly absent in Phase 2:
-`placeholder_sig` QR signature and the missing `QrSigner`; `ProcessCheckIn` not verifying signatures; ticket PDF rendering; the interim O(n) ticket-number counter in `IssueTicket.php:19`; the expiry sweeper and reconciliation jobs; real gateway adapters other than `FakeGateway`.
+Scheduled deliverables of Phase 6, correctly absent in Phase 2:
+`placeholder_sig` QR signature and the missing `QrSigner`; `ProcessCheckIn` not verifying signatures; ticket PDF rendering; the interim O(n) ticket-number counter in `IssueTicket.php:19`.
+
+Phase 4A landed the expiry sweeper, the reconciliation job, and a real `SslCommerzClient` (see below) — `bkash`/`nagad`/`rocket` still resolve to `FakeGateway` pending their merchant applications (Phase 4B).
 
 Vendor-blocked pieces of Phase 5 (engineering is done; only a vendor pick or Meta approval is missing — see [§Phase 5](#-phase-5-emailsmswhatsapp--buildable-now-slice-closed-2026-08-04)): real `SmsDriver`/`WhatsAppDriver` (no Bangladesh SMS vendor named, no approved WhatsApp templates — both unchecked in External Dependencies below); DLR/delivery-webhook endpoints (the payload/signature shape is vendor-specific and unknown without one).
 
@@ -48,11 +52,12 @@ Vendor-blocked pieces of Phase 5 (engineering is done; only a vendor pick or Met
 - CI pipeline (Pint, PHPStan level 8, tests, `composer audit`)
 - OpenAPI attributes on all endpoints; spec generates cleanly (81 paths)
 - State machine (`HasStateMachine`) integrated across all models
-- Real `MailDriver` (Phase 5) plus fake drivers for the vendor-blocked channels: `FakeGateway`, `FakeSmsDriver`, `FakeWhatsAppDriver`
+- Real `MailDriver` (Phase 5) and real `SslCommerzClient` (Phase 4A) plus fake drivers for the vendor-blocked pieces: `FakeGateway` (still resolved for `bkash`/`nagad`/`rocket`), `FakeSmsDriver`, `FakeWhatsAppDriver`
 - Atomic reservation (`tryReserve`/`confirmSale`/`releaseReservation`) and atomic admission (`tryAdmit`) — verified under concurrency
 - A gateway-verified payment issues a ticket (D1) and idempotency is enforced on registration creation and payment initiation (D4)
 - The notification outbox is real: 6 domain events write outbox rows via `Notification\Actions\QueueNotification`, `app/Jobs/SendNotificationJob` drains them with the ADR-07 backoff schedule, per-channel kill switches are enforced at send-time (Phase 5)
-- 219 tests passing, Pint clean, PHPStan level 8 clean, `composer audit` clean
+- The CMS is editable end to end (Phase 3.5): 22 admin content endpoints, versioned page saves with restore, a validating media upload, and the SPA screens at `/cms`
+- 302 tests passing, Pint clean, PHPStan level 8 clean, `composer audit` clean
 
 ### ⚠️ Previously listed as complete — corrected 2026-08-03, D3/D4/D1-related rows resolved 2026-08-04
 
@@ -70,6 +75,7 @@ These were on the "done" list but the code did not support the claim at the time
 - Concurrency tests green: 300 purchases against 100 capacity sells exactly 100; 20 concurrent scans admit exactly once
 - Documented all ~47 API endpoints with OpenAPI attributes (was 1/50)
 - Closed D1–D4 (2026-08-04): gateway payments now issue tickets end-to-end, a public payment-initiate endpoint exists, and idempotency is enforced on registration creation and payment initiation
+- Closed D5 (2026-08-04, Phase 4A): abandoned checkouts release reserved capacity via a gateway-pre-checked sweeper instead of leaking it forever
 
 ### 📋 Exit Criteria (from docs/08-development-roadmap.md)
 - [x] Registration → payment → ticketing → admission flow works end-to-end in tests — **met 2026-08-04**: `EndToEndTest::test_complete_registration_to_admission_flow_via_gateway()` proves the actual gateway path (initiate → IPN → verify → ticket → admission), not just manual verification
@@ -81,11 +87,11 @@ These were on the "done" list but the code did not support the claim at the time
 - [x] `composer test` green with the new assertions (189 passing), Pint and PHPStan level 8 clean
 - [ ] D1–D4 closed, with a regression test asserting a `tickets` row after **gateway** verification
 
-### 🚧 Phase 3.5 (CMS) — in progress
+### ✅ Phase 3.5 (CMS) — closed 2026-08-04
 
-The **backend foundation slice landed 2026-08-04**, sequenced per docs/08's own note ("schema and public read API in weeks 1–2") so Phase 3's marketing pages build against real content rather than fixtures.
+The **backend foundation slice** (schema + public read API) landed first, sequenced per docs/08's own note ("schema and public read API in weeks 1–2") so Phase 3's marketing pages build against real content rather than fixtures. The **admin half landed the same day** — the CMS is now editable end to end.
 
-**Shipped:**
+**Shipped — backend foundation:**
 
 - Seventh module `app/Domain/Content/` — `ContentPage`, `ContentBlock`, `ContentPageRevision`, `Menu`, `MenuItem`, `Sponsor`, `ScheduleItem`, `Faq`, `GalleryAlbum`, `GalleryItem`
 - Ten migrations (`2026_08_04_1000*`), factories for every model, and `ContentSeeder` with real bilingual copy — wired into `DatabaseSeeder`
@@ -93,7 +99,22 @@ The **backend foundation slice landed 2026-08-04**, sequenced per docs/08's own 
 - Public read API under `/api/v1/public/content/` — `pages`, `pages/{slug}`, `menus`, `menus/{code}`, `sponsors`, `schedule`, `faqs`, `gallery`, `gallery/{slug}`
 - 45 new tests (`tests/Feature/Public/ContentApiTest.php`, `tests/Unit/Domain/Content/ContentLocaleTest.php`) plus two `content.*` RBAC pairs
 
-**Still open — the admin half:** CRUD controllers with revision capture/restore, the media upload endpoint (also closes D9 and unblocks Phase 4A's manual payment-proof upload), the SPA CMS screens, and the ISR revalidation hook.
+**Shipped — admin half:**
+
+- Six Content Actions carrying the audit trail themselves (D8 discipline — new code logs from the Action, never the controller): `SaveContentPage` (block-tree sync + revision capture), `ChangeContentPageStatus`, `RestoreContentPageRevision`, `IssuePagePreviewToken`, `DeleteContentPage`, `UploadContentMedia`, plus `SaveContentResource` as the shared create/update/delete choke point for the simple collections.
+- 22 admin endpoints under `/api/v1/admin/content/` — pages (CRUD + `/status` + `/preview-token` + `/revisions` + `/revisions/{revision}/restore`), menus and menu items, sponsors, schedule, FAQs, gallery albums and items, and the media library. All OpenAPI-annotated; the spec is now **104 paths** (was 81).
+- **The media upload endpoint exists** (`POST /admin/content/media`) — magic-byte type detection, full GD re-encode (strips EXIF/GPS and anything smuggled into the container), randomised filename, JPEG/PNG/WebP only. SVG is refused outright: it is a script-bearing XML document and no re-encode makes it safe to serve from our own origin. This is the CMS half of D9 only — see D9 above for what it does *not* cover.
+- ISR revalidation hook: `Content\Events\ContentChanged` → `Content\Listeners\RevalidateFrontendContent` → `app/Jobs/RevalidateFrontendContentJob` on the `notifications` lane. A no-op until `CONTENT_REVALIDATE_URL` is set, so the CMS is fully usable before the Next.js repo exposes the route. Content publishes the event and knows nothing about a frontend; only the listener does.
+- SPA `resources/js/features/cms/` — tabbed Pages / Navigation / Sponsors / Schedule / FAQs / Gallery / Media, plus a full page editor at `/cms/pages/:ulid` with the block editor, publish controls, preview-link minting, and revision restore. Every string field is a paired EN/বাংলা control driven by one page-level locale toggle.
+- 51 new tests (`tests/Feature/Admin/Content{PageAdmin,LibraryAdmin,MediaUpload,Revalidation}Test.php`) plus 7 `content.*` HTTP permission round-trips in `ComprehensivePermissionTest`.
+
+**Invariants the admin half establishes — the tests exist to stop these regressing:**
+
+- **Saving never publishes.** `PATCH /pages/{page}` ignores a `status` field entirely; workflow moves go through `POST /pages/{page}/status`, which needs `content.publish` — a permission an Event Manager holds and a copy editor need not. `SaveContentPage` is the only writer of the body, `ChangeContentPageStatus` the only writer of `status`.
+- **History is append-only.** Every save captures a `content_page_revisions` row; a *restore* replays the snapshot as a new save rather than rewinding, so who restored what stays recoverable. Snapshots store media by ULID, never internal id.
+- **The preview token is returned exactly once**, by the endpoint that mints it. It is `$hidden`, outside `$fillable`, and absent from every resource; the admin view exposes only `has_preview_token`. Rotating invalidates every previously shared link.
+- **`FormRequest::validated()` does not preserve nested array order.** It rebuilds data rule by rule, so an entry carrying an optional key can come back first — `array_values()` on it silently scrambles block order. `SaveContentPage` `ksort`s before reindexing; do the same anywhere else a positional array arrives through validation.
+- **Block field shapes live in `resources/js/features/cms/blocks.ts`.** The server validates the block *type* against `ContentBlock::TYPES` and keeps `data` as free JSON, deliberately, so a copy change never needs a migration. That makes the SPA schema the field contract in practice: a new block type means touching `ContentBlock::TYPES`, `blocks.ts`, and the public site's renderer.
 
 **Conventions this module establishes — follow them, don't re-litigate:**
 
@@ -125,9 +146,29 @@ Split the same way Phase 4A split off SSLCommerz sandbox work from live merchant
 - Automated bounce/opt-out handling via provider webhooks — same reason. The `sent → bounced` state machine transition and `FakeEmailDriver`'s simulated bounce already exercise the state, just not from a real provider yet.
 - Live cross-carrier delivery verification (GP/Robi/Banglalink/Teletalk) — inherently unmeetable without a live SMS vendor.
 
+### ✅ Phase 4A (SSLCommerz Sandbox) — buildable-now slice closed 2026-08-04
+
+Same split as Phase 3.5/5: build everything that's pure engineering now, flag what a real sandbox call or a real merchant account is needed for rather than guessing at it. SSLCommerz's sandbox credentials are self-service, so unlike bKash/Nagad/Rocket (still blocked on merchant applications — see External Dependencies below), the whole SSLCommerz money path is buildable today. It has **not** been proven against a live sandbox call in this environment, because no `SSLCOMMERZ_STORE_PASSWORD` was available — that first live smoke test is still outstanding and should happen before this is treated as production-ready.
+
+**Shipped:**
+
+- `App\Domain\Payment\Gateways\SslCommerzClient` implementing `PaymentGatewayInterface` — `createIntent` (session init), `verify` (val_id lookup, with a tran_id-lookup fallback for a lost/delayed IPN), `refund`, `parseWebhook` (IPN `verify_sign`/`verify_key` check, following the documented algorithm). `PaymentGatewayResolver::forMethod('sslcommerz')` now resolves to it; `bkash`/`nagad`/`rocket` stay on `FakeGateway`.
+- `App\Http\Controllers\Api\Public\SslCommerzReturnController` — the `success`/`fail`/`cancel` browser-return legs SSLCommerz needs as real backend URLs (it POSTs to them, so they can't be the Next.js frontend directly). It reads and writes nothing; it only redirects to `FRONTEND_URL`, and only when the `next` query param's host matches — a hand-crafted request can't turn this into an open redirect.
+- `App\Http\Middleware\EnsureIpnFromAllowlistedIp` (`ipn.allowlist:sslcommerz`, applied to `routes/webhooks.php`'s sslcommerz route) — source-IP allowlisting on top of signature verification. Deliberately a no-op when `SSLCOMMERZ_IPN_IP_ALLOWLIST` is unset: SSLCommerz's actual published IPN ranges aren't in any doc here, and a wrong guess would silently drop real payment notifications, which is worse than skipping this layer until someone pastes the real ranges in.
+- `App\Domain\Payment\Actions\ExpirePaymentIntents`, scheduled every 5 minutes (`routes/console.php`) — closes D5. `CreateRegistration` now writes `payments.expires_at` from `payment.intent_ttl_minutes`; the sweeper re-verifies each expired-eligible payment against its gateway before expiring, so a delayed IPN is recovered instead of the registration being wrongly killed. `Payment::TRANSITIONS` (and docs/04-erd.md's diagram) gained `pending → expired` — the sweeper's own query always covered `pending`, the diagram just hadn't caught up.
+- `App\Domain\Payment\Actions\RefundPayment` now actually calls `PaymentGatewayInterface::refund()` before touching any local state, and records the attempt as a `payment_transactions` row (`type=refund`) with the gateway's reference. A manual (personal-wallet) payment skips the gateway call entirely, since no money ever moved through one. Fixed in passing: `Refund::create()` was missing the NOT NULL `method` column — untested until now, since no prior test exercised a successful refund.
+- `App\Domain\Payment\Actions\ReconcilePayments`, scheduled nightly (`routes/console.php`) — re-verifies every unreconciled `succeeded` payment against its gateway and classifies `matched` / `amount_mismatch` / `missing_at_gateway`. **`missing_locally` is not implemented** — it needs a gateway settlement-report enumerated by date, and `PaymentGatewayInterface` only supports looking up a transaction this system already knows about; building that generically across four gateways with different (and mostly unbuilt) settlement-export APIs would be guessing at a Phase 4B shape. Flagged here rather than silently skipped.
+- 32 new tests: `SslCommerzClientTest` (session creation, minimum-amount guard, val_id and tran_id-fallback verification, signature validation, refund success/failure) via `Http::fake()`; `ExpirePaymentIntentsTest` (expires an abandoned intent, recovers one with a late/lost IPN, leaves manual-channel and not-yet-due payments alone); `ReconcilePaymentsTest` (all three implemented classes, manual-channel exclusion, no re-checking an already-reconciled row); `RefundPaymentTest` (gateway call, manual skip, SSLCommerz fails closed with no recorded bank transaction id); `SslCommerzReturnTest` (redirect allowlisting); `WebhookIpAllowlistTest` (no-op when unset, rejects/admits by configured IP).
+
+**Still open:**
+
+- A first live call against the real SSLCommerz sandbox (needs `SSLCOMMERZ_STORE_PASSWORD` provisioned) — the field names in `SslCommerzClient` follow the published v4 docs but are unverified against an actual response.
+- The manual verification workflow's proof-upload half (duplicate-TrxID detection and the approval queue already exist from Phase 2/D-review era). Phase 3.5's `UploadContentMedia` is **not** it: that endpoint stores public, CDN-served CMS images, and a payment proof must be private with a short-TTL signed URL. Reuse its magic-byte validation and re-encode step; do not reuse its disk, `is_public`, or route.
+- `missing_locally` reconciliation (see above) and bKash/Nagad/Rocket real adapters — both wait on Phase 4B's merchant applications.
+
 ### 💳 Payments — development environment
 
-Development and all Phase 4A work run against the **SSLCommerz sandbox** (<https://sandbox-gw.sslcommerz.com/docs>, <https://developer.sslcommerz.com/doc/v4/>). Sandbox credentials are self-service — no merchant onboarding required — so the full money path is buildable now.
+Development and all Phase 4A work run against the **SSLCommerz sandbox** (<https://sandbox-gw.sslcommerz.com/docs>, <https://developer.sslcommerz.com/doc/v4/>). Sandbox credentials are self-service — no merchant onboarding required — so the full money path is buildable now. `SslCommerzClient` (Phase 4A, closed 2026-08-04) implements it; see [§Phase 4A above](#-phase-4a-sslcommerz-sandbox--buildable-now-slice-closed-2026-08-04) for what's still unverified against a live call.
 
 | Purpose | Sandbox endpoint |
 |---|---|
@@ -171,7 +212,9 @@ A single Laravel application at the repo root, which serves **both** the API and
 composer install
 cp .env.example .env && php artisan key:generate
 php artisan migrate
+php artisan storage:link
 ```
+Without `storage:link`, `public/storage` doesn't exist and every `MediaFile::publicUrl()` (CMS media library, sponsor logos, page OG images, gallery — anything using the `public` disk) 404s: the thumbnail shows a broken image even though the upload itself succeeded and the file is really on disk under `storage/app/public/`. This bit a fresh checkout during Phase 3.5 testing — the step is easy to forget because nothing in `composer install` or `migrate` fails without it.
 
 **Run the full dev stack** (server + queue listener + logs + Vite, concurrently):
 ```bash
@@ -270,4 +313,5 @@ Vite + React 19 + TypeScript strict, TanStack Query for all server state, TanSta
 - **Navigation and actions render from the permission set returned at login**, never from role names — same rule as the backend. A user must not see a control they cannot use.
 - **Types are hand-written today and will drift.** The roadmap's Phase 3 exit criterion requires no drift between client and server validation. Until the client is generated from `public/docs/openapi.json`, treat `types.ts` as needing a manual check whenever you change an API Resource.
 - **Run `npm run typecheck` before committing** — TypeScript is strict and CI does not currently catch SPA type errors.
-- No pages are unbacked placeholders anymore: Check-in (D10, closed 2026-08-04) and Notifications (Phase 5, closed 2026-08-04) both have real backends and full SPA screens. If you add a new module ahead of its backend, don't stub fake data — leave a `Placeholder` (`resources/js/features/misc/Placeholder.tsx`) and flag it, matching how these two were handled while open.
+- No pages are unbacked placeholders anymore: Check-in (D10), Notifications (Phase 5) and Content (Phase 3.5) all closed 2026-08-04 with real backends and full SPA screens. If you add a new module ahead of its backend, don't stub fake data — leave a `Placeholder` (`resources/js/features/misc/Placeholder.tsx`) and flag it, matching how these were handled while open.
+- **Bilingual editing is one locale toggle per form, not a field-level one.** `features/cms/components/BilingualField.tsx` renders whichever half of a `field`/`field_bn` pair the toggle selects and carries the other through untouched; a blank Bangla value is a supported state that falls back to English server-side, so surface it (the field says so) rather than blocking the save.

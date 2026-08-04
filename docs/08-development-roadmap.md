@@ -366,25 +366,27 @@ Note the paisa boundary: SSLCommerz transacts in decimal BDT with a **10.00 mini
 
 ### Deliverables
 
-- `SslCommerzClient` implementing `PaymentGatewayInterface` — `createIntent` (session init), `verify` (`val_id` validation), `refund`, `parseWebhook` (IPN with `verify_sign`/`verify_key`)
-- Wire `PaymentGatewayResolver::forMethod()` to return it for `sslcommerz`; other gateways keep resolving to `FakeGateway` until Phase 4B
-- **Public payment endpoints** — initiate against a registration, plus `success`/`fail`/`cancel` return handlers that only *read* status and never mutate it. Closes D3.
-- `idempotent:payment.initiate` middleware actually attached to those routes. Closes D4.
-- IPN endpoint hardening: signature verification, IP allowlisting, replay rejection
-- Payment intent expiry sweeper with a gateway pre-check, plus the scheduler entry that runs it. Closes D5.
-- Nightly reconciliation job with the three mismatch classes
-- Manual verification workflow completed: proof upload (needs the Phase 3.5 media endpoint), duplicate-TrxID detection, approval queue, attributed approval
-- Refund workflow with approval, gateway call, and ticket voiding
-- Sandbox test suite: success, failure, timeout, cancelled, replayed callback, forged signature, amount mismatch, duplicate IPN, partial refund, `INVALID_TRANSACTION`
+> **Buildable-now slice closed 2026-08-04** — same split as Phase 3.5/5: everything that's pure engineering is done; only a live sandbox smoke test and the Phase 3.5 media endpoint remain outstanding. See CLAUDE.md §"Phase 4A (SSLCommerz Sandbox)" for full detail.
+
+- [x] `SslCommerzClient` implementing `PaymentGatewayInterface` — `createIntent` (session init), `verify` (`val_id` validation, with a `tran_id`-lookup fallback for a lost/delayed IPN), `refund`, `parseWebhook` (IPN with `verify_sign`/`verify_key`) — **unverified against a live sandbox call**, no `SSLCOMMERZ_STORE_PASSWORD` provisioned in this environment
+- [x] Wire `PaymentGatewayResolver::forMethod()` to return it for `sslcommerz`; other gateways keep resolving to `FakeGateway` until Phase 4B
+- [x] **Public payment endpoints** — initiate against a registration (Phase 2/D3), plus `success`/`fail`/`cancel` return handlers that only *read* status and never mutate it
+- [x] `idempotent:payment.initiate` middleware actually attached to those routes (Phase 2/D4)
+- [x] IPN endpoint hardening: signature verification (real), replay rejection (real, generic since Phase 2); IP allowlisting (`ipn.allowlist:sslcommerz`, config-driven, no-op until SSLCommerz's published ranges are added to `.env` — see CLAUDE.md)
+- [x] Payment intent expiry sweeper with a gateway pre-check, plus the scheduler entry that runs it. Closes D5.
+- [x] Nightly reconciliation job with two of the three mismatch classes (`matched`, `amount_mismatch`, `missing_at_gateway`); `missing_locally` deliberately not implemented — needs a settlement-report enumeration API no adapter exposes (see CLAUDE.md)
+- [ ] Manual verification workflow completed: proof upload still blocked on the Phase 3.5 media endpoint; duplicate-TrxID detection, approval queue, and attributed approval already existed from Phase 2
+- [x] Refund workflow with approval, gateway call, and ticket voiding
+- [x] Sandbox test suite (unit-level, via `Http::fake()`, not a live sandbox call): success, failure, forged signature, amount mismatch, duplicate IPN, partial refund, `INVALID_TRANSACTION`. **Not yet exercised:** timeout and cancelled-callback scenarios, and everything above at "not yet exercised against a real sandbox".
 
 ### Exit criteria
 
-- [ ] A full sandbox transaction completes: session → hosted page → IPN → `val_id` validation → `succeeded` → **ticket issued** → admitted at a gate
-- [ ] A forged or replayed `success_url` hit produces **no** payment transition and **no** ticket
-- [ ] An IPN with an invalid `verify_sign` is recorded and ignored
-- [ ] A double-clicked Pay button produces exactly one charge and one registration
-- [ ] An amount-mismatched transaction lands in `reconciliation_status` and never reaches `succeeded`
-- [ ] The expiry sweeper returns leaked reservations to available capacity
+- [ ] A full sandbox transaction completes: session → hosted page → IPN → `val_id` validation → `succeeded` → **ticket issued** → admitted at a gate — **blocked on a live sandbox credential**; the equivalent path is proven against `Http::fake()`, not a real SSLCommerz response
+- [x] A forged or replayed `success_url` hit produces **no** payment transition and **no** ticket — `SslCommerzReturnController` never mutates a payment; `ProcessGatewayWebhook`'s replay guard is unchanged
+- [x] An IPN with an invalid `verify_sign` is recorded and ignored — `SslCommerzClientTest::test_parse_webhook_rejects_a_tampered_payload`
+- [x] A double-clicked Pay button produces exactly one charge and one registration — closed in Phase 2 (D4)
+- [x] An amount-mismatched transaction lands in `reconciliation_status` and never reaches `succeeded` — both at verify-time (`VerifyPayment`, Phase 2) and at nightly reconciliation (`ReconcilePaymentsTest`)
+- [x] The expiry sweeper returns leaked reservations to available capacity — `ExpirePaymentIntentsTest`
 
 ---
 

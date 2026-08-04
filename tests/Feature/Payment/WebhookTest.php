@@ -163,7 +163,11 @@ class WebhookTest extends TestCase
 
         $this->payment->update(['gateway_reference' => $gatewayReference]);
 
-        $response = $this->postJson(route('webhooks.sslcommerz'), [
+        // Not sslcommerz: as of Phase 4A that route is backed by the real
+        // SslCommerzClient (which expects SSLCommerz's own IPN field
+        // names, not FakeGateway's), while this test exercises the
+        // generic ProcessGatewayWebhook flow against the fake stand-in.
+        $response = $this->postJson(route('webhooks.bkash'), [
             'gateway_reference' => $gatewayReference,
             'status' => 'failed',
             'signature' => $signature,

@@ -507,6 +507,7 @@ stateDiagram-v2
     [*] --> pending: intent created
     pending --> initiated: gateway session opened
     pending --> awaiting_verification: manual proof submitted
+    pending --> expired: TTL elapsed, gateway session never opened
     initiated --> processing: callback or IPN received
     processing --> succeeded: server-side verify passed
     processing --> failed: verify declined
@@ -523,6 +524,8 @@ stateDiagram-v2
 ```
 
 **The critical edge is `processing → succeeded`.** It is reachable only through a server-to-server verification call. No browser redirect, no unverified webhook, and no admin action other than manual approval can produce it. See [06 §6.6 Payment security](06-security-architecture.md#66-payment-security).
+
+**`pending → expired` was added 2026-08-04 (Phase 4A).** The expiry sweeper's own query (§5.3 payment intent expiry) always included `pending` alongside `initiated` — an abandoned registration whose payer never even opened the gateway page must release capacity too, not just one that opened it and vanished. The diagram simply hadn't been updated to match; this is a doc fix, not a new business rule.
 
 ### Ticket
 

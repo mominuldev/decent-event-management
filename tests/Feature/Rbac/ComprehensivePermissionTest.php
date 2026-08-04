@@ -5,6 +5,7 @@ namespace Tests\Feature\Rbac;
 use App\Domain\CheckIn\Models\CheckIn;
 use App\Domain\CheckIn\Models\Gate;
 use App\Domain\CheckIn\Models\VolunteerProfile;
+use App\Domain\Content\Models\ContentPage;
 use App\Domain\Notification\Models\Notification;
 use App\Domain\Payment\Models\Payment;
 use App\Domain\Registration\Models\Attendee;
@@ -541,5 +542,86 @@ class ComprehensivePermissionTest extends TestCase
 
         Sanctum::actingAs($this->superAdmin, ['*'], 'web-admin');
         $this->getJson(route('api.v1.admin.notifications.templates'))->assertStatus(200);
+    }
+
+    // === CMS (Phase 3.5, admin half) ===
+
+    public function test_content_view_any_http(): void
+    {
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.content.pages.index'))->assertStatus(200);
+
+        Sanctum::actingAs($this->volunteer, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.content.pages.index'))->assertStatus(403);
+    }
+
+    public function test_content_view_http(): void
+    {
+        $page = ContentPage::factory()->create();
+
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.content.pages.show', ['page' => $page->ulid]))->assertStatus(200);
+
+        Sanctum::actingAs($this->volunteer, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.content.pages.show', ['page' => $page->ulid]))->assertStatus(403);
+    }
+
+    public function test_content_create_http(): void
+    {
+        Sanctum::actingAs($this->volunteer, ['*'], 'web-admin');
+        $this->postJson(route('api.v1.admin.content.pages.store'), ['slug' => 'denied', 'title' => 'Denied'])
+            ->assertStatus(403);
+
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->postJson(route('api.v1.admin.content.pages.store'), ['slug' => 'allowed', 'title' => 'Allowed'])
+            ->assertStatus(201);
+    }
+
+    public function test_content_update_http(): void
+    {
+        $page = ContentPage::factory()->create();
+
+        Sanctum::actingAs($this->volunteer, ['*'], 'web-admin');
+        $this->patchJson(route('api.v1.admin.content.pages.update', ['page' => $page->ulid]), ['title' => 'Denied'])
+            ->assertStatus(403);
+
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->patchJson(route('api.v1.admin.content.pages.update', ['page' => $page->ulid]), ['title' => 'Allowed'])
+            ->assertStatus(200);
+    }
+
+    public function test_content_publish_http(): void
+    {
+        $page = ContentPage::factory()->create();
+
+        Sanctum::actingAs($this->volunteer, ['*'], 'web-admin');
+        $this->postJson(route('api.v1.admin.content.pages.status', ['page' => $page->ulid]), ['status' => 'published'])
+            ->assertStatus(403);
+
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->postJson(route('api.v1.admin.content.pages.status', ['page' => $page->ulid]), ['status' => 'published'])
+            ->assertStatus(200);
+    }
+
+    public function test_content_delete_http(): void
+    {
+        $page = ContentPage::factory()->create();
+
+        // Deleting content follows the same Super-Admin-only rule as every
+        // other `*.delete` — an Event Manager may publish but not destroy.
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->deleteJson(route('api.v1.admin.content.pages.destroy', ['page' => $page->ulid]))->assertStatus(403);
+
+        Sanctum::actingAs($this->superAdmin, ['*'], 'web-admin');
+        $this->deleteJson(route('api.v1.admin.content.pages.destroy', ['page' => $page->ulid]))->assertStatus(204);
+    }
+
+    public function test_content_manage_media_http(): void
+    {
+        Sanctum::actingAs($this->volunteer, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.content.media.index'))->assertStatus(403);
+
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.content.media.index'))->assertStatus(200);
     }
 }

@@ -31,6 +31,15 @@ class ContentPage extends Model
      * to `draft` so a live page can be pulled without deleting it, and
      * `archived` is the terminal-but-restorable resting state.
      */
+    /**
+     * Layouts the public site knows how to render. A closed set for the same
+     * reason {@see ContentBlock::TYPES} is: `template` picks a renderer on the
+     * Next.js side, so an unknown value would publish a blank page.
+     *
+     * @var list<string>
+     */
+    public const array TEMPLATES = ['standard', 'landing', 'article', 'contact'];
+
     public const array TRANSITIONS = [
         'draft' => ['in_review', 'published'],
         'in_review' => ['draft', 'published'],
@@ -54,6 +63,7 @@ class ContentPage extends Model
         'published_at',
         'is_indexable',
         'position',
+        'revision_number',
         'created_by_user_id',
         'updated_by_user_id',
         'published_by_user_id',

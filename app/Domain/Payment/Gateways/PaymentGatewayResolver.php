@@ -7,11 +7,11 @@ use Illuminate\Contracts\Foundation\Application;
 use InvalidArgumentException;
 
 /**
- * Maps a payment method / gateway name to its adapter. Every case
- * resolves to {@see FakeGateway} until Phase 4 replaces each with a real
- * client (`BkashClient`, `NagadClient`, `RocketClient`, `SslCommerzClient`)
- * — this is the one place that changes, domain code never branches on
- * gateway name itself.
+ * Maps a payment method / gateway name to its adapter — the one place
+ * that branches on gateway name; domain code never does. `sslcommerz`
+ * resolves to the real {@see SslCommerzClient} (Phase 4A); `bkash`,
+ * `nagad`, and `rocket` stay on {@see FakeGateway} until their merchant
+ * applications land (Phase 4B — see CLAUDE.md's External Dependencies).
  */
 class PaymentGatewayResolver
 {
@@ -25,6 +25,9 @@ class PaymentGatewayResolver
             throw new InvalidArgumentException("Unsupported payment gateway [{$method}].");
         }
 
-        return $this->app->make(FakeGateway::class);
+        return match ($method) {
+            'sslcommerz' => $this->app->make(SslCommerzClient::class),
+            default => $this->app->make(FakeGateway::class),
+        };
     }
 }

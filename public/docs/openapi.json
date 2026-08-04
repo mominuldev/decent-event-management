@@ -1028,6 +1028,2280 @@
                 ]
             }
         },
+        "/admin/content/faqs": {
+            "get": {
+                "tags": [
+                    "CMS FAQs"
+                ],
+                "summary": "List FAQs",
+                "operationId": "1e724e9707097b051ccacfc47b33ae17",
+                "parameters": [
+                    {
+                        "name": "category",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "is_published",
+                        "in": "query",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 50
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated FAQs, grouped by category then position"
+                    },
+                    "403": {
+                        "description": "Missing content.view_any permission"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "CMS FAQs"
+                ],
+                "summary": "Create an FAQ",
+                "operationId": "9a760724644ca860932dc14096c30ebf",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "question",
+                                    "answer"
+                                ],
+                                "properties": {
+                                    "question": {
+                                        "type": "string"
+                                    },
+                                    "question_bn": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "answer": {
+                                        "type": "string"
+                                    },
+                                    "answer_bn": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "category": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "position": {
+                                        "type": "integer"
+                                    },
+                                    "is_published": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "FAQ created"
+                    },
+                    "403": {
+                        "description": "Missing content.create permission"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/content/faqs/{faq}": {
+            "get": {
+                "tags": [
+                    "CMS FAQs"
+                ],
+                "summary": "Fetch one FAQ",
+                "operationId": "8ab60fed84c251bd7a8b10ba234c6b33",
+                "parameters": [
+                    {
+                        "name": "faq",
+                        "in": "path",
+                        "description": "FAQ ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "FAQ detail"
+                    },
+                    "403": {
+                        "description": "Missing content.view permission"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "CMS FAQs"
+                ],
+                "summary": "Delete an FAQ",
+                "description": "Super-Admin-only (`content.delete`).",
+                "operationId": "f290bccceb19ff166b8e37df810cb635",
+                "parameters": [
+                    {
+                        "name": "faq",
+                        "in": "path",
+                        "description": "FAQ ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "FAQ deleted"
+                    },
+                    "403": {
+                        "description": "Missing content.delete permission"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "patch": {
+                "tags": [
+                    "CMS FAQs"
+                ],
+                "summary": "Update an FAQ",
+                "operationId": "e005c48a25243655b698bd3fc0650692",
+                "parameters": [
+                    {
+                        "name": "faq",
+                        "in": "path",
+                        "description": "FAQ ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "FAQ updated"
+                    },
+                    "403": {
+                        "description": "Missing content.update permission"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/content/gallery": {
+            "get": {
+                "tags": [
+                    "CMS Gallery"
+                ],
+                "summary": "List gallery albums",
+                "operationId": "b8a656328b198f446f8c065ccaa0ecc0",
+                "parameters": [
+                    {
+                        "name": "is_published",
+                        "in": "query",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 50
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated albums with item counts"
+                    },
+                    "403": {
+                        "description": "Missing content.view_any permission"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "CMS Gallery"
+                ],
+                "summary": "Create a gallery album",
+                "operationId": "692ba8aaa2e984ebc55b427ea9a062a2",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "slug",
+                                    "title"
+                                ],
+                                "properties": {
+                                    "slug": {
+                                        "type": "string"
+                                    },
+                                    "title": {
+                                        "type": "string"
+                                    },
+                                    "title_bn": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "cover_media_ulid": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "position": {
+                                        "type": "integer"
+                                    },
+                                    "is_published": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Album created"
+                    },
+                    "403": {
+                        "description": "Missing content.create permission"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/content/gallery/{album}": {
+            "get": {
+                "tags": [
+                    "CMS Gallery"
+                ],
+                "summary": "Fetch one album with its items",
+                "operationId": "748589503534db669cf0badfb75a2b99",
+                "parameters": [
+                    {
+                        "name": "album",
+                        "in": "path",
+                        "description": "Album ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Album detail including every item, published or not"
+                    },
+                    "403": {
+                        "description": "Missing content.view permission"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "CMS Gallery"
+                ],
+                "summary": "Delete a gallery album and its items",
+                "description": "Super-Admin-only (`content.delete`). Items cascade with the album; the underlying media files are not removed, since they may be referenced elsewhere.",
+                "operationId": "c125feec6d219c33d822456d5bf13c6e",
+                "parameters": [
+                    {
+                        "name": "album",
+                        "in": "path",
+                        "description": "Album ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Album deleted"
+                    },
+                    "403": {
+                        "description": "Missing content.delete permission"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "patch": {
+                "tags": [
+                    "CMS Gallery"
+                ],
+                "summary": "Update a gallery album",
+                "operationId": "962f942f82f7cd86f244d5247007e628",
+                "parameters": [
+                    {
+                        "name": "album",
+                        "in": "path",
+                        "description": "Album ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Album updated"
+                    },
+                    "403": {
+                        "description": "Missing content.update permission"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/content/gallery/{album}/items": {
+            "post": {
+                "tags": [
+                    "CMS Gallery"
+                ],
+                "summary": "Add a picture to an album",
+                "operationId": "f7aa58e7dadd32f7fd8d31c49b468f86",
+                "parameters": [
+                    {
+                        "name": "album",
+                        "in": "path",
+                        "description": "Album ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "media_ulid"
+                                ],
+                                "properties": {
+                                    "media_ulid": {
+                                        "description": "A media library file, uploaded via /admin/content/media",
+                                        "type": "string"
+                                    },
+                                    "caption": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "alt_text": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "position": {
+                                        "type": "integer"
+                                    },
+                                    "is_published": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Item added"
+                    },
+                    "403": {
+                        "description": "Missing content.create permission"
+                    },
+                    "404": {
+                        "description": "Album not found"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/content/gallery/{album}/items/{item}": {
+            "delete": {
+                "tags": [
+                    "CMS Gallery"
+                ],
+                "summary": "Remove a picture from an album",
+                "description": "Super-Admin-only (`content.delete`). The media file itself stays in the library.",
+                "operationId": "1bb0fba05a8ff34913e4f13f86c397f1",
+                "parameters": [
+                    {
+                        "name": "album",
+                        "in": "path",
+                        "description": "Album ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "item",
+                        "in": "path",
+                        "description": "Item ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Item removed"
+                    },
+                    "403": {
+                        "description": "Missing content.delete permission"
+                    },
+                    "404": {
+                        "description": "Item not found in that album"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "patch": {
+                "tags": [
+                    "CMS Gallery"
+                ],
+                "summary": "Update a gallery item",
+                "operationId": "5eae0a9ce7f926557cc857f28285f6bc",
+                "parameters": [
+                    {
+                        "name": "album",
+                        "in": "path",
+                        "description": "Album ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "item",
+                        "in": "path",
+                        "description": "Item ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Item updated"
+                    },
+                    "403": {
+                        "description": "Missing content.update permission"
+                    },
+                    "404": {
+                        "description": "Item not found in that album"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/content/media": {
+            "get": {
+                "tags": [
+                    "CMS Media"
+                ],
+                "summary": "Browse the CMS media library",
+                "description": "Scoped to the CMS collections only — payment proofs and ticket PDFs live in the same table but are never listed here.",
+                "operationId": "ac0a1939951bec13540c8c50e6108b1b",
+                "parameters": [
+                    {
+                        "name": "collection",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "content",
+                                "page_og",
+                                "sponsor_logo",
+                                "speaker_photo",
+                                "gallery"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 40
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated media, newest first"
+                    },
+                    "403": {
+                        "description": "Missing content.manage_media permission"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "CMS Media"
+                ],
+                "summary": "Upload an image to the media library",
+                "description": "Multipart. The file’s type is decided by its magic bytes — the extension and the client `Content-Type` are ignored — and the image is fully re-encoded, which strips EXIF/GPS and anything smuggled into the container. JPEG, PNG and WebP only; SVG is refused because no re-encode makes it safe to serve from our origin.",
+                "operationId": "01de343c140d9c4edee849ce764f8b5f",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "required": [
+                                    "file"
+                                ],
+                                "properties": {
+                                    "file": {
+                                        "description": "Max 8 MB",
+                                        "type": "string",
+                                        "format": "binary"
+                                    },
+                                    "collection": {
+                                        "type": "string",
+                                        "default": "content",
+                                        "enum": [
+                                            "content",
+                                            "page_og",
+                                            "sponsor_logo",
+                                            "speaker_photo",
+                                            "gallery"
+                                        ]
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "File stored; returns its ULID and public URL"
+                    },
+                    "403": {
+                        "description": "Missing content.manage_media permission"
+                    },
+                    "422": {
+                        "description": "Rejected by size, or by what the bytes actually are",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "string",
+                                            "example": "unsupported_media"
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/content/media/{media}": {
+            "delete": {
+                "tags": [
+                    "CMS Media"
+                ],
+                "summary": "Remove a file from the media library",
+                "description": "Super-Admin-only (`content.delete`), and refused while a gallery item still points at the file — otherwise the album would render a hole.",
+                "operationId": "80a48c37a945be9fab077f510a580e15",
+                "parameters": [
+                    {
+                        "name": "media",
+                        "in": "path",
+                        "description": "Media ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "File removed"
+                    },
+                    "403": {
+                        "description": "Missing content.delete permission"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "422": {
+                        "description": "Still referenced by a gallery item"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/content/menus": {
+            "get": {
+                "tags": [
+                    "CMS Menus"
+                ],
+                "summary": "List navigation menus with their full item trees",
+                "description": "Not paginated: there are a handful of regions and the editor reorders the whole tree at once.",
+                "operationId": "d1a7f34a542326690b553de0c5bbbc41",
+                "responses": {
+                    "200": {
+                        "description": "Menus, each with a nested `items` tree"
+                    },
+                    "403": {
+                        "description": "Missing content.view_any permission"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "CMS Menus"
+                ],
+                "summary": "Create a navigation menu",
+                "operationId": "70a0640ea71d44d45ae1bbc466b4c23b",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "code",
+                                    "name"
+                                ],
+                                "properties": {
+                                    "code": {
+                                        "description": "Stable region key the public site fetches by, e.g. `primary`",
+                                        "type": "string"
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "name_bn": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "is_active": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Menu created"
+                    },
+                    "403": {
+                        "description": "Missing content.create permission"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/content/menus/{menu}": {
+            "get": {
+                "tags": [
+                    "CMS Menus"
+                ],
+                "summary": "Fetch one menu with its item tree",
+                "operationId": "a3162e55321b858640d51174eb906efc",
+                "parameters": [
+                    {
+                        "name": "menu",
+                        "in": "path",
+                        "description": "Menu ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Menu detail"
+                    },
+                    "403": {
+                        "description": "Missing content.view permission"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "CMS Menus"
+                ],
+                "summary": "Delete a menu and its items",
+                "description": "Super-Admin-only (`content.delete`).",
+                "operationId": "9309e7e2de35cba6662e20060f164c17",
+                "parameters": [
+                    {
+                        "name": "menu",
+                        "in": "path",
+                        "description": "Menu ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Menu deleted"
+                    },
+                    "403": {
+                        "description": "Missing content.delete permission"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "patch": {
+                "tags": [
+                    "CMS Menus"
+                ],
+                "summary": "Update a menu",
+                "operationId": "c896943a815d86a484b108ae39260562",
+                "parameters": [
+                    {
+                        "name": "menu",
+                        "in": "path",
+                        "description": "Menu ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Menu updated"
+                    },
+                    "403": {
+                        "description": "Missing content.update permission"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/content/menus/{menu}/items": {
+            "post": {
+                "tags": [
+                    "CMS Menus"
+                ],
+                "summary": "Add an item to a menu",
+                "description": "Link either to an internal page (`page_ulid`) or an external `url`, never both — an internal reference wins at render time, so accepting both would silently drop one.",
+                "operationId": "19013348429ee28370ac97aa331eb26a",
+                "parameters": [
+                    {
+                        "name": "menu",
+                        "in": "path",
+                        "description": "Menu ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "label"
+                                ],
+                                "properties": {
+                                    "label": {
+                                        "type": "string"
+                                    },
+                                    "label_bn": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "parent_ulid": {
+                                        "description": "Nests this item under another",
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "page_ulid": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "url": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "target": {
+                                        "type": "string",
+                                        "enum": [
+                                            "_self",
+                                            "_blank"
+                                        ]
+                                    },
+                                    "position": {
+                                        "type": "integer"
+                                    },
+                                    "is_visible": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Item added"
+                    },
+                    "403": {
+                        "description": "Missing content.create permission"
+                    },
+                    "404": {
+                        "description": "Menu not found"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/content/menus/{menu}/items/{item}": {
+            "delete": {
+                "tags": [
+                    "CMS Menus"
+                ],
+                "summary": "Remove a menu item and everything nested under it",
+                "description": "Super-Admin-only (`content.delete`). Children cascade with the parent.",
+                "operationId": "e113da0137e0f80fb221d08b30c1d9a9",
+                "parameters": [
+                    {
+                        "name": "menu",
+                        "in": "path",
+                        "description": "Menu ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "item",
+                        "in": "path",
+                        "description": "Menu item ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Item removed"
+                    },
+                    "403": {
+                        "description": "Missing content.delete permission"
+                    },
+                    "404": {
+                        "description": "Item not found in that menu"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "patch": {
+                "tags": [
+                    "CMS Menus"
+                ],
+                "summary": "Update a menu item",
+                "operationId": "528048354a0286fc68b62297fdc06c8d",
+                "parameters": [
+                    {
+                        "name": "menu",
+                        "in": "path",
+                        "description": "Menu ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "item",
+                        "in": "path",
+                        "description": "Menu item ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Item updated"
+                    },
+                    "403": {
+                        "description": "Missing content.update permission"
+                    },
+                    "404": {
+                        "description": "Item not found in that menu"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/content/pages": {
+            "get": {
+                "tags": [
+                    "CMS Pages"
+                ],
+                "summary": "List content pages for the CMS",
+                "description": "Unlike the public endpoint this returns every page regardless of status, including scheduled and archived ones.",
+                "operationId": "4f2175657dbb6e15f9d705939c8d7450",
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "description": "Filter by workflow status",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "draft",
+                                "in_review",
+                                "published",
+                                "archived"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "template",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "q",
+                        "in": "query",
+                        "description": "Match against slug or title (either language)",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "Results per page, capped at 100",
+                        "schema": {
+                            "type": "integer",
+                            "default": 20
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated pages",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "ulid": {
+                                                        "type": "string"
+                                                    },
+                                                    "slug": {
+                                                        "type": "string"
+                                                    },
+                                                    "title": {
+                                                        "type": "string"
+                                                    },
+                                                    "title_bn": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "status": {
+                                                        "type": "string"
+                                                    },
+                                                    "is_live": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "published_at": {
+                                                        "type": "string",
+                                                        "format": "date-time",
+                                                        "nullable": true
+                                                    },
+                                                    "revision_number": {
+                                                        "type": "integer"
+                                                    },
+                                                    "has_preview_token": {
+                                                        "type": "boolean"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        },
+                                        "links": {
+                                            "type": "object"
+                                        },
+                                        "meta": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Missing content.view_any permission"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "CMS Pages"
+                ],
+                "summary": "Create a content page",
+                "description": "Always created as a `draft`. Publishing is a separate call to `/status`.",
+                "operationId": "af8307a333122fe54c080a1dabde98e0",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "slug",
+                                    "title"
+                                ],
+                                "properties": {
+                                    "slug": {
+                                        "description": "Lowercase kebab-case; unique",
+                                        "type": "string"
+                                    },
+                                    "title": {
+                                        "type": "string"
+                                    },
+                                    "title_bn": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "template": {
+                                        "type": "string",
+                                        "enum": [
+                                            "standard",
+                                            "landing",
+                                            "article",
+                                            "contact"
+                                        ]
+                                    },
+                                    "excerpt": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "seo_title": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "seo_description": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "og_image_media_ulid": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "is_indexable": {
+                                        "type": "boolean"
+                                    },
+                                    "change_note": {
+                                        "description": "Recorded on the captured revision",
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "blocks": {
+                                        "description": "Replaces the page block tree in the order given; `position` is derived, never sent",
+                                        "type": "array",
+                                        "items": {
+                                            "properties": {
+                                                "ulid": {
+                                                    "description": "Present to update an existing block in place",
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "type": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "rich_text",
+                                                        "hero",
+                                                        "image",
+                                                        "cta",
+                                                        "stat_row",
+                                                        "faq_list",
+                                                        "sponsor_grid",
+                                                        "schedule",
+                                                        "gallery",
+                                                        "video"
+                                                    ]
+                                                },
+                                                "data": {
+                                                    "type": "object"
+                                                },
+                                                "data_bn": {
+                                                    "type": "object",
+                                                    "nullable": true
+                                                },
+                                                "media_ulid": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "is_visible": {
+                                                    "type": "boolean"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Page created as a draft, revision #1 captured"
+                    },
+                    "403": {
+                        "description": "Missing content.create permission"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/content/pages/{page}": {
+            "get": {
+                "tags": [
+                    "CMS Pages"
+                ],
+                "summary": "Fetch one content page with its full block tree",
+                "description": "Returns both language halves and every block, including hidden ones — the editorial view, not the public one.",
+                "operationId": "73f1cd0c3cbec75e48944986b192f845",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "path",
+                        "description": "Page ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Page detail"
+                    },
+                    "403": {
+                        "description": "Missing content.view permission"
+                    },
+                    "404": {
+                        "description": "Page not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "CMS Pages"
+                ],
+                "summary": "Soft-delete a content page",
+                "description": "Super-Admin-only, matching every other `*.delete` in config/rbac.php. The row and its revision history survive.",
+                "operationId": "f6dab99dc6305d5f98cb5e92657c62df",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "path",
+                        "description": "Page ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Page deleted"
+                    },
+                    "403": {
+                        "description": "Missing content.delete permission"
+                    },
+                    "404": {
+                        "description": "Page not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "patch": {
+                "tags": [
+                    "CMS Pages"
+                ],
+                "summary": "Update a content page and capture a revision",
+                "description": "Every save writes a new append-only revision. `status` is not accepted — use `/status`.",
+                "operationId": "8cf447ef66aeb55321231ef6e49bf001",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "path",
+                        "description": "Page ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "slug": {
+                                        "type": "string"
+                                    },
+                                    "title": {
+                                        "type": "string"
+                                    },
+                                    "title_bn": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "change_note": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "blocks": {
+                                        "description": "Omit to leave the block tree untouched",
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Page updated"
+                    },
+                    "403": {
+                        "description": "Missing content.update permission"
+                    },
+                    "404": {
+                        "description": "Page not found"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/content/pages/{page}/status": {
+            "post": {
+                "tags": [
+                    "CMS Pages"
+                ],
+                "summary": "Move a page through the editorial workflow",
+                "description": "draft → in_review → published → archived, per ContentPage::TRANSITIONS. A `published_at` in the future schedules the page; scopeLive() keeps it hidden until then with no cron job.",
+                "operationId": "50c1a881684f84c017700bb38fbda2c4",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "path",
+                        "description": "Page ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "status"
+                                ],
+                                "properties": {
+                                    "status": {
+                                        "type": "string",
+                                        "enum": [
+                                            "draft",
+                                            "in_review",
+                                            "published",
+                                            "archived"
+                                        ]
+                                    },
+                                    "published_at": {
+                                        "description": "Only meaningful when publishing; defaults to now",
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Status changed"
+                    },
+                    "403": {
+                        "description": "Missing content.publish permission"
+                    },
+                    "404": {
+                        "description": "Page not found"
+                    },
+                    "422": {
+                        "description": "The transition is not permitted from the page’s current status",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "string",
+                                            "example": "invalid_transition"
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/content/pages/{page}/preview-token": {
+            "post": {
+                "tags": [
+                    "CMS Pages"
+                ],
+                "summary": "Mint or rotate the page’s preview token",
+                "description": "Returns a shareable preview URL for the public read API. The token is returned exactly once — it is never present on any other response — and rotating invalidates every previously shared link.",
+                "operationId": "e778c72191c068736fa0d34b22be943d",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "path",
+                        "description": "Page ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Token issued",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "properties": {
+                                                "preview_token": {
+                                                    "type": "string"
+                                                },
+                                                "preview_url": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Missing content.update permission"
+                    },
+                    "404": {
+                        "description": "Page not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/content/pages/{page}/revisions": {
+            "get": {
+                "tags": [
+                    "CMS Pages"
+                ],
+                "summary": "List a page’s revision history",
+                "description": "Newest first. Each entry carries the full block snapshot taken at that save, so the UI can preview or diff without a second request.",
+                "operationId": "c15ca0287298705604420d83f198f1db",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "path",
+                        "description": "Page ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 20
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated revisions"
+                    },
+                    "403": {
+                        "description": "Missing content.view permission"
+                    },
+                    "404": {
+                        "description": "Page not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/content/pages/{page}/revisions/{revision}/restore": {
+            "post": {
+                "tags": [
+                    "CMS Pages"
+                ],
+                "summary": "Restore a page to an earlier revision",
+                "description": "Replays the snapshot as a *new* save, so the history stays append-only and the restore is itself recorded. The page’s status is untouched — restoring the text of a live page neither publishes nor unpublishes it.",
+                "operationId": "196038ea3fab6ef3b2cf3df222ac34f8",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "path",
+                        "description": "Page ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "revision",
+                        "in": "path",
+                        "description": "Revision ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Page restored; a new revision was written"
+                    },
+                    "403": {
+                        "description": "Missing content.update permission"
+                    },
+                    "404": {
+                        "description": "Page or revision not found, or the revision belongs to another page"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/content/schedule": {
+            "get": {
+                "tags": [
+                    "CMS Schedule"
+                ],
+                "summary": "List schedule items",
+                "operationId": "b6e3855dbf43a7deb5a0c369b7ee1651",
+                "parameters": [
+                    {
+                        "name": "track",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "is_published",
+                        "in": "query",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 50
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated schedule items, chronological"
+                    },
+                    "403": {
+                        "description": "Missing content.view_any permission"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "CMS Schedule"
+                ],
+                "summary": "Create a schedule item",
+                "operationId": "6ebc14f77e4d57bd8174dca328746ba8",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "title",
+                                    "starts_at"
+                                ],
+                                "properties": {
+                                    "title": {
+                                        "type": "string"
+                                    },
+                                    "title_bn": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "speaker_name": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "speaker_photo_media_ulid": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "venue": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "track": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "starts_at": {
+                                        "type": "string",
+                                        "format": "date-time"
+                                    },
+                                    "ends_at": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "nullable": true
+                                    },
+                                    "event_session_code": {
+                                        "description": "Soft reference to event_sessions.code — deliberately not a foreign key",
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "is_published": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Schedule item created"
+                    },
+                    "403": {
+                        "description": "Missing content.create permission"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/content/schedule/{schedule_item}": {
+            "get": {
+                "tags": [
+                    "CMS Schedule"
+                ],
+                "summary": "Fetch one schedule item",
+                "operationId": "a3af4435144319d121f3fd4daf8a098f",
+                "parameters": [
+                    {
+                        "name": "schedule_item",
+                        "in": "path",
+                        "description": "Schedule item ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Schedule item detail"
+                    },
+                    "403": {
+                        "description": "Missing content.view permission"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "CMS Schedule"
+                ],
+                "summary": "Delete a schedule item",
+                "description": "Super-Admin-only (`content.delete`).",
+                "operationId": "e0987d9fc1fcbe38cd24f49d8c5321f5",
+                "parameters": [
+                    {
+                        "name": "schedule_item",
+                        "in": "path",
+                        "description": "Schedule item ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Schedule item deleted"
+                    },
+                    "403": {
+                        "description": "Missing content.delete permission"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "patch": {
+                "tags": [
+                    "CMS Schedule"
+                ],
+                "summary": "Update a schedule item",
+                "operationId": "da171b832bc5017afc0558d388c2e5d0",
+                "parameters": [
+                    {
+                        "name": "schedule_item",
+                        "in": "path",
+                        "description": "Schedule item ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Schedule item updated"
+                    },
+                    "403": {
+                        "description": "Missing content.update permission"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/content/sponsors": {
+            "get": {
+                "tags": [
+                    "CMS Sponsors"
+                ],
+                "summary": "List sponsors",
+                "description": "Ordered by tier rank then position — the same order the public sponsor grid renders in.",
+                "operationId": "3aa84f938fdf268c3d484768be7fcbfa",
+                "parameters": [
+                    {
+                        "name": "tier",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "platinum",
+                                "gold",
+                                "silver",
+                                "bronze",
+                                "partner"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "is_published",
+                        "in": "query",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 50
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated sponsors"
+                    },
+                    "403": {
+                        "description": "Missing content.view_any permission"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "CMS Sponsors"
+                ],
+                "summary": "Create a sponsor",
+                "operationId": "92c94c94379be3e11326b2c8ada4a2e6",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "name"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "name_bn": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "tier": {
+                                        "type": "string",
+                                        "enum": [
+                                            "platinum",
+                                            "gold",
+                                            "silver",
+                                            "bronze",
+                                            "partner"
+                                        ]
+                                    },
+                                    "logo_media_ulid": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "website_url": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "position": {
+                                        "type": "integer"
+                                    },
+                                    "is_published": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Sponsor created"
+                    },
+                    "403": {
+                        "description": "Missing content.create permission"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/content/sponsors/{sponsor}": {
+            "get": {
+                "tags": [
+                    "CMS Sponsors"
+                ],
+                "summary": "Fetch one sponsor",
+                "operationId": "8ec175aece84a9e856582213b81024fe",
+                "parameters": [
+                    {
+                        "name": "sponsor",
+                        "in": "path",
+                        "description": "Sponsor ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Sponsor detail"
+                    },
+                    "403": {
+                        "description": "Missing content.view permission"
+                    },
+                    "404": {
+                        "description": "Sponsor not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "CMS Sponsors"
+                ],
+                "summary": "Delete a sponsor",
+                "description": "Super-Admin-only (`content.delete`).",
+                "operationId": "1272562014993cf54ea2bbd5c8a659de",
+                "parameters": [
+                    {
+                        "name": "sponsor",
+                        "in": "path",
+                        "description": "Sponsor ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Sponsor deleted"
+                    },
+                    "403": {
+                        "description": "Missing content.delete permission"
+                    },
+                    "404": {
+                        "description": "Sponsor not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "patch": {
+                "tags": [
+                    "CMS Sponsors"
+                ],
+                "summary": "Update a sponsor",
+                "operationId": "00bdb9b0a6bcf9ebedbb0306f0062d12",
+                "parameters": [
+                    {
+                        "name": "sponsor",
+                        "in": "path",
+                        "description": "Sponsor ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Sponsor updated"
+                    },
+                    "403": {
+                        "description": "Missing content.update permission"
+                    },
+                    "404": {
+                        "description": "Sponsor not found"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/admin/devices": {
             "get": {
                 "tags": [
@@ -7382,6 +9656,45 @@
                 }
             }
         },
+        "/public/payments/sslcommerz/return/{status}": {
+            "get": {
+                "tags": [
+                    "Public"
+                ],
+                "summary": "Browser return target for a SSLCommerz payment session",
+                "description": "SSLCommerz redirects (or form-POSTs) the payer's browser here after a hosted-page session — never the IPN, which arrives separately at `/webhooks/sslcommerz`. This handler reads nothing from the database and writes nothing: it only re-derives the frontend return page from server-side config (`FRONTEND_URL`) and redirects the browser there, per docs/06 §6.6 — a browser return proves nothing and must never transition a payment. The `next` query parameter is honoured only when its host matches the configured frontend origin, so this cannot be turned into an open redirect by a hand-crafted request.",
+                "operationId": "521c2daea350ac9f535aec94ea7134ea",
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "path",
+                        "description": "Which return leg the gateway hit",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "success",
+                                "fail",
+                                "cancel"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "next",
+                        "in": "query",
+                        "description": "Frontend return URL, set server-side at session creation; honoured only if its host matches FRONTEND_URL",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "Redirect to the frontend return page"
+                    }
+                }
+            }
+        },
         "/public/ticket-types": {
             "get": {
                 "tags": [
@@ -8144,6 +10457,27 @@
         },
         {
             "name": "Check-ins"
+        },
+        {
+            "name": "CMS FAQs"
+        },
+        {
+            "name": "CMS Gallery"
+        },
+        {
+            "name": "CMS Media"
+        },
+        {
+            "name": "CMS Menus"
+        },
+        {
+            "name": "CMS Pages"
+        },
+        {
+            "name": "CMS Schedule"
+        },
+        {
+            "name": "CMS Sponsors"
         },
         {
             "name": "Devices"

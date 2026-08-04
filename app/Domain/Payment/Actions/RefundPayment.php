@@ -3,6 +3,8 @@
 namespace App\Domain\Payment\Actions;
 
 use App\Domain\Payment\Events\RefundIssued;
+use App\Domain\Payment\Gateways\Contracts\GatewayRefundResult;
+use App\Domain\Payment\Gateways\PaymentGatewayResolver;
 use App\Domain\Payment\Models\Payment;
 use App\Domain\Payment\Models\Refund;
 use App\Domain\Shared\Models\User;
@@ -12,6 +14,8 @@ use InvalidArgumentException;
 
 class RefundPayment
 {
+    public function __construct(private readonly PaymentGatewayResolver $gateways) {}
+
     public function execute(Payment $payment, User $approvedBy, string $reason, ?int $amountPaisa = null, string $type = 'full'): Refund
     {
         return DB::transaction(function () use ($payment, $approvedBy, $reason, $amountPaisa, $type): Refund {
@@ -20,6 +24,17 @@ class RefundPayment
             }
 
             $refundAmount = $amountPaisa ?? $payment->amount_due_paisa;
+
+            // A manual (personal-wallet) payment has no gateway to call —
+            // the money never moved through one — so the refund is a
+            // local record only, same as VerifyManualPayment's approval.
+            $gatewayResult = $payment->isManual()
+                ? new GatewayRefundResult(GatewayRefundResult::STATUS_SUCCEEDED, null, ['reason' => 'manual_payment_no_gateway_call'])
+                : $this->gateways->forMethod($payment->method)->refund($payment, $refundAmount, $reason);
+
+            if (! $gatewayResult->isSucceeded()) {
+                throw new InvalidArgumentException("Gateway declined the refund for payment {$payment->payment_number}.");
+            }
 
             $refundNumber = 'REF-'.strtoupper(Str::random(8));
 
@@ -30,8 +45,23 @@ class RefundPayment
                 'amount_paisa' => $refundAmount,
                 'reason' => $reason,
                 'type' => $type,
+                'method' => $payment->method,
                 'status' => 'completed',
                 'approved_by_user_id' => $approvedBy->id,
+                'approved_at' => now(),
+                'processed_at' => now(),
+                'gateway_refund_id' => $gatewayResult->gatewayReference,
+            ]);
+
+            $payment->transactions()->create([
+                'type' => 'refund',
+                'direction' => 'outbound',
+                'gateway' => $payment->method,
+                'status' => 'success',
+                'amount_paisa' => $refundAmount,
+                'currency' => $payment->currency,
+                'gateway_reference' => $gatewayResult->gatewayReference,
+                'response_payload' => $gatewayResult->rawResponse,
             ]);
 
             $newRefundedPaisa = max(0, (int) ($payment->refunded_paisa + $refundAmount));

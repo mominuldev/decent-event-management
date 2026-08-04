@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Domain\Content\Events\ContentChanged;
+use App\Domain\Content\Listeners\RevalidateFrontendContent;
 use App\Domain\Notification\Channels\NotificationChannelResolver;
 use App\Domain\Notification\Listeners\QueueManualPaymentVerifiedNotification;
 use App\Domain\Notification\Listeners\QueuePaymentFailedNotification;
@@ -70,6 +72,10 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(ManualPaymentVerified::class, QueueManualPaymentVerifiedNotification::class);
         Event::listen(RefundIssued::class, QueueRefundIssuedNotification::class);
         Event::listen(TicketIssued::class, QueueTicketDeliveredNotification::class);
+
+        // CMS → public site cache invalidation (docs/08 Phase 3.5). Content
+        // publishes the event; only this listener knows a Next.js site exists.
+        Event::listen(ContentChanged::class, RevalidateFrontendContent::class);
 
         RateLimiter::for('api', fn ($request) => Limit::perMinute(60)->by($request->user()?->id ?: $request->ip()));
 

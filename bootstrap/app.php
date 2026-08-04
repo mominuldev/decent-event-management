@@ -3,6 +3,7 @@
 use App\Http\Middleware\EnsureDeviceActive;
 use App\Http\Middleware\EnsureGateAssigned;
 use App\Http\Middleware\EnsureIdempotency;
+use App\Http\Middleware\EnsureIpnFromAllowlistedIp;
 use App\Http\Middleware\EnsureWithinCheckInWindow;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -32,6 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'checkin.window' => EnsureWithinCheckInWindow::class,
             'gate.assigned' => EnsureGateAssigned::class,
             'idempotent' => EnsureIdempotency::class,
+            'ipn.allowlist' => EnsureIpnFromAllowlistedIp::class,
             'abilities' => CheckAbilities::class,
             'ability' => CheckForAnyAbility::class,
         ]);

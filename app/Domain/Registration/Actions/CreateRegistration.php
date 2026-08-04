@@ -8,6 +8,7 @@ use App\Domain\Registration\Events\RegistrationCreated;
 use App\Domain\Registration\Models\Attendee;
 use App\Domain\Registration\Models\Registration;
 use App\Domain\Registration\Models\RegistrationGuest;
+use App\Domain\Shared\Models\EventSetting;
 use App\Domain\Ticketing\Models\TicketType;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -131,6 +132,10 @@ class CreateRegistration
                 'amount_paid_paisa' => 0,
                 'currency' => $ticketType->currency ?? 'BDT',
                 'idempotency_key' => $data['idempotency_key'] ?? Str::random(32),
+                // Reservation TTL starts now, not at gateway-session open —
+                // an attendee who abandons the checkout before ever
+                // clicking "pay" must still release capacity (D5).
+                'expires_at' => now()->addMinutes($this->intentTtlMinutes()),
             ]);
 
             $registration->load(['attendee', 'guests', 'ticketType', 'payments']);
@@ -139,5 +144,12 @@ class CreateRegistration
 
             return $registration;
         });
+    }
+
+    private function intentTtlMinutes(): int
+    {
+        $value = EventSetting::where('key', 'payment.intent_ttl_minutes')->value('value');
+
+        return $value !== null ? max(1, (int) $value) : 30;
     }
 }
