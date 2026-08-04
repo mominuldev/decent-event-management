@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\BackupDatabaseCommand;
 use App\Console\Commands\ExpirePaymentIntentsCommand;
 use App\Console\Commands\QueueEventReminders;
 use App\Console\Commands\ReconcilePaymentsCommand;
@@ -18,3 +19,9 @@ Schedule::command(ExpirePaymentIntentsCommand::class)->everyFiveMinutes()->witho
 
 // Nightly settlement reconciliation (docs/06 §6.6 "Reconciliation as a security control").
 Schedule::command(ReconcilePaymentsCommand::class)->dailyAt('02:00')->withoutOverlapping();
+
+// Nightly database dump (Phase 9, docs/08 §Phase 9 "Encrypted backups with
+// verified restore"). Ship the resulting gzip off-box and run
+// `db:restore --verify` against it periodically — neither is automated here;
+// see CLAUDE.md's Phase 9 section for why.
+Schedule::command(BackupDatabaseCommand::class)->dailyAt('03:00')->withoutOverlapping();

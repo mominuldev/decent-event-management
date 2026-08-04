@@ -24,10 +24,12 @@ use App\Domain\Ticketing\Events\TicketIssued;
 use App\Domain\Ticketing\Listeners\GenerateTicketAssets;
 use App\Domain\Ticketing\Listeners\IssueTicketForSucceededPayment;
 use App\Domain\Ticketing\Models\Ticket;
+use App\Listeners\CheckApplicationHealth;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Foundation\Events\DiagnosingHealth;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -81,6 +83,10 @@ class AppServiceProvider extends ServiceProvider
         // CMS → public site cache invalidation (docs/08 Phase 3.5). Content
         // publishes the event; only this listener knows a Next.js site exists.
         Event::listen(ContentChanged::class, RevalidateFrontendContent::class);
+
+        // Deep dependency checks for the built-in `/up` route (Phase 9,
+        // docs/07 §7.3's load-balancer health check and uptime monitoring).
+        Event::listen(DiagnosingHealth::class, CheckApplicationHealth::class);
 
         RateLimiter::for('api', fn ($request) => Limit::perMinute(60)->by($request->user()?->id ?: $request->ip()));
 

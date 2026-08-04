@@ -5,6 +5,7 @@ use App\Http\Middleware\EnsureGateAssigned;
 use App\Http\Middleware\EnsureIdempotency;
 use App\Http\Middleware\EnsureIpnFromAllowlistedIp;
 use App\Http\Middleware\EnsureWithinCheckInWindow;
+use App\Http\Middleware\SetSecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -39,6 +40,8 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->throttleApi();
+
+        $middleware->append(SetSecurityHeaders::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

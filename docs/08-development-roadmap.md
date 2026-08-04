@@ -583,46 +583,48 @@ The gate rehearsal is the highest-value activity in this phase and the one most 
 
 **Duration:** 2 weeks + event-day operations · **Depends on:** Phase 8 sign-off
 
+> **Buildable-now slice landed 2026-08-04**, started ahead of the Phase 8 dependency above at explicit user request — Phase 8 is not signed off (see its own section). Unlike every prior phase, most of this phase's deliverable list is not achievable by engineering effort alone in any dev sandbox: it needs a chosen hosting provider, a live event, and real people, not more code. Full detail in CLAUDE.md's Phase 9 section; this section only updates the checklist below and records what's genuinely still blocked and on what.
+
 ### Objectives
 Deploy, cut over, operate the event, and hand over.
 
 ### Deliverables
 
 **Infrastructure**
-- Production provisioned to the event-day sizing in [07 §7.3](07-scalability-plan.md#73-infrastructure)
-- CDN, WAF, TLS, HSTS preload
-- Read replica and hot standby in replication
-- Encrypted backups with verified restore
-- Monitoring, alerting, log aggregation, on-call rotation
+- [ ] Production provisioned to the event-day sizing in [07 §7.3](07-scalability-plan.md#73-infrastructure) — blocked on a hosting provider decision (docs/07 §7.3 specs sizing/topology, not a vendor); a provider-agnostic image and reference `docker-compose.prod.yml` topology exist to provision *from*, not yet provisioned anywhere
+- [~] CDN, WAF, TLS, HSTS preload — the app now sends `Strict-Transport-Security` (preload directive included) on every response; CDN/WAF/TLS termination are infrastructure this environment cannot stand up
+- [ ] Read replica and hot standby in replication — needs a managed database or real second instance
+- [~] Encrypted backups with verified restore — `db:backup`/`db:restore --verify` exist and are proven against real MySQL (dump → restore into a scratch DB → row-count diff against a manifest); the dump itself is gzip only, not encrypted, and nothing here replicates it offsite
+- [~] Monitoring, alerting, log aggregation, on-call rotation — `/up` now performs real dependency checks (DB, Redis, storage) for a monitor to poll; nothing here aggregates logs, alerts on failures, or staffs an on-call rotation
 
 **Release**
-- Zero-downtime deploy pipeline with a tested rollback
-- Live gateway credentials installed; production QR signing key generated
-- Production settings and content loaded
-- Smoke tests against production
+- [~] Zero-downtime deploy pipeline with a tested rollback — `.github/workflows/deploy-image.yml` builds, gates on `migrate --pretend`, boot-checks, and publishes a tagged image to GHCR on every push to `main`; there is no job that deploys that image to a live host, cuts traffic over, or rolls back, because no host is chosen yet
+- [ ] Live gateway credentials installed; production QR signing key generated — blocked on Phase 4B's merchant applications and a provisioned production environment respectively; `qr-signing:generate-key` is ready to run the moment one exists
+- [ ] Production settings and content loaded — needs a real production database
+- [~] Smoke tests against production — the release pipeline boot-checks the built image (`php artisan --version` inside the container); that is a pre-deploy check on the artifact, not a post-deploy check against a live production environment, which doesn't exist
 
 **Launch**
-- Registration opens; first-48-hours monitoring at heightened alert thresholds
-- Daily reconciliation review
+- [ ] Registration opens; first-48-hours monitoring at heightened alert thresholds
+- [ ] Daily reconciliation review
 
 **Event day** — per the [operational plan](07-scalability-plan.md#77-event-day-operational-plan)
-- T-7 scale-up and load verification
-- T-24 deployment freeze, device charging, dry run
-- T-2 volunteer briefing, forced manifest sync, paper fallback printed
-- Live ops dashboard, on-site engineer, escalation path active
+- [ ] T-7 scale-up and load verification
+- [ ] T-24 deployment freeze, device charging, dry run
+- [ ] T-2 volunteer briefing, forced manifest sync, paper fallback printed
+- [ ] Live ops dashboard, on-site engineer, escalation path active
 
 **Post-event**
-- Full data sync and offline conflict resolution
-- Final attendance, revenue, and reconciliation reports
-- Post-mortem
-- Handover: architecture docs, runbooks, credentials transfer, admin training
-- Data retention actions per [06 §6.8](06-security-architecture.md#68-data-protection)
-- Scale-down and decommissioning plan
+- [ ] Full data sync and offline conflict resolution
+- [ ] Final attendance, revenue, and reconciliation reports
+- [ ] Post-mortem
+- [ ] Handover: architecture docs, runbooks, credentials transfer, admin training
+- [ ] Data retention actions per [06 §6.8](06-security-architecture.md#68-data-protection)
+- [ ] Scale-down and decommissioning plan
 
 ### Exit criteria
-- Event completes with all attendees admitted
-- Financial reconciliation balances against the merchant account
-- Client sign-off and handover complete
+- [ ] Event completes with all attendees admitted
+- [ ] Financial reconciliation balances against the merchant account
+- [ ] Client sign-off and handover complete
 
 ---
 

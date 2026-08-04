@@ -1,0 +1,98 @@
+# Reference production topology for the image built by ./Dockerfile.
+# Matches docs/07 §7.3's "workers dedicated, not co-located with app
+# instances" — horizon and the scheduler are separate containers from `app`
+# so a 60,000-message notification blast never steals CPU from the request
+# path (docs/07 §7.3's stated reason). This file is the shape to translate
+# into whatever orchestrator a hosting provider decision lands on (ECS task
+# definitions, a Kubernetes Deployment, Docker Swarm, or literally
+# `docker compose -f docker-compose.prod.yml up` on a single box) — it is
+# not itself a deploy target. `mysql`/`redis` here are for a single-box
+# reference deployment only; docs/07 §7.3's sizing assumes a managed
+# database with a replica and a hot standby, which this compose file
+# cannot express.
+#
+# NOT BUILD- OR RUN-TESTED — see the Dockerfile's own header comment for why.
+
+services:
+  # nginx + php-fpm in one container (see Dockerfile's runtime-stage
+  # comment for why they're bundled rather than split). Runs as root at the
+  # container level only because nginx's master process needs it to bind
+  # port 80; nginx.conf and php-fpm's own pool config both drop worker
+  # processes to www-data internally.
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "80:80"
+
+  horizon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    user: www-data
+    command: ["php", "artisan", "horizon"]
+    env_file: .env
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Horizon's own graceful-termination window (config/horizon.php's
+    # supervisor timeouts) needs longer than Docker's default 10s or a
+    # deploy/restart can kill a scan or payment job mid-flight.
+    stop_grace_period: 30s
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    user: www-data
+    command: ["php", "artisan", "schedule:work"]
+    env_file: .env
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mysql-data:
+  redis-data:
