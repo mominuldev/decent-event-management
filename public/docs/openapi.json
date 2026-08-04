@@ -10063,6 +10063,36 @@
                                                 }
                                             },
                                             "type": "object"
+                                        },
+                                        "gates": {
+                                            "description": "Gates this volunteer is assigned to — the scanner app has no other way to learn which gate_id to submit scans under",
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "ulid": {
+                                                        "type": "string"
+                                                    },
+                                                    "code": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    },
+                                                    "event_session_id": {
+                                                        "type": "integer",
+                                                        "nullable": true
+                                                    },
+                                                    "allowed_ticket_type_ids": {
+                                                        "description": "null means every ticket type is allowed at this gate — see Gate::allowsTicketType()",
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "integer"
+                                                        },
+                                                        "nullable": true
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
                                         }
                                     },
                                     "type": "object"

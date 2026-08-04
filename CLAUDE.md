@@ -9,6 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Phase 5 — Email/SMS/WhatsApp: buildable-now slice landed 2026-08-04 (outbox, dispatcher, real email, admin dashboard). Real SMS/WhatsApp drivers and DLR webhooks stay deferred — no vendor is chosen and Meta hasn't approved templates. See [§Phase 5 below](#-phase-5-emailsmswhatsapp--buildable-now-slice-closed-2026-08-04).**
 **Phase 4A — SSLCommerz Sandbox: buildable-now slice landed 2026-08-04 (real `SslCommerzClient`, expiry sweeper closing D5, nightly reconciliation, refund-to-gateway wiring). Not yet smoke-tested against a live sandbox transaction — no `SSLCOMMERZ_STORE_PASSWORD` has been provisioned in this environment. See [§Phase 4A below](#-phase-4a-sslcommerz-sandbox--buildable-now-slice-closed-2026-08-04).**
 **Phase 6 — QR & PDF Tickets: buildable-now slice landed 2026-08-04 (real Ed25519 `QrSigner`, signature+expiry verification in `ProcessCheckIn`, race-safe `TicketNumberGenerator`, QR PNG + bilingual A5 PDF generation on the `tickets` lane, signed-URL media serving, manifest delta sync + published keys, key-rotation tooling). Physical print/scan testing and a live device-rotation rehearsal are explicitly out of scope for this slice — see [§Phase 6 below](#-phase-6-qr--pdf-tickets--buildable-now-slice-closed-2026-08-04).**
+**Phase 7 — Mobile Verification App: the React Native scanner is a separate repo (`decent-event-scanner`, sibling to this one — see "Three frontends, two repos" below), so nothing here changed except one small backend addition: `POST /scanner/v1/enrol` now also returns the volunteer's assigned gates. Core offline scan loop (enrolment, manifest delta sync, local Ed25519 verification, local admission policy, offline scan queue with batched idempotent upload) landed there 2026-08-04. Manual lookup, override-request routing, crash reporting, and all physical-device testing are deferred — see that repo's README.**
 
 > Reviewed 2026-08-03, defects closed 2026-08-04. The 2026-08-03 architecture/code review found four real defects (D1–D4) plus six doc-vs-code drift items (D5–D10); **D1–D4 are now closed** (see below) with a gateway-path regression test added. Full original detail, evidence, and file references live in [docs/08-development-roadmap.md §"Phase 2 review findings"](docs/08-development-roadmap.md). D5 closed 2026-08-04 as part of Phase 4A; D6–D10 remain as tracked drift — none of them block sign-off, which now rests solely on the frontend-lead OpenAPI review. The roadmap was revised in the 2026-08-03 pass — Phase 4 split into 4A (SSLCommerz sandbox, unblocked) and 4B (live cutover), and Phase 3.5 (CMS) added.
 
@@ -190,6 +191,27 @@ Same split as Phase 3.5/4A/5: build everything that's pure engineering now, flag
 - **The live device-rotation rehearsal.** The crypto and tooling for rotation exist end-to-end (multi-key `QrSigner`, `qr-signing:generate-key`, retired keys published in the manifest), but the *procedure* — Super Admin, re-auth, publish → wait for confirmed device sync → only then switch the active key, notify Event Managers (docs/06 §6.5) — is a staged human/ops workflow with no admin-API endpoint or SPA screen built for it yet. Rotating today means manually editing `.env` in the right order.
 - **Manifest delta sync has not been load-tested against a 12,000-ticket cold start** (docs/08 Phase 6 exit criterion) — the query shape (`whereIn('status', …)` with no pagination) is the same one that existed before this slice; making it paginate/stream is a Phase 8 load-testing concern, not something this slice changed.
 
+### ✅ Phase 7 (Mobile Verification App) — core scan loop closed 2026-08-04
+
+Unlike every other phase, this one's actual deliverable lives **outside this repo** — `decent-event-scanner`, a sibling Expo/React Native/TypeScript project, per this file's own "Three frontends, two repos" split. This section tracks only what changed *here*; see that repo's README for the full scope, architecture notes, and deferred list.
+
+**Shipped here (backend):**
+
+- `POST /scanner/v1/enrol` (`App\Http\Controllers\Api\Scanner\DeviceEnrolmentController`) now also returns `gates: [{ulid, code, name, event_session_id, allowed_ticket_type_ids}]` — the volunteer's active assigned gates. This closes a real gap: nothing previously told a scanner device which `gate_id` it's allowed to submit scans under (`EnsureGateAssigned` middleware enforces the assignment, but there was no way to *discover* it). Filters to `is_active` gates only; a revoked/deactivated gate silently drops out rather than erroring.
+- New test in `tests/Feature/Scanner/DeviceEnrolmentTest.php` asserting only the volunteer's active assigned gates come back, with `allowed_ticket_type_ids` intact (the scanner app needs it to run the same wrong-gate check offline that `AdmissionPolicy` runs server-side). Pint and PHPStan level 8 clean; OpenAPI spec regenerated (still 104 paths — this is a response-shape addition to an existing documented endpoint, not a new one).
+
+**Shipped in `decent-event-scanner`** (see that repo for detail):
+
+- Enrolment, manifest cold-start + delta sync into local SQLite, fully-offline Ed25519 QR verification (`tweetnacl`, a deliberate port of `QrPayload.php`/`QrSigner.php`), a local admission policy (a port of `AdmissionPolicy.php`) that runs against the synced manifest with no network call, a local admission counter so a second offline scan of the same ticket is caught as a duplicate before any sync, an idempotent batched scan-upload queue with exponential backoff, and a camera scan screen with a party-size confirmation step and a green/red result banner.
+- 38 Jest unit tests covering the ported QR-parsing and admission-policy logic, including adversarial cases: forged signature, single-bit tamper of `admits_total`, a hand-crafted payload naming a real ticket ulid but without the real private key, expired-but-validly-signed payload, unknown/retired key ids.
+
+**Deferred, not silently dropped** (full list and reasoning in `decent-event-scanner`'s README):
+
+- Manual lookup by mobile last-4/ticket number, and the override-request-to-Event-Manager flow — both need backend endpoints that don't exist yet.
+- Crash reporting, an offline diagnostic log, and sync-status UI polish (battery, last-sync detail).
+- A conflict-resolution UI for the two-devices-scanned-the-same-ticket-offline case — the data (`conflict_flag` from `POST /scanner/v1/scans`) is captured, but nothing surfaces it to the volunteer yet; the next manifest sync silently reconciles to the server's count.
+- **All physical-device testing** — autofocus, haptics, battery life, and the roadmap's own exit criteria (500 consecutive offline scans, 12,000-ticket sync under 90s on 4G, 8-hour battery, an untrained volunteer completing 20 correct scans) need real hardware this environment doesn't have. Matches this file's own standing rule for Phase 6 that physical testing "is not optional and cannot be simulated."
+
 ### 💳 Payments — development environment
 
 Development and all Phase 4A work run against the **SSLCommerz sandbox** (<https://sandbox-gw.sslcommerz.com/docs>, <https://developer.sslcommerz.com/doc/v4/>). Sandbox credentials are self-service — no merchant onboarding required — so the full money path is buildable now. `SslCommerzClient` (Phase 4A, closed 2026-08-04) implements it; see [§Phase 4A above](#-phase-4a-sslcommerz-sandbox--buildable-now-slice-closed-2026-08-04) for what's still unverified against a live call.
@@ -227,7 +249,7 @@ A single Laravel application at the repo root, which serves **both** the API and
 
 - **Admin dashboard — in this repo** at `resources/js`, a Vite + React 19 SPA served by the catch-all in `routes/web.php`. Deliberately *not* Next.js: it is authenticated-only, so SSR/ISR buys nothing and co-location removes a deploy target.
 - **Public site — separate Next.js repo**, consuming this API cross-origin. Needs `config/cors.php` with an explicit origin allowlist, which does not exist yet (D9).
-- **Scanner — separate React Native app** (Phase 7), talking to `routes/scanner.php`.
+- **Scanner — separate React Native (Expo) app**, `decent-event-scanner`, talking to `routes/scanner.php`. Core offline scan loop landed 2026-08-04 — see that repo's README for scope and what's deferred.
 
 ## Commands
 

@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Scanner;
 
+use App\Domain\CheckIn\Models\Gate;
+use App\Domain\CheckIn\Models\VolunteerGateAssignment;
 use App\Domain\CheckIn\Models\VolunteerProfile;
 use App\Domain\Shared\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -83,6 +85,36 @@ class DeviceEnrolmentTest extends TestCase
             'platform' => 'android',
             'pin' => '123456',
         ])->assertStatus(422);
+    }
+
+    public function test_enrol_response_includes_only_the_volunteers_active_assigned_gates(): void
+    {
+        $volunteer = $this->volunteer();
+        $assignedGate = Gate::factory()->create(['is_active' => true, 'allowed_ticket_type_ids' => [1, 2]]);
+        $inactiveGate = Gate::factory()->create(['is_active' => false]);
+        $unassignedGate = Gate::factory()->create(['is_active' => true]);
+
+        VolunteerGateAssignment::factory()->create(['volunteer_profile_id' => $volunteer->id, 'gate_id' => $assignedGate->id]);
+        VolunteerGateAssignment::factory()->create(['volunteer_profile_id' => $volunteer->id, 'gate_id' => $inactiveGate->id]);
+
+        $token = 'test-enrolment-token-gates';
+        Cache::put("device-enrolment:{$token}", ['volunteer_profile_id' => $volunteer->id], now()->addMinutes(15));
+
+        $response = $this->postJson('/api/scanner/v1/enrol', [
+            'enrolment_token' => $token,
+            'device_fingerprint' => 'fingerprint-gates',
+            'device_name' => 'Test Phone',
+            'device_code' => 'DEV-GATES',
+            'platform' => 'android',
+            'pin' => '123456',
+        ])->assertOk()->assertJsonStructure(['token', 'expires_at', 'device', 'gates']);
+
+        $gates = $response->json('gates');
+        $this->assertCount(1, $gates);
+        $this->assertSame($assignedGate->ulid, $gates[0]['ulid']);
+        $this->assertSame($assignedGate->code, $gates[0]['code']);
+        $this->assertSame([1, 2], $gates[0]['allowed_ticket_type_ids']);
+        $this->assertNotContains($unassignedGate->ulid, array_column($gates, 'ulid'));
     }
 
     public function test_a_scanner_token_cannot_access_admin_routes(): void

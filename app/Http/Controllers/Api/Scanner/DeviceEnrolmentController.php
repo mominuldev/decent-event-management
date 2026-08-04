@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Scanner;
 
 use App\Domain\CheckIn\Models\CheckInDevice;
+use App\Domain\CheckIn\Models\Gate;
 use App\Domain\CheckIn\Models\VolunteerProfile;
 use App\Domain\Shared\Models\EventSetting;
 use App\Http\Controllers\Api\Admin\VolunteerController;
@@ -73,6 +74,27 @@ class DeviceEnrolmentController extends Controller
                                     new OAT\Property(property: 'code', type: 'string'),
                                 ]
                             ),
+                            new OAT\Property(
+                                property: 'gates',
+                                type: 'array',
+                                description: 'Gates this volunteer is assigned to — the scanner app has no other way to learn which gate_id to submit scans under',
+                                items: new OAT\Items(
+                                    properties: [
+                                        new OAT\Property(property: 'ulid', type: 'string'),
+                                        new OAT\Property(property: 'code', type: 'string'),
+                                        new OAT\Property(property: 'name', type: 'string'),
+                                        new OAT\Property(property: 'event_session_id', type: 'integer', nullable: true),
+                                        new OAT\Property(
+                                            property: 'allowed_ticket_type_ids',
+                                            type: 'array',
+                                            items: new OAT\Items(type: 'integer'),
+                                            nullable: true,
+                                            description: 'null means every ticket type is allowed at this gate — see Gate::allowsTicketType()'
+                                        ),
+                                    ],
+                                    type: 'object'
+                                )
+                            ),
                         ]
                     )
                 )
@@ -139,10 +161,26 @@ class DeviceEnrolmentController extends Controller
 
         $device->forceFill(['sanctum_token_id' => $token->accessToken->id])->save();
 
+        $gates = $volunteer->gateAssignments()
+            ->with('gate')
+            ->get()
+            ->pluck('gate')
+            ->filter(fn (?Gate $gate): bool => $gate !== null && $gate->is_active)
+            ->unique('id')
+            ->values()
+            ->map(fn (Gate $gate): array => [
+                'ulid' => $gate->ulid,
+                'code' => $gate->code,
+                'name' => $gate->name,
+                'event_session_id' => $gate->event_session_id,
+                'allowed_ticket_type_ids' => $gate->allowed_ticket_type_ids,
+            ]);
+
         return response()->json([
             'token' => $token->plainTextToken,
             'expires_at' => $expiresAt,
             'device' => ['ulid' => $device->ulid, 'code' => $device->device_code],
+            'gates' => $gates,
         ]);
     }
 
