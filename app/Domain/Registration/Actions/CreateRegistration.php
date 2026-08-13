@@ -5,6 +5,7 @@ namespace App\Domain\Registration\Actions;
 use App\Domain\CheckIn\Models\EventSession;
 use App\Domain\Payment\Models\Payment;
 use App\Domain\Registration\Events\RegistrationCreated;
+use App\Domain\Registration\Exceptions\RegistrationRejectedException;
 use App\Domain\Registration\Models\Attendee;
 use App\Domain\Registration\Models\Registration;
 use App\Domain\Registration\Models\RegistrationGuest;
@@ -12,7 +13,6 @@ use App\Domain\Shared\Models\EventSetting;
 use App\Domain\Ticketing\Models\TicketType;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use RuntimeException;
 
 class CreateRegistration
 {
@@ -25,8 +25,12 @@ class CreateRegistration
             /** @var TicketType $ticketType */
             $ticketType = TicketType::where('ulid', $data['ticket_type_ulid'])->firstOrFail();
 
+            // Checked before reserving, so a rejected registration never
+            // holds capacity it is not entitled to.
+            $this->assertParticipantTypeAllowed($ticketType, (string) $data['participant_type']);
+
             if (! $ticketType->tryReserve()) {
-                throw new RuntimeException('Tickets are sold out or capacity is full.');
+                throw RegistrationRejectedException::soldOut();
             }
 
             $mobile = preg_replace('/[^0-9+]/', '', (string) $data['mobile']);
@@ -72,14 +76,22 @@ class CreateRegistration
             $adultsCount = (int) ($data['adults_count'] ?? 1);
             $childrenCount = (int) ($data['children_count'] ?? 0);
 
+            // `children_count` arrives as every child attending, infants
+            // included. How many of those are free is decided here from the
+            // guests' own ages against the ticket type's threshold — never
+            // from a client-supplied count, which would let a caller mint
+            // free admits by claiming a party of infants.
+            $infantsCount = $this->countFreeInfants($ticketType, $data['guests'] ?? []);
+            $infantsCount = min($infantsCount, $childrenCount);
+            $billableChildren = $childrenCount - $infantsCount;
+
             $extraAdults = max(0, $adultsCount - $baseAdmits);
-            $extraChildren = $childrenCount;
 
             $basePrice = (int) $ticketType->base_price_paisa;
             $additionalAdultPrice = (int) $ticketType->additional_adult_price_paisa;
             $additionalChildPrice = (int) $ticketType->additional_child_price_paisa;
 
-            $totalPrice = $basePrice + ($extraAdults * $additionalAdultPrice) + ($extraChildren * $additionalChildPrice);
+            $totalPrice = $basePrice + ($extraAdults * $additionalAdultPrice) + ($billableChildren * $additionalChildPrice);
 
             $eventSessionId = null;
             if (! empty($data['event_session_ulid'])) {
@@ -94,7 +106,12 @@ class CreateRegistration
                 'event_session_id' => $eventSessionId,
                 'participation_type' => $data['participation_type'],
                 'adults_count' => $adultsCount,
-                'children_count' => $childrenCount,
+                // Stored split, not as submitted: `children_count` is the
+                // billable half so reports and pricing agree, and
+                // `infants_count` carries the free heads that IssueTicket
+                // still has to admit.
+                'children_count' => $billableChildren,
+                'infants_count' => $infantsCount,
                 'status' => 'pending_payment',
                 'subtotal_paisa' => $totalPrice,
                 'discount_paisa' => 0,
@@ -125,7 +142,7 @@ class CreateRegistration
                 'payment_number' => 'PAY-'.Str::upper(Str::random(8)),
                 'registration_id' => $registration->id,
                 'attendee_id' => $attendee->id,
-                'method' => $data['payment_method'] ?? 'bkash',
+                'method' => $data['payment_method'] ?? $this->defaultPaymentMethod(),
                 'channel' => 'online',
                 'status' => 'pending',
                 'amount_due_paisa' => $totalPrice,
@@ -144,6 +161,83 @@ class CreateRegistration
 
             return $registration;
         });
+    }
+
+    /**
+     * A ticket type sells only to the participant types it lists.
+     *
+     * Part of D7: `allowed_participant_types` has been stored, published on
+     * TicketTypeResource and rendered by the public site since Phase 2, but
+     * nothing ever checked it — so a Sponsor-only ticket would happily sell
+     * to anyone who named its ULID. The public ticket form now builds its
+     * participant-type dropdown from this same list, which only means
+     * anything if the server enforces it too.
+     *
+     * An empty list means "open to everyone", matching how the frontend's
+     * describeAllowedParticipants() already reads it.
+     */
+    private function assertParticipantTypeAllowed(TicketType $ticketType, string $participantType): void
+    {
+        $allowed = $ticketType->allowed_participant_types;
+
+        if ($allowed === []) {
+            return;
+        }
+
+        if (! in_array($participantType, $allowed, true)) {
+            throw RegistrationRejectedException::participantTypeNotAllowed($participantType);
+        }
+    }
+
+    /**
+     * Guests young enough to attend free under this ticket type's rule.
+     *
+     * A type with no `child_free_under_age` has no free-infant rule at all,
+     * which is every ticket type that predates the centennial single/family
+     * pair — so this returns 0 and pricing is byte-identical to before.
+     *
+     * `$guests` is typed loosely on purpose: it arrives from the untyped
+     * `$data` payload, so each entry really is unknown until checked.
+     *
+     * @param  array<int, mixed>  $guests
+     */
+    private function countFreeInfants(TicketType $ticketType, array $guests): int
+    {
+        $threshold = $ticketType->child_free_under_age;
+
+        if ($threshold === null) {
+            return 0;
+        }
+
+        $count = 0;
+
+        foreach ($guests as $guest) {
+            if (! is_array($guest) || ($guest['age_group'] ?? null) !== 'child') {
+                continue;
+            }
+
+            $age = $guest['age'] ?? null;
+
+            // An age is mandatory to claim the free rate. A child guest sent
+            // without one is billed, not waved through.
+            if (is_numeric($age) && (int) $age < (int) $threshold) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * The gateway a checkout opens against when the caller doesn't name
+     * one. Config rather than a literal so pointing the public flow at a
+     * different gateway is a deploy-time change, not a code change.
+     */
+    private function defaultPaymentMethod(): string
+    {
+        $method = config('services.payment.default_method');
+
+        return is_string($method) && $method !== '' ? $method : 'sslcommerz';
     }
 
     private function intentTtlMinutes(): int

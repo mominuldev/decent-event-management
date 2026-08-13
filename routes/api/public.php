@@ -21,9 +21,24 @@ Route::post('registrations', [RegistrationController::class, 'store'])
     ->name('registrations.store');
 Route::get('registrations/{registration:ulid}', [RegistrationController::class, 'show'])->name('registrations.show');
 
+// Badge photo for the registering alumnus. Scoped to a registration rather
+// than offered as a bare public upload endpoint, so a caller must already
+// hold an unguessable ULID; throttled on top of that because an image
+// re-encode is the most expensive thing an anonymous request can ask for.
+Route::post('registrations/{registration:ulid}/photo', [RegistrationController::class, 'photo'])
+    ->middleware('throttle:10,1')
+    ->name('registrations.photo.store');
+
 Route::post('registrations/{registration:ulid}/payment/initiate', [PaymentController::class, 'initiate'])
     ->middleware('idempotent:payment.initiate')
     ->name('registrations.payment.initiate');
+
+// On-demand server-to-server settlement check for the return page. Rate
+// limited because each call can make an outbound gateway request, and the
+// page polls it. Accepts no body — the gateway is the only source of truth.
+Route::post('registrations/{registration:ulid}/payment/verify', [PaymentController::class, 'verify'])
+    ->middleware('throttle:20,1')
+    ->name('registrations.payment.verify');
 
 // Browser return leg for SSLCommerz (docs/08 Phase 4A). Read-only — never
 // trusted to transition a payment; the IPN at routes/webhooks.php is the

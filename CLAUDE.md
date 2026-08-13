@@ -257,17 +257,97 @@ Same split as every prior phase, applied to a phase where it matters more than u
 - Registration launch, first-48-hours heightened monitoring, daily reconciliation review during the live window — all presuppose the site is actually live.
 - Every event-day operational item in docs/07 §7.7 (T-7 scale-up, T-24 deployment freeze, T-2 volunteer briefing, live ops dashboard, on-site engineer, escalation path) — a staged human/ops procedure for a real event, not something a dev sandbox can rehearse, matching this file's standing rule for Phase 6/7's physical-device testing.
 
+### ✅ Centennial ticket system merged into the real registration flow — 2026-08-14
+
+The public site's `/tickets#register` page (repo `centennial-celebration`, sibling to this one) shipped as a **fully static** ticket system priced from a frontend constants file, with `confirm()` minting a local `CEN-{batch}-{XXXXX}` string and no network call anywhere. It is now backed by this system end to end.
+
+**One ticket, family optional.** The page originally sold a single/family *pair*; that collapsed into one `CEN` ticket type on which family is optional for every participant type. A lone registrant is simply a party of one, so there is no ticket kind to pick and no way to pick the wrong one. The tiered pricing columns carry the whole rule with no new pricing path:
+
+| | |
+|---|---|
+| registrant | `base_price_paisa` — ৳2,500 |
+| each extra adult | `additional_adult_price_paisa` — ৳2,000 |
+| each extra child | `additional_child_price_paisa` — ৳2,000 |
+| child under 2 | free, **still admitted** |
+
+**The real schema gap this exposed.** A child under 2 attends free but still walks through the gate. `children_count` was read by two things at once — pricing in `CreateRegistration`, and `admits_total` in `IssueTicket` (`adults + children`) — so excluding a free infant to get the price right would have under-counted the admits and the gate would have turned the infant away. Migration `2026_08_14_100000_*` adds `registrations.infants_count` (never priced, always admitted; `admits_total = adults + children + infants`) and `ticket_types.child_free_under_age` (`NULL` on every pre-existing type, so their pricing is byte-identical).
+
+**Infants are counted server-side from the guests' own ages**, never from a client-supplied count — otherwise a caller could mint free admits by declaring a party of infants. Contract: `children_count` is *every* child attending, infants included; `CreateRegistration::countFreeInfants()` splits it and stores `children_count` as the billable half. A child guest sent without an age is billed, not waved through.
+
+**Participant type is now asked for and enforced.** The form's dropdown is built from the ticket type's own `allowed_participant_types`, and `CreateRegistration` enforces it — **closing part of D7**, which had been stored, published on `TicketTypeResource` and rendered by the public site since Phase 2 while nothing ever checked it (a Sponsor-only ticket would have sold to anyone naming its ULID). Enforcement runs *before* `tryReserve()`, so a refused registration never holds capacity. An empty list still means "open to everyone", matching how the frontend already read it. `ssc_batch_year` is asked for only from a current/former student, mirroring the API's own `required_if`.
+
+**Shipped here:**
+
+- `CEN` seeded in `TicketTypeSeeder` (`base_admits` 1, `max_admits` 9, `child_free_under_age` 2, 12,000 capacity). `guest`/`sponsor` are deliberately excluded from its audience — they have their own VIP/SPN types, which are `is_public=false`/`requires_approval=true` and must not become self-serve at the centennial price. The short-lived `CEN-SINGLE`/`CEN-FAMILY` pair is **retired, not deleted** (`is_active`/`is_public` false): `registrations.ticket_type_id` is `ON DELETE RESTRICT`, so an environment that sold one cannot drop the row without destroying that history.
+- **Fixed in passing — a real bug:** `TicketTypeSeeder` never set `sale_starts_at`, and the public endpoint filters `sale_starts_at <= now()`. SQL's `NULL` comparison is not true, so **every seeded ticket type was invisible to the public API** regardless of `is_active`/`is_public`. Backfilled after the upsert so a re-seed never drags an admin-chosen opening date forward.
+- `RegistrationRejectedException` — sold-out and participant-type rejections are caller error and now render as **422** in the uniform `{code, message, request_id}` envelope. They were `RuntimeException` → 500, which the form would have shown as "Something went wrong" instead of the actual reason. (Sold-out was pre-existing; it 500'd too.)
+- `POST /public/registrations/{registration}/photo` + `Registration\Actions\UploadAttendeePhoto` — the badge photo the form collects. Deliberately **not** Content's `UploadContentMedia`: that writes the public CDN disk with `is_public=true`, right for a sponsor logo and wrong for a photograph of a private individual. Same validation discipline (magic bytes decide the type, full GD re-encode stripping EXIF/GPS, randomised name), but private disk + short-TTL signed URL, reusing Phase 6's `MediaFile::temporarySignedUrl()`/`SignedMediaController`. Downscales to 1024px. Scoped to a registration and accepted only while `pending_payment` — that scoping is what keeps it from being an open public file drop; `throttle:10,1` on top. `ActivityLog` written from the Action (D8 discipline).
+- `child_free_under_age` on `TicketTypeResource`, `infants_count` on `RegistrationResource`, both admin ticket-type requests accept the new column. OpenAPI regenerated — **105 paths** (was 104).
+- 15 tests (`tests/Feature/Public/CentennialTicketFlowTest.php`): party-of-one vs. family on the same ticket type, member rates, the free infant priced out *and* admitted (`admits_total == 4` for a party of 4 with one infant), the exactly-2 boundary, free infants unclaimable without matching guest rows, an ageless child billed, a no-rule ticket type unchanged, all six allowed participant types buying, a disallowed one refused 422 without reserving capacity, an unrestricted ticket selling to anyone, and the photo endpoint (private disk, signed URL, disguised-PHP-script rejected 422, refused once out of checkout).
+
+**Shipped in `centennial-celebration`:**
+
+- `features/ticket-system/config.ts` holds **no money** — only copy, FAQs and the `TICKET_CODE` join. Prices, admit limits, the free-infant age and the participant-type list all come from `/public/ticket-types` via `resolve.ts`. `/tickets` moved from `force-static` to `revalidate = 300`, so a price edit in the admin console reaches the page without a deploy; the form re-fetches on the client, so a stale card can't lead to a stale checkout.
+- Four steps (was five): Your Details → Family (optional, starts empty, skippable) → Summary → Confirm. `participation_type` is **derived** from the party rather than asked. `pricing.ts` mirrors `CreateRegistration`'s formula exactly and is only ever an estimate — the confirmation screen renders the server's `total_paisa`, and no price is sent to the API.
+- `confirm()` creates a real registration (idempotency key per submission), uploads the held photo, and shows the real `registration_number`. Payment is a deliberate second act (a button, not an auto-redirect) so a failed gateway session leaves a recoverable registration rather than stranding the reader with no reference. A failed *photo* upload is non-fatal by design — the seats are already held.
+- `gender` is now collected (the API requires it). Guest `gender` is omitted rather than defaulted, so nothing guesses a person's gender to satisfy a type.
+- **`/register` is a `permanentRedirect` to `/tickets#register`**; the six-step `RegistrationWizard`, its step components, wizard store, `fieldSteps.ts` and the already-dead `TicketBuyForm` are deleted. Two wizards over one endpoint meant two sets of client validation to keep in step with the server, and they had already drifted.
+- **Fixed in passing — a second real bug:** the frontend `Registration` type declared `total_amount_paisa`, a field `RegistrationResource` has never returned (it returns `total_paisa`). Every reader guarded with `typeof … === "number"`, so `RegistrationSummaryCard` had silently never rendered a total. `ParticipantType` was likewise missing `guest`/`sponsor`, which the API has accepted since Phase 8. Exactly the hand-written-types drift this file's SPA conventions warn about.
+
+**Verified against the running stack**, not just unit tests: a teacher registering alone with no batch year → ৳2,500; a guardian + spouse + 1-year-old → ৳4,500 with `infants_count: 1`; a sponsor → 422 `participant_type_not_allowed`; the photo endpoint downscaled 1600×1200 → 1024×768 behind a signed URL and rejected a PHP script named `evil.jpg`. Backend 363 passed / 1 skipped, Pint + PHPStan level 8 clean; frontend `tsc --noEmit`, ESLint and `next build` clean.
+
+**Still open:**
+
+- ~~The public flow initiates payment on the default `bkash` method.~~ **Closed 2026-08-14** — the default is now `sslcommerz` and the whole path is verified against the live sandbox; see [§SSLCommerz live-sandbox verification](#-sslcommerz-sandbox-verified-live-and-two-real-defects-fixed--2026-08-14).
+- **The registrant pays ৳2,500 and each added member ৳2,000.** Under the superseded family ticket every head paid a flat ৳2,000, so a family of four now costs ৳8,500 rather than ৳8,000. This is a seeder-only change (`base_price_paisa`) if the flat reading was intended — no code depends on the three rates differing.
+- The seat-hold copy says "while the payment window is open"; the real TTL is `payment.intent_ttl_minutes` (default **30**). Someone should set that deliberately.
+- No bilingual (BN) rendering on the ticket page; `name_bn` is seeded but the page renders English only.
+
 ### 💳 Payments — development environment
 
-Development and all Phase 4A work run against the **SSLCommerz sandbox** (<https://sandbox-gw.sslcommerz.com/docs>, <https://developer.sslcommerz.com/doc/v4/>). Sandbox credentials are self-service — no merchant onboarding required — so the full money path is buildable now. `SslCommerzClient` (Phase 4A, closed 2026-08-04) implements it; see [§Phase 4A above](#-phase-4a-sslcommerz-sandbox--buildable-now-slice-closed-2026-08-04) for what's still unverified against a live call.
+Development runs against the **SSLCommerz sandbox** (<https://developer.sslcommerz.com/doc/v4/>). Credentials are self-service — no merchant onboarding — so the full money path is live in development. **`sslcommerz` is the public checkout's default gateway** (`services.payment.default_method`, `PAYMENT_DEFAULT_METHOD`); `bkash`/`nagad`/`rocket` still resolve to `FakeGateway` pending Phase 4B, so never make one of them the default.
+
+**Verified against the live sandbox 2026-08-14** — this is no longer an unexercised adapter. See [§SSLCommerz live-sandbox verification](#-sslcommerz-sandbox-verified-live-and-two-real-defects-fixed--2026-08-14) below for the two defects that verification exposed.
 
 | Purpose | Sandbox endpoint |
 |---|---|
-| Session initiation | `POST https://sandbox-gw.sslcommerz.com/gwprocess/v4/api.php` |
+| Session initiation | `POST https://sandbox.sslcommerz.com/gwprocess/v4/api.php` |
 | Order validation (`val_id`) | `GET https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php` |
 | Refund | `https://sandbox.sslcommerz.com/validator/api/merchantTransIDvalidationAPI.php` |
 
+The older `sandbox-gw.sslcommerz.com` host still answers the session endpoint but returns the legacy `gw.php?sessionkey=` URL; `sandbox.sslcommerz.com` is what the v4 docs publish and returns the current EasyCheckOut page, so all three calls share that one host. Demo store credentials are **`testbox` / `qwerty`** — `qwerty1234`, which this file and `config/services.php` both previously claimed, is rejected with "Store Password credential mismatch".
+
 `store_id`/`store_passwd` belong in `config/services.php` + `.env`, never committed and never in an unencrypted `event_settings` row. The mandatory order for every transaction: **IPN `verify_sign`/`verify_key` check → `val_id` validation API (accept only `VALID` or `VALIDATED`) → amount/currency re-check against `amount_due_paisa` → only then `succeeded`.** The `success_url` browser redirect proves nothing and must never transition a payment — SSLCommerz's own docs say so explicitly. SSLCommerz transacts in decimal BDT with a 10.00 minimum; that conversion lives inside `SslCommerzClient` alone and no decimal amount may leak past the adapter.
+
+### ✅ SSLCommerz sandbox verified live, and two real defects fixed — 2026-08-14
+
+Phase 4A shipped `SslCommerzClient` in full but explicitly never called a live sandbox ("Treat the exact response field names as needing a first real-sandbox smoke test"). That smoke test has now happened, and it found two defects that no amount of `Http::fake()` could have.
+
+**Defect 1 — the IPN signature check was wrong, so no gateway payment could ever succeed.** `verifySignature()` appended `store_passwd` last and never sorted. SSLCommerz's actual algorithm (their own `SSLCOMMERZ_hash_verify()` in `sslcommerz/SSLCommerz-PHP`) puts `store_passwd => md5(pw)` *into* the field array, `ksort()`s the whole thing, joins `key=value&…`, trims the trailing `&`, and md5s that. Any payload carrying a field sorting after `store_passwd` — `tran_id` and `value_a`, which SSLCommerz always sends — hashes differently, so **every genuine IPN failed verification** and no payment could reach `succeeded`. The v4 docs describe `verify_sign` only as a "Data Validation Key" and never publish the algorithm; their library is the reference.
+
+  The unit test did not catch this because its `sign()` helper reimplemented the *same* wrong construction — the implementation asserted against itself. That is the docs/08 R12 failure mode again (third occurrence, after D1/D2 and the Phase 8 concurrency tests). It is now pinned by `test_signature_matches_sslcommerz_reference_digest`, a hand-computed fixed digest, plus a test asserting the old unsorted construction is *rejected*.
+
+**Defect 2 — `payment_method` was never in `StoreRegistrationRequest`'s rules at all**, so `validated()` stripped it and `CreateRegistration`'s `$data['payment_method'] ?? 'bkash'` always took the fallback. The public checkout could not have reached SSLCommerz even if a caller asked for it. Now allowlisted against `PaymentGatewayResolver::SUPPORTED_GATEWAYS` (made a public const so validation and the resolver cannot drift), with the default in config. This closes the `payment_method` half of D7.
+
+**Also fixed:** `Http::fake()` in `SslCommerzClientTest` matched on the old `sandbox-gw` host, so after the host change one test made a **real network call to the live sandbox** instead of failing. `Http::preventStrayRequests()` is now set in that suite's `setUp()`, so a stale fake pattern fails loudly rather than silently calling a third party. `FRONTEND_URL` was empty, which made every gateway return leg bounce the payer back to the API instead of the site.
+
+**Verified end to end against the real sandbox**, not mocks:
+
+- Registration → `payment.method = sslcommerz` → initiate returns a genuine `https://sandbox.sslcommerz.com/EasyCheckOut/…` URL that serves HTTP 200.
+- A correctly-signed IPN (built with SSLCommerz's own algorithm) posted to `POST /webhooks/sslcommerz` is accepted and recorded with `signature_valid = true`.
+- **The security invariant holds:** that same accepted IPN left the payment at `failed`, *not* `succeeded`, because the server-to-server `val_id` validation rejected the fabricated id. A forged or replayed IPN cannot mint a paid ticket — signature check → `val_id` validation → amount re-check, in that order, exactly as the docs require.
+- All three return legs (`success`/`fail`/`cancel`) land on `{FRONTEND_URL}/registrations/{ulid}?payment_status=…`, and a `next` pointing at `evil.com` is refused and falls back to the configured origin.
+
+**Return page fixed 2026-08-14 — "Confirming your payment" span forever.** Two compounding faults:
+
+1. `PaymentStatusPoller`'s timeout lived in a `useEffect` keyed on `[awaitingConfirmation, status, registration]` that compared `Date.now()` against a ref. While a payment stayed pending the API returned identical JSON, so TanStack Query's structural sharing handed back the **same object reference** and no dep ever changed — the effect never re-ran after mount, where elapsed time is zero. `timedOut` stayed false forever while `refetchInterval` quietly stopped at the 120s cap, leaving a spinner with nothing left to resolve it. Now a real `setTimeout`.
+2. The poller only re-read `GET /public/registrations/{ulid}`, which reflects only what an **IPN has already written**. SSLCommerz cannot reach a localhost dev server at all, and a delayed or lost IPN is routine for Bangladeshi MFS in production — so the page could spin on a payment that had genuinely settled.
+
+`POST /public/registrations/{registration}/payment/verify` (`PaymentController::verify`, throttled 20/min) fixes the second: it re-runs the same server-to-server `VerifyPayment` the IPN path uses (`val_id`, falling back to `tran_id`) and re-checks the amount before anything settles. **It accepts no request body**, so the browser's arrival is only a prompt to go ask the gateway — never evidence of payment, and `PaymentVerifyEndpointTest` asserts a caller-supplied `status`/`amount_paid_paisa` changes nothing. Already-settled payments short-circuit without a gateway round trip, so polling is cheap. 4 tests; spec now **106 paths**.
+
+**Found while fixing this, not fixed — flagged:** `VerifyPayment::handle()` dispatches `PaymentSucceeded` inside its own DB transaction, and `IssueTicketForSucceededPayment` runs synchronously. A throw in ticket issuance therefore **rolls back the payment's success** — observed here for real when a missing `QR_SIGNING_PRIVATE_KEY` made `QrSigner::sign()` throw and the verified payment silently reverted to `pending`. In production that means money taken at the gateway with the payment left unsettled until reconciliation. The dev trigger was just the documented `qr-signing:generate-key --if-missing` setup step, but the coupling is the real hazard: issuance belongs on the `tickets` queue lane (`->afterCommit()`), the way `GenerateTicketAssetsJob` already is.
+
+**Still open:** a *completed* sandbox payment (driving the hosted checkout to a `VALID` transaction) has not been run — that needs a browser on the EasyCheckOut page, so `verify()`'s success branch and `refund()` are still exercised only against fakes. `SSLCOMMERZ_IPN_IP_ALLOWLIST` remains an intentional no-op until someone supplies SSLCommerz's real IPN ranges.
 
 ### 🚨 External Dependencies (start during Phase 2!)
 - [ ] Payment gateway merchant applications (bKash, Nagad, Rocket, SSLCommerz) — **2-6 weeks lead time**. Blocks Phase 4B (live cutover) only; sandbox work is unblocked. Sequence SSLCommerz first.

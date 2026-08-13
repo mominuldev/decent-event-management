@@ -34,6 +34,7 @@ class UpdateTicketTypeRequest extends FormRequest
             'currency' => ['sometimes', 'string', 'size:3'],
             'base_admits' => ['sometimes', 'required', 'integer', 'min:1', 'max:20'],
             'max_admits' => ['sometimes', 'required', 'integer', 'min:1', 'max:20', 'gte:base_admits'],
+            'child_free_under_age' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:18'],
             'allowed_participant_types' => ['nullable', 'array'],
             'allowed_participant_types.*' => ['string', Rule::in(['current_student', 'former_student', 'teacher', 'staff', 'guardian', 'guest', 'sponsor', 'other'])],
             'quantity_total' => ['nullable', 'integer', 'min:1'],

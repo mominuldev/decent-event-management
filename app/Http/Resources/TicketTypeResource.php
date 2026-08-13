@@ -30,6 +30,7 @@ class TicketTypeResource extends JsonResource
             'currency' => $this->currency,
             'base_admits' => $this->base_admits,
             'max_admits' => $this->max_admits,
+            'child_free_under_age' => $this->child_free_under_age,
             'allowed_participant_types' => $this->allowed_participant_types,
             'quantity_total' => $this->quantity_total,
             'quantity_sold' => $this->quantity_sold,

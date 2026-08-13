@@ -44,6 +44,7 @@ class Registration extends Model
         'participation_type',
         'adults_count',
         'children_count',
+        'infants_count',
         'status',
         'subtotal_paisa',
         'discount_paisa',

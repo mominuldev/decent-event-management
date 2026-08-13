@@ -9,7 +9,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { useToast } from '@/components/Toast';
 import { totalOf } from '@/lib/pagination';
 import * as attendeesApi from './api';
-import { PARTICIPANT_TYPES, type Attendee, type ParticipantType, type UpdateAttendeePayload } from './types';
+import { PARTICIPANT_TYPES, SSC_BATCH_YEARS, type Attendee, type ParticipantType, type UpdateAttendeePayload } from './types';
 
 function useDebounced<T>(value: T, delayMs = 350): T {
     const [debounced, setDebounced] = useState(value);
@@ -135,13 +135,17 @@ function AttendeeDetail({ ulid, onClose }: { ulid: string; onClose: () => void }
                         </div>
                         <div>
                             <Label htmlFor="ssc_batch_year">SSC batch year</Label>
-                            <Input
+                            <Select
                                 id="ssc_batch_year"
-                                type="number"
                                 value={form.ssc_batch_year ?? ''}
                                 disabled={!canEdit}
                                 onChange={(e) => setForm({ ...form, ssc_batch_year: e.target.value ? Number(e.target.value) : null })}
-                            />
+                            >
+                                <option value="">Not set</option>
+                                {SSC_BATCH_YEARS.map((year) => (
+                                    <option key={year} value={year}>{year}</option>
+                                ))}
+                            </Select>
                         </div>
                     </div>
 
@@ -291,15 +295,18 @@ export default function AttendeesPage() {
                             ))}
                         </Select>
                     </div>
-                    <div className="w-32">
+                    <div className="w-36">
                         <Label htmlFor="batch_year_filter">Batch year</Label>
-                        <Input
+                        <Select
                             id="batch_year_filter"
-                            type="number"
-                            placeholder="e.g. 2005"
                             value={batchYear}
                             onChange={(e) => { setBatchYear(e.target.value); setPageIndex(0); }}
-                        />
+                        >
+                            <option value="">All years</option>
+                            {SSC_BATCH_YEARS.map((year) => (
+                                <option key={year} value={year}>{year}</option>
+                            ))}
+                        </Select>
                     </div>
                 </div>
 

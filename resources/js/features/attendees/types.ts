@@ -38,6 +38,16 @@ export interface UpdateAttendeePayload {
     notes?: string | null;
 }
 
+export const SSC_BATCH_YEAR_MIN = 1971;
+/** Floored at 2026 so the list never shrinks below the range the event was launched with. */
+export const SSC_BATCH_YEAR_MAX = Math.max(2026, new Date().getFullYear());
+
+/** Newest batch first — most attendees are recent batches, so they sort to the top of the picker. */
+export const SSC_BATCH_YEARS: number[] = Array.from(
+    { length: SSC_BATCH_YEAR_MAX - SSC_BATCH_YEAR_MIN + 1 },
+    (_, i) => SSC_BATCH_YEAR_MAX - i,
+);
+
 export const PARTICIPANT_TYPES: { value: ParticipantType; label: string }[] = [
     { value: 'current_student', label: 'Current student' },
     { value: 'former_student', label: 'Former student' },

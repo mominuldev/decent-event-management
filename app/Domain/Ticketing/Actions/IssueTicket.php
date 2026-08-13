@@ -21,7 +21,11 @@ class IssueTicket
         return DB::transaction(function () use ($registration): Ticket {
             $attendee = $registration->attendee;
             $ticketType = $registration->ticketType;
-            $admitsTotal = $registration->adults_count + $registration->children_count;
+            // Free infants are excluded from the price but never from the
+            // gate: they walk in, so they must occupy an admit.
+            $admitsTotal = $registration->adults_count
+                + $registration->children_count
+                + $registration->infants_count;
 
             $batchYear = $attendee?->ssc_batch_year !== null ? (string) $attendee->ssc_batch_year : 'XXXX';
 
