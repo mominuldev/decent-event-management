@@ -41,6 +41,7 @@ class RegistrationResource extends JsonResource
             'ticket_type' => new TicketTypeResource($this->whenLoaded('ticketType')),
             'guests' => RegistrationGuestResource::collection($this->whenLoaded('guests')),
             'event_session' => new EventSessionResource($this->whenLoaded('eventSession')),
+            'tickets' => TicketResource::collection($this->whenLoaded('tickets')),
         ];
     }
 }

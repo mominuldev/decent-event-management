@@ -46,6 +46,18 @@ class RegistrationController extends Controller
                                         new OAT\Property(property: 'total_paisa', type: 'integer'),
                                         new OAT\Property(property: 'currency', type: 'string'),
                                         new OAT\Property(property: 'created_at', type: 'string', format: 'date-time', nullable: true),
+                                        new OAT\Property(
+                                            property: 'tickets',
+                                            type: 'array',
+                                            items: new OAT\Items(
+                                                properties: [
+                                                    new OAT\Property(property: 'ulid', type: 'string'),
+                                                    new OAT\Property(property: 'ticket_number', type: 'string'),
+                                                    new OAT\Property(property: 'status', type: 'string'),
+                                                ],
+                                                type: 'object'
+                                            )
+                                        ),
                                     ],
                                     type: 'object'
                                 )
@@ -61,7 +73,7 @@ class RegistrationController extends Controller
         /** @var Attendee $attendee */
         $attendee = $request->user();
 
-        $registrations = Registration::with(['guests', 'ticketType', 'eventSession'])
+        $registrations = Registration::with(['guests', 'ticketType', 'eventSession', 'tickets'])
             ->where('attendee_id', $attendee->id)
             ->get();
 
