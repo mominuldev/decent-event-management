@@ -3,11 +3,15 @@
 namespace App\Http\Controllers\Api\Public;
 
 use App\Domain\Registration\Actions\CreateRegistration;
+use App\Domain\Registration\Actions\UploadAttendeePhoto;
 use App\Domain\Registration\Models\Registration;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Public\StoreAttendeePhotoRequest;
 use App\Http\Requests\Public\StoreRegistrationRequest;
 use App\Http\Resources\RegistrationResource;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\UploadedFile;
+use InvalidArgumentException;
 use OpenApi\Attributes as OAT;
 
 #[OAT\Tag(name: 'Public')]
@@ -243,5 +247,99 @@ class RegistrationController extends Controller
         $registration->load(['attendee', 'guests', 'ticketType', 'payments']);
 
         return new RegistrationResource($registration);
+    }
+
+    #[OAT\Post(
+        path: '/public/registrations/{registration}/photo',
+        summary: "Attach the registering attendee's badge photo",
+        description: 'Accepted only while the registration is still pending_payment. The image is '.
+            'validated by magic bytes, re-encoded (stripping EXIF/GPS), downscaled and stored '.
+            'privately; the response carries a short-TTL signed URL, never a public path.',
+        tags: ['Public'],
+        requestBody: new OAT\RequestBody(
+            required: true,
+            content: new OAT\MediaType(
+                mediaType: 'multipart/form-data',
+                schema: new OAT\Schema(
+                    properties: [
+                        new OAT\Property(
+                            property: 'photo',
+                            type: 'string',
+                            format: 'binary',
+                            description: 'JPEG, PNG or WebP, up to 4 MB',
+                            required: ['photo']
+                        ),
+                    ]
+                )
+            )
+        ),
+        parameters: [
+            new OAT\Parameter(
+                name: 'registration',
+                description: 'Registration ULID',
+                in: 'path',
+                required: true,
+                schema: new OAT\Schema(type: 'string')
+            ),
+        ],
+        responses: [
+            new OAT\Response(
+                response: 201,
+                description: 'Photo stored and linked to the attendee',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(
+                                property: 'data',
+                                type: 'object',
+                                properties: [
+                                    new OAT\Property(property: 'ulid', type: 'string'),
+                                    new OAT\Property(property: 'url', type: 'string', description: 'Short-TTL signed URL'),
+                                    new OAT\Property(property: 'width', type: 'integer'),
+                                    new OAT\Property(property: 'height', type: 'integer'),
+                                ]
+                            ),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 422, description: 'Not an accepted image, or registration no longer accepting a photo'),
+            new OAT\Response(response: 404, description: 'Registration not found'),
+        ]
+    )]
+    public function photo(
+        StoreAttendeePhotoRequest $request,
+        Registration $registration,
+        UploadAttendeePhoto $action,
+    ): JsonResponse {
+        /** @var UploadedFile $file */
+        $file = $request->file('photo');
+
+        try {
+            $media = $action->execute(
+                $registration,
+                $file,
+                $request->ip(),
+                $request->header('X-Request-Id'),
+            );
+        } catch (InvalidArgumentException $e) {
+            // The Action's own rejections are caller error, not a 500 —
+            // reported in the API's uniform error shape.
+            return response()->json([
+                'code' => 'photo_rejected',
+                'message' => $e->getMessage(),
+                'request_id' => $request->header('X-Request-Id'),
+            ], 422);
+        }
+
+        return response()->json([
+            'data' => [
+                'ulid' => $media->ulid,
+                'url' => $media->temporarySignedUrl(),
+                'width' => $media->width,
+                'height' => $media->height,
+            ],
+        ], 201);
     }
 }

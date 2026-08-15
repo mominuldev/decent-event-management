@@ -31,6 +31,7 @@ class TicketType extends Model
         'currency',
         'base_admits',
         'max_admits',
+        'child_free_under_age',
         'allowed_participant_types',
         'quantity_total',
         'quantity_reserved',

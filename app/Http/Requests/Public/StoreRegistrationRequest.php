@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Public;
 
+use App\Domain\Payment\Gateways\PaymentGatewayResolver;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -47,6 +48,12 @@ class StoreRegistrationRequest extends FormRequest
             'tshirt_size' => ['required_if:tshirt_required,true', 'nullable', 'string', Rule::in(['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'])],
             'comments' => ['nullable', 'string', 'max:1000'],
             'special_notes' => ['nullable', 'string', 'max:1000'],
+            // Was never validated *and* never in the rules at all, so
+            // `validated()` stripped it and every registration silently fell
+            // back to the default gateway (part of D7). Allowlisted against
+            // the resolver's own list so a payment row can never carry a
+            // method nothing can build an adapter for.
+            'payment_method' => ['nullable', 'string', Rule::in(PaymentGatewayResolver::SUPPORTED_GATEWAYS)],
             'idempotency_key' => ['required', 'string', 'max:64'],
         ];
     }

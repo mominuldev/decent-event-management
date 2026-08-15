@@ -193,10 +193,29 @@ class SslCommerzClient implements PaymentGatewayInterface
     }
 
     /**
-     * SSLCommerz's documented signature scheme: `verify_key` names the
-     * fields (in order) that make up the signed string; each is joined as
-     * `field=value`, `store_passwd` (as its own md5) is appended last, and
-     * the whole string is md5'd again to produce `verify_sign`.
+     * SSLCommerz's signature scheme, matching their own PHP library's
+     * `SSLCOMMERZ_hash_verify()` (sslcommerz/SSLCommerz-PHP,
+     * lib/SslCommerzNotification.php):
+     *
+     *   1. `verify_key` names the fields that make up the signed string.
+     *   2. Collect those fields' values from the payload.
+     *   3. Add `store_passwd` => md5(store password) **into** that array.
+     *   4. `ksort()` the whole array — including store_passwd.
+     *   5. Join as `key=value&…`, drop the trailing `&`, md5 the result.
+     *
+     * Steps 3–4 are the subtle part and were previously wrong here:
+     * `store_passwd` was appended *last* and nothing was sorted, which
+     * produces a different digest for any payload carrying a field that
+     * sorts after "store_passwd" — `tran_id` and `value_a`, for two that
+     * SSLCommerz always sends. The effect was that every genuine IPN
+     * failed verification, so no gateway payment could ever reach
+     * `succeeded`. The v4 docs describe `verify_sign` only as a "Data
+     * Validation Key" and do not publish the algorithm, so their library
+     * is the reference.
+     *
+     * A field named in `verify_key` but absent from the payload is skipped
+     * rather than sent as an empty string, again matching the library's
+     * `isset()` guard — including it would change the digest.
      *
      * @param  array<string, mixed>  $payload
      */
@@ -208,18 +227,24 @@ class SslCommerzClient implements PaymentGatewayInterface
             return false;
         }
 
-        $fields = array_filter(array_map('trim', explode(',', $verifyKey)));
+        $signed = [];
 
-        $pairs = [];
-        foreach ($fields as $field) {
-            $pairs[] = $field.'='.(string) ($payload[$field] ?? '');
+        foreach (array_filter(array_map('trim', explode(',', $verifyKey))) as $field) {
+            if (array_key_exists($field, $payload)) {
+                $signed[$field] = (string) $payload[$field];
+            }
         }
 
-        $pairs[] = 'store_passwd='.md5($storePassword);
+        $signed['store_passwd'] = md5($storePassword);
 
-        $expected = md5(implode('&', $pairs));
+        ksort($signed);
 
-        return hash_equals($expected, $verifySign);
+        $pairs = [];
+        foreach ($signed as $key => $value) {
+            $pairs[] = $key.'='.$value;
+        }
+
+        return hash_equals(md5(implode('&', $pairs)), $verifySign);
     }
 
     private function normalizeIpnStatus(string $sslStatus): string
@@ -262,7 +287,7 @@ class SslCommerzClient implements PaymentGatewayInterface
      */
     private function queryByTranId(string $tranId): ?array
     {
-        $response = Http::get($this->validationUrl(), [
+        $response = Http::get($this->transactionValidationUrl(), [
             'tran_id' => $tranId,
             'store_id' => $this->storeId(),
             'store_passwd' => $this->storePassword(),
@@ -310,9 +335,27 @@ class SslCommerzClient implements PaymentGatewayInterface
         return rtrim((string) config('services.sslcommerz.base_url'), '/').'/gwprocess/v4/api.php';
     }
 
+    /**
+     * val_id-only: confirmed against the real sandbox WSDL, this endpoint
+     * has no `tran_id` parameter and returns the SOAP service description
+     * page (not JSON) if queried by tran_id — see transactionValidationUrl().
+     */
     private function validationUrl(): string
     {
         return rtrim((string) config('services.sslcommerz.validation_base_url'), '/').'/validator/api/validationserverAPI.php';
+    }
+
+    /**
+     * tran_id-based order lookup — the endpoint queryByTranId() must use.
+     * Verified live against the sandbox: validationUrl() silently fails
+     * every tran_id query (no `no_of_trans_found` in its response, always
+     * treated as "not found"), which is why a payment with no IPN — every
+     * payment in local dev, since SSLCommerz can't reach localhost — never
+     * left "pending" no matter how many times it was re-verified.
+     */
+    private function transactionValidationUrl(): string
+    {
+        return rtrim((string) config('services.sslcommerz.validation_base_url'), '/').'/validator/api/merchantTransIDvalidationAPI.php';
     }
 
     private function refundUrl(): string

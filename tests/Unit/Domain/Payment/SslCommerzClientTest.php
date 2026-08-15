@@ -30,6 +30,12 @@ class SslCommerzClientTest extends TestCase
 
         config(['services.sslcommerz.store_password' => 'sandbox-store-password']);
 
+        // Nothing in this suite may reach the real sandbox. Without this a
+        // fake whose URL pattern stops matching (as happened when the
+        // session host moved from sandbox-gw to sandbox) silently makes a
+        // live third-party call instead of failing.
+        Http::preventStrayRequests();
+
         $this->gateway = new SslCommerzClient;
 
         $attendee = Attendee::factory()->create();
@@ -47,7 +53,7 @@ class SslCommerzClientTest extends TestCase
     public function test_create_intent_returns_the_gateway_hosted_page_url(): void
     {
         Http::fake([
-            'sandbox-gw.sslcommerz.com/*' => Http::response([
+            '*/gwprocess/v4/api.php*' => Http::response([
                 'status' => 'SUCCESS',
                 'sessionkey' => 'sesh123',
                 'GatewayPageURL' => 'https://sandbox.sslcommerz.com/EasyCheckOut/testcde',
@@ -71,7 +77,7 @@ class SslCommerzClientTest extends TestCase
     public function test_create_intent_throws_when_gateway_reports_failure(): void
     {
         Http::fake([
-            'sandbox-gw.sslcommerz.com/*' => Http::response([
+            '*/gwprocess/v4/api.php*' => Http::response([
                 'status' => 'FAILED',
                 'failedreason' => 'Invalid store credential',
             ]),
@@ -98,7 +104,7 @@ class SslCommerzClientTest extends TestCase
     public function test_verify_returns_pending_when_no_ipn_and_no_transaction_found(): void
     {
         Http::fake([
-            '*/validationserverAPI.php*' => Http::response(['no_of_trans_found' => 0]),
+            '*/merchantTransIDvalidationAPI.php*' => Http::response(['no_of_trans_found' => 0]),
         ]);
 
         $result = $this->gateway->verify($this->payment);
@@ -109,7 +115,7 @@ class SslCommerzClientTest extends TestCase
     public function test_verify_falls_back_to_tran_id_lookup_and_recovers_a_missing_ipn(): void
     {
         Http::fake([
-            '*/validationserverAPI.php*' => Http::response([
+            '*/merchantTransIDvalidationAPI.php*' => Http::response([
                 'no_of_trans_found' => 1,
                 'element' => [
                     ['status' => 'VALID', 'amount' => '500.00', 'bank_tran_id' => 'BANKTXN1'],
@@ -257,14 +263,108 @@ class SslCommerzClientTest extends TestCase
     /**
      * @param  array<string, mixed>  $payload
      */
+    /**
+     * A fixed vector computed by hand from SSLCommerz's published library
+     * algorithm. If someone "simplifies" either the adapter or the helper
+     * above, this is the assertion that fails.
+     */
+    public function test_signature_matches_sslcommerz_reference_digest(): void
+    {
+        $payload = [
+            'tran_id' => 'PAY-SSLTEST01',
+            'amount' => '500.00',
+            'status' => 'VALID',
+            'currency_type' => 'BDT',
+        ];
+
+        $this->assertSame(
+            '311e00696c7c8b0d50eaea20e55c4b9b',
+            $this->sign($payload, 'amount,currency_type,status,tran_id', 'sandbox-store-password'),
+        );
+    }
+
+    /**
+     * The exact regression: `store_passwd` appended last with no ksort.
+     * `tran_id` sorts after `store_passwd`, so the two constructions differ
+     * — and this one used to be what the adapter computed, which is why no
+     * genuine IPN could ever be accepted.
+     */
+    public function test_webhook_rejects_a_signature_built_the_unsorted_way(): void
+    {
+        $payload = [
+            'tran_id' => $this->payment->payment_number,
+            'amount' => '500.00',
+            'status' => 'VALID',
+            'verify_key' => 'amount,status,tran_id',
+        ];
+
+        $pairs = [];
+        foreach (explode(',', $payload['verify_key']) as $field) {
+            $pairs[] = $field.'='.$payload[$field];
+        }
+        $pairs[] = 'store_passwd='.md5('sandbox-store-password');
+
+        $payload['verify_sign'] = md5(implode('&', $pairs));
+
+        $result = $this->gateway->parseWebhook(Request::create('/webhooks/sslcommerz', 'POST', $payload));
+
+        $this->assertFalse($result->signatureValid);
+    }
+
+    /**
+     * A field named in verify_key but absent from the payload is skipped,
+     * not signed as an empty string — matching the library's isset() guard.
+     */
+    public function test_webhook_accepts_a_signature_with_a_field_missing_from_the_payload(): void
+    {
+        $payload = [
+            'tran_id' => $this->payment->payment_number,
+            'amount' => '500.00',
+            'status' => 'VALID',
+            'verify_key' => 'amount,status,tran_id,card_type',
+        ];
+
+        $payload['verify_sign'] = $this->sign($payload, $payload['verify_key'], 'sandbox-store-password');
+
+        $result = $this->gateway->parseWebhook(Request::create('/webhooks/sslcommerz', 'POST', $payload));
+
+        $this->assertTrue($result->signatureValid);
+    }
+
+    /**
+     * SSLCommerz's own algorithm, transcribed from their PHP library's
+     * `SSLCOMMERZ_hash_verify()`: collect the `verify_key` fields, add
+     * `store_passwd` as its md5 *into* the array, ksort the lot, join with
+     * `&`, md5.
+     *
+     * This helper previously mirrored the adapter's own (wrong)
+     * construction — store_passwd appended last, nothing sorted — so the
+     * signature tests were asserting the implementation against itself and
+     * passed while no genuine IPN could ever verify. That is the docs/08
+     * R12 failure mode; `test_signature_matches_sslcommerz_reference_digest`
+     * below pins the algorithm to a fixed digest so this helper cannot
+     * silently drift back.
+     *
+     * @param  array<string, mixed>  $payload
+     */
     private function sign(array $payload, string $verifyKey, string $storePassword): string
     {
-        $pairs = [];
+        $signed = [];
+
         foreach (explode(',', $verifyKey) as $field) {
-            $pairs[] = $field.'='.(string) ($payload[$field] ?? '');
+            if (array_key_exists($field, $payload)) {
+                $signed[$field] = (string) $payload[$field];
+            }
         }
 
-        $pairs[] = 'store_passwd='.md5($storePassword);
+        $signed['store_passwd'] = md5($storePassword);
+
+        ksort($signed);
+
+        $pairs = [];
+        foreach ($signed as $key => $value) {
+            $pairs[] = $key.'='.$value;
+        }
 
         return md5(implode('&', $pairs));
     }

@@ -15,7 +15,14 @@ use InvalidArgumentException;
  */
 class PaymentGatewayResolver
 {
-    private const array SUPPORTED_GATEWAYS = ['bkash', 'nagad', 'rocket', 'sslcommerz'];
+    /**
+     * Public so request validation can allowlist exactly what the resolver
+     * can build — the two must not drift into a state where a payment row
+     * is created with a method nothing can resolve.
+     *
+     * @var list<string>
+     */
+    public const array SUPPORTED_GATEWAYS = ['bkash', 'nagad', 'rocket', 'sslcommerz'];
 
     public function __construct(private readonly Application $app) {}
 

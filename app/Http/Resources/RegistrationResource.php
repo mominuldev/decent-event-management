@@ -25,6 +25,7 @@ class RegistrationResource extends JsonResource
             'participation_type' => $this->participation_type,
             'adults_count' => $this->adults_count,
             'children_count' => $this->children_count,
+            'infants_count' => $this->infants_count,
             'subtotal_paisa' => $this->subtotal_paisa,
             'discount_paisa' => $this->discount_paisa,
             'total_paisa' => $this->total_paisa,

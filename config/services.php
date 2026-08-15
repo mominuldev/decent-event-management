@@ -42,17 +42,34 @@ return [
         'webhook_secret' => env('FAKE_GATEWAY_WEBHOOK_SECRET', 'fake-gateway-webhook-secret'),
     ],
 
+    // Which gateway a registration's payment intent is opened against when
+    // the caller doesn't name one. `sslcommerz` is the only adapter backed
+    // by a real implementation — bkash/nagad/rocket still resolve to
+    // FakeGateway pending their merchant applications (Phase 4B), so
+    // defaulting to one of those would silently take the public checkout
+    // off the real money path.
+    'payment' => [
+        'default_method' => env('PAYMENT_DEFAULT_METHOD', 'sslcommerz'),
+    ],
+
     // Phase 4A — SslCommerzClient. Sandbox credentials are self-service
-    // (developer.sslcommerz.com), no merchant onboarding required; the
-    // default sandbox demo store is `testbox` / `qwerty1234`. Swap the
-    // three URLs to the live hosts only once a real merchant account
-    // exists (Phase 4B) — never flip `sandbox` without also swapping the
-    // credentials, or a real amount could hit the demo store.
+    // (developer.sslcommerz.com), no merchant onboarding required. The
+    // shared demo store is `testbox` / `qwerty` — verified against the live
+    // sandbox on 2026-08-14, which is also how the previously-documented
+    // `qwerty1234` was found to be wrong ("Store Password credential
+    // mismatch"). Swap the URLs to the live hosts only once a real merchant
+    // account exists (Phase 4B) — never flip `sandbox` without also
+    // swapping the credentials, or a real amount could hit the demo store.
+    //
+    // Both `sandbox.sslcommerz.com` and the older `sandbox-gw.sslcommerz.com`
+    // answer the session endpoint; the former is what the v4 docs publish
+    // and returns the current EasyCheckOut URL, so it is the default for
+    // session, validation and refund alike.
     'sslcommerz' => [
         'store_id' => env('SSLCOMMERZ_STORE_ID', 'testbox'),
-        'store_password' => env('SSLCOMMERZ_STORE_PASSWORD'),
+        'store_password' => env('SSLCOMMERZ_STORE_PASSWORD', 'qwerty'),
         'sandbox' => env('SSLCOMMERZ_SANDBOX', true),
-        'base_url' => env('SSLCOMMERZ_BASE_URL', 'https://sandbox-gw.sslcommerz.com'),
+        'base_url' => env('SSLCOMMERZ_BASE_URL', 'https://sandbox.sslcommerz.com'),
         'validation_base_url' => env('SSLCOMMERZ_VALIDATION_BASE_URL', 'https://sandbox.sslcommerz.com'),
 
         // Source-IP allowlist for the IPN (docs/06 §6.6), on top of
