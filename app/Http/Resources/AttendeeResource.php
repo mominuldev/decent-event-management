@@ -41,7 +41,10 @@ class AttendeeResource extends JsonResource
             'emergency_contact_phone' => $this->emergency_contact_phone,
             'notes' => $this->notes,
             'is_verified' => $this->is_verified,
-            'profile_photo_url' => $this->whenLoaded('profilePhoto', fn () => $this->profilePhoto?->path),
+            // Short-TTL signed URL (docs/06 §6.4), not the raw private-disk
+            // path — `profilePhoto` lazy-loads here if a caller hasn't
+            // eager-loaded it, which is fine for a single-resource response.
+            'profile_photo_url' => $this->profilePhoto?->temporarySignedUrl(),
             'created_at' => $this->created_at?->toISOString(),
         ];
     }

@@ -5504,10 +5504,36 @@
                                                         "typed_value": {
                                                             "description": "Value cast to its declared type"
                                                         },
+                                                        "type": {
+                                                            "description": "Declared value type",
+                                                            "type": "string",
+                                                            "enum": [
+                                                                "string",
+                                                                "int",
+                                                                "money",
+                                                                "bool",
+                                                                "datetime",
+                                                                "json"
+                                                            ]
+                                                        },
+                                                        "is_public": {
+                                                            "description": "Whether this setting is exposed on the public event endpoint",
+                                                            "type": "boolean"
+                                                        },
                                                         "label": {
                                                             "type": "string"
                                                         },
                                                         "description": {
+                                                            "type": "string",
+                                                            "nullable": true
+                                                        },
+                                                        "updated_at": {
+                                                            "type": "string",
+                                                            "format": "date-time",
+                                                            "nullable": true
+                                                        },
+                                                        "updated_by": {
+                                                            "description": "Name of the staff member who last changed it",
                                                             "type": "string",
                                                             "nullable": true
                                                         }
@@ -5589,10 +5615,36 @@
                                         "typed_value": {
                                             "description": "Value cast to its declared type"
                                         },
+                                        "type": {
+                                            "description": "Declared value type",
+                                            "type": "string",
+                                            "enum": [
+                                                "string",
+                                                "int",
+                                                "money",
+                                                "bool",
+                                                "datetime",
+                                                "json"
+                                            ]
+                                        },
+                                        "is_public": {
+                                            "description": "Whether this setting is exposed on the public event endpoint",
+                                            "type": "boolean"
+                                        },
                                         "label": {
                                             "type": "string"
                                         },
                                         "description": {
+                                            "type": "string",
+                                            "nullable": true
+                                        },
+                                        "updated_at": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "nullable": true
+                                        },
+                                        "updated_by": {
+                                            "description": "Name of the staff member who last changed it",
                                             "type": "string",
                                             "nullable": true
                                         }
@@ -7811,6 +7863,93 @@
                 ]
             }
         },
+        "/attendee/me/photo": {
+            "post": {
+                "tags": [
+                    "Attendee Self-Service"
+                ],
+                "summary": "Change the authenticated attendee's own account photo",
+                "description": "The image is validated by magic bytes, re-encoded (stripping EXIF/GPS), downscaled and stored privately; the response carries a short-TTL signed URL, never a public path. Replaces any existing photo.",
+                "operationId": "64805d856971dd422f59857b238e548b",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "properties": {
+                                    "photo": {
+                                        "description": "JPEG, PNG or WebP, up to 4 MB",
+                                        "required": [
+                                            "photo"
+                                        ],
+                                        "type": "string",
+                                        "format": "binary"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Photo stored and linked to the attendee",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "properties": {
+                                                "ulid": {
+                                                    "type": "string"
+                                                },
+                                                "url": {
+                                                    "description": "Short-TTL signed URL",
+                                                    "type": "string"
+                                                },
+                                                "width": {
+                                                    "type": "integer"
+                                                },
+                                                "height": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Not an accepted image"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Attendee Self-Service"
+                ],
+                "summary": "Remove the authenticated attendee's own account photo",
+                "operationId": "15070c24be16c104d6d82687f69cb243",
+                "responses": {
+                    "204": {
+                        "description": "Photo removed (or there was none)"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/attendee/registrations": {
             "get": {
                 "tags": [
@@ -9094,11 +9233,31 @@
                                                     "typed_value": {
                                                         "description": "Value cast to its configured type (string, integer, boolean, etc.)"
                                                     },
+                                                    "type": {
+                                                        "description": "Declared value type",
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "string",
+                                                            "int",
+                                                            "money",
+                                                            "bool",
+                                                            "datetime",
+                                                            "json"
+                                                        ]
+                                                    },
+                                                    "is_public": {
+                                                        "type": "boolean"
+                                                    },
                                                     "label": {
                                                         "type": "string"
                                                     },
                                                     "description": {
                                                         "type": "string"
+                                                    },
+                                                    "updated_at": {
+                                                        "type": "string",
+                                                        "format": "date-time",
+                                                        "nullable": true
                                                     }
                                                 },
                                                 "type": "object"
