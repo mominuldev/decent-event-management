@@ -104,7 +104,7 @@ class SslCommerzClientTest extends TestCase
     public function test_verify_returns_pending_when_no_ipn_and_no_transaction_found(): void
     {
         Http::fake([
-            '*/validationserverAPI.php*' => Http::response(['no_of_trans_found' => 0]),
+            '*/merchantTransIDvalidationAPI.php*' => Http::response(['no_of_trans_found' => 0]),
         ]);
 
         $result = $this->gateway->verify($this->payment);
@@ -115,7 +115,7 @@ class SslCommerzClientTest extends TestCase
     public function test_verify_falls_back_to_tran_id_lookup_and_recovers_a_missing_ipn(): void
     {
         Http::fake([
-            '*/validationserverAPI.php*' => Http::response([
+            '*/merchantTransIDvalidationAPI.php*' => Http::response([
                 'no_of_trans_found' => 1,
                 'element' => [
                     ['status' => 'VALID', 'amount' => '500.00', 'bank_tran_id' => 'BANKTXN1'],

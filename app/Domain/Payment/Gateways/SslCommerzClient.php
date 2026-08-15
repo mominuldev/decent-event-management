@@ -287,7 +287,7 @@ class SslCommerzClient implements PaymentGatewayInterface
      */
     private function queryByTranId(string $tranId): ?array
     {
-        $response = Http::get($this->validationUrl(), [
+        $response = Http::get($this->transactionValidationUrl(), [
             'tran_id' => $tranId,
             'store_id' => $this->storeId(),
             'store_passwd' => $this->storePassword(),
@@ -335,9 +335,27 @@ class SslCommerzClient implements PaymentGatewayInterface
         return rtrim((string) config('services.sslcommerz.base_url'), '/').'/gwprocess/v4/api.php';
     }
 
+    /**
+     * val_id-only: confirmed against the real sandbox WSDL, this endpoint
+     * has no `tran_id` parameter and returns the SOAP service description
+     * page (not JSON) if queried by tran_id — see transactionValidationUrl().
+     */
     private function validationUrl(): string
     {
         return rtrim((string) config('services.sslcommerz.validation_base_url'), '/').'/validator/api/validationserverAPI.php';
+    }
+
+    /**
+     * tran_id-based order lookup — the endpoint queryByTranId() must use.
+     * Verified live against the sandbox: validationUrl() silently fails
+     * every tran_id query (no `no_of_trans_found` in its response, always
+     * treated as "not found"), which is why a payment with no IPN — every
+     * payment in local dev, since SSLCommerz can't reach localhost — never
+     * left "pending" no matter how many times it was re-verified.
+     */
+    private function transactionValidationUrl(): string
+    {
+        return rtrim((string) config('services.sslcommerz.validation_base_url'), '/').'/validator/api/merchantTransIDvalidationAPI.php';
     }
 
     private function refundUrl(): string
