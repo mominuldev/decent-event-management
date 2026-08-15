@@ -119,6 +119,10 @@ class LoadTestSeeder extends Seeder
                 $ticketTypeId = $ticketTypeIds[array_rand($ticketTypeIds)];
                 $adults = fake()->numberBetween(1, 2);
                 $children = fake()->numberBetween(0, 2);
+                // A minority of parties carry a free infant — priced at zero
+                // but still admitted, so volume data exercises the same
+                // adults + children + infants admit maths the gate runs.
+                $infants = fake()->boolean(15) ? 1 : 0;
                 $subtotal = fake()->numberBetween(50000, 500000);
                 $regNumber = 'REG-100Y-'.str_pad((string) ($chunkStart + $i + 1), 6, '0', STR_PAD_LEFT);
 
@@ -127,9 +131,10 @@ class LoadTestSeeder extends Seeder
                     'registration_number' => $regNumber,
                     'attendee_id' => $attendeeId,
                     'ticket_type_id' => $ticketTypeId,
-                    'participation_type' => $children > 0 ? 'family' : ($adults > 1 ? 'couple' : 'single'),
+                    'participation_type' => $children + $infants > 0 ? 'family' : ($adults > 1 ? 'couple' : 'single'),
                     'adults_count' => $adults,
                     'children_count' => $children,
+                    'infants_count' => $infants,
                     'status' => $status,
                     'subtotal_paisa' => $subtotal,
                     'discount_paisa' => 0,
@@ -148,7 +153,7 @@ class LoadTestSeeder extends Seeder
             // Re-select the just-inserted rows to get real IDs for FK rows.
             $inserted = DB::table('registrations')
                 ->whereIn('registration_number', array_column($registrationRows, 'registration_number'))
-                ->get(['id', 'registration_number', 'attendee_id', 'ticket_type_id', 'status', 'total_paisa']);
+                ->get(['id', 'registration_number', 'attendee_id', 'ticket_type_id', 'status', 'total_paisa', 'adults_count', 'children_count', 'infants_count']);
 
             foreach ($inserted as $registration) {
                 if ($registration->status !== 'confirmed') {
@@ -183,7 +188,13 @@ class LoadTestSeeder extends Seeder
                     'attendee_id' => $registration->attendee_id,
                     'ticket_type_id' => $registration->ticket_type_id,
                     'status' => 'active',
-                    'admits_total' => fake()->numberBetween(1, 4),
+                    // Derived from the party rather than a random number, so
+                    // it matches IssueTicket — capacity and admission
+                    // benchmarks measured against random admits were
+                    // measuring the wrong distribution.
+                    'admits_total' => (int) $registration->adults_count
+                        + (int) $registration->children_count
+                        + (int) $registration->infants_count,
                     'admitted_count' => 0,
                     'price_paid_paisa' => $registration->total_paisa,
                     'currency' => 'BDT',

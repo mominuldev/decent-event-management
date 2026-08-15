@@ -32,8 +32,11 @@ class EventSettingController extends Controller
                                         new OAT\Property(property: 'group', type: 'string'),
                                         new OAT\Property(property: 'value', type: 'string', description: 'Raw stored value'),
                                         new OAT\Property(property: 'typed_value', description: 'Value cast to its configured type (string, integer, boolean, etc.)'),
+                                        new OAT\Property(property: 'type', description: 'Declared value type', type: 'string', enum: ['string', 'int', 'money', 'bool', 'datetime', 'json']),
+                                        new OAT\Property(property: 'is_public', type: 'boolean'),
                                         new OAT\Property(property: 'label', type: 'string'),
                                         new OAT\Property(property: 'description', type: 'string'),
+                                        new OAT\Property(property: 'updated_at', type: 'string', format: 'date-time', nullable: true),
                                     ],
                                     type: 'object'
                                 )

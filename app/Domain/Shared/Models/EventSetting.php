@@ -59,4 +59,30 @@ class EventSetting extends Model
             default => $this->value,
         };
     }
+
+    /**
+     * The inverse of {@see typedValue()} — narrows a typed input back to the
+     * one canonical string form this row stores, so `true`, `"1"` and `1` all
+     * land as `'1'` and a datetime is always persisted in the app timezone
+     * regardless of the offset the client sent it in.
+     */
+    public function castForStorage(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        return match ($this->type) {
+            'int', 'money' => (string) (int) $value,
+            'bool' => filter_var($value, FILTER_VALIDATE_BOOLEAN) ? '1' : '0',
+            'json' => is_string($value) ? $value : (string) json_encode($value),
+            // Carbon::parse keeps whatever offset the caller sent, so this must
+            // shift into the app timezone explicitly — otherwise a cutoff saved
+            // from a +06:00 browser stores six hours later than it means.
+            'datetime' => Carbon::parse((string) $value)
+                ->setTimezone((string) config('app.timezone'))
+                ->toDateTimeString(),
+            default => (string) $value,
+        };
+    }
 }

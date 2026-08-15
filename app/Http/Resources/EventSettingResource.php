@@ -23,8 +23,18 @@ class EventSettingResource extends JsonResource
             'group' => $this->group,
             'value' => $this->value,
             'typed_value' => $this->typedValue(),
+            // The declared type, so a client can render the right editor
+            // instead of guessing from the JSON type of `typed_value` —
+            // a `datetime` and a `string` are indistinguishable there.
+            'type' => $this->type,
+            'is_public' => $this->is_public,
             'label' => $this->label,
             'description' => $this->description,
+            'updated_at' => $this->updated_at?->toIso8601String(),
+            // Only present when the caller eager-loaded the relation, which
+            // the public endpoint deliberately does not — a staff member's
+            // name must never reach an unauthenticated response.
+            'updated_by' => $this->whenLoaded('updatedBy', fn () => $this->updatedBy?->name),
         ];
     }
 }

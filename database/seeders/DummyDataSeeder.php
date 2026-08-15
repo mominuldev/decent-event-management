@@ -8,6 +8,7 @@ use App\Domain\CheckIn\Models\Gate;
 use App\Domain\Payment\Models\Payment;
 use App\Domain\Registration\Models\Attendee;
 use App\Domain\Registration\Models\Registration;
+use App\Domain\Registration\Models\RegistrationGuest;
 use App\Domain\Shared\Models\User;
 use App\Domain\Ticketing\Models\Ticket;
 use App\Domain\Ticketing\Models\TicketType;
@@ -73,9 +74,8 @@ class DummyDataSeeder extends Seeder
                 'is_verified' => true,
             ]);
 
-            $adults = fake()->numberBetween(1, 2);
-            $children = fake()->numberBetween(0, 2);
-            $subtotal = $ticketType->base_price_paisa + ($children * 50000);
+            $party = $this->buildParty($ticketType);
+            $subtotal = $party['subtotal_paisa'];
             $regNum = 'REG-100Y-'.str_pad((string) $i, 6, '0', STR_PAD_LEFT);
 
             $registration = Registration::create([
@@ -83,9 +83,10 @@ class DummyDataSeeder extends Seeder
                 'registration_number' => $regNum,
                 'attendee_id' => $attendee->id,
                 'ticket_type_id' => $ticketType->id,
-                'participation_type' => $children > 0 ? 'family' : ($adults > 1 ? 'couple' : 'single'),
-                'adults_count' => $adults,
-                'children_count' => $children,
+                'participation_type' => $party['participation_type'],
+                'adults_count' => $party['adults'],
+                'children_count' => $party['children'],
+                'infants_count' => $party['infants'],
                 'status' => 'confirmed',
                 'subtotal_paisa' => $subtotal,
                 'discount_paisa' => 0,
@@ -95,6 +96,8 @@ class DummyDataSeeder extends Seeder
                 'submitted_at' => now()->subDays(fake()->numberBetween(2, 30)),
                 'confirmed_at' => now()->subDays(fake()->numberBetween(1, 29)),
             ]);
+
+            $this->seedGuests($registration, $party);
 
             // Create Succeeded Payment
             $payment = Payment::create([
@@ -123,7 +126,12 @@ class DummyDataSeeder extends Seeder
                 'attendee_id' => $attendee->id,
                 'ticket_type_id' => $ticketType->id,
                 'status' => 'active',
-                'admits_total' => $ticketType->base_admits,
+                // Must match IssueTicket: every head that walks through the
+                // gate, free infants included. This used to be the ticket
+                // type's `base_admits` (nearly always 1), so a demo family of
+                // four carried a one-admit ticket and the check-in screens
+                // never showed a realistic partial admission.
+                'admits_total' => $party['adults'] + $party['children'] + $party['infants'],
                 'admitted_count' => 0,
                 'price_paid_paisa' => $subtotal,
                 'currency' => 'BDT',
@@ -176,6 +184,7 @@ class DummyDataSeeder extends Seeder
                 'participation_type' => 'single',
                 'adults_count' => 1,
                 'children_count' => 0,
+                'infants_count' => 0,
                 'status' => 'pending_payment',
                 'subtotal_paisa' => $subtotal,
                 'discount_paisa' => 0,
@@ -215,6 +224,7 @@ class DummyDataSeeder extends Seeder
                 'participation_type' => 'single',
                 'adults_count' => 1,
                 'children_count' => 0,
+                'infants_count' => 0,
                 'status' => 'cancelled',
                 'subtotal_paisa' => $ticketType->base_price_paisa,
                 'discount_paisa' => 0,
@@ -234,6 +244,95 @@ class DummyDataSeeder extends Seeder
         ');
 
         $this->command->info('Dummy data seeding completed successfully!');
+    }
+
+    /**
+     * Builds one party and prices it the way `CreateRegistration` does, so
+     * demo rows are internally consistent: the tiered ticket-type columns
+     * decide the price (not a hardcoded per-child rate), a child young enough
+     * for the type's `child_free_under_age` becomes a free infant, and the
+     * party never exceeds `max_admits`.
+     *
+     * @return array{adults: int, children: int, infants: int, subtotal_paisa: int, participation_type: string}
+     */
+    private function buildParty(TicketType $ticketType): array
+    {
+        $baseAdmits = (int) ($ticketType->base_admits ?: 1);
+        $maxAdmits = (int) ($ticketType->max_admits ?: $baseAdmits);
+
+        $adults = min(fake()->numberBetween(1, 2), $maxAdmits);
+        $children = min(fake()->numberBetween(0, 2), max(0, $maxAdmits - $adults));
+
+        // Only a ticket type that actually carries a free-infant rule can
+        // produce one — every type predating the centennial ticket has
+        // `child_free_under_age` NULL and prices exactly as it always did.
+        $infants = 0;
+        if ($ticketType->child_free_under_age !== null && $adults + $children < $maxAdmits && fake()->boolean(30)) {
+            $infants = 1;
+        }
+
+        $extraAdults = max(0, $adults - $baseAdmits);
+
+        $subtotal = (int) $ticketType->base_price_paisa
+            + ($extraAdults * (int) $ticketType->additional_adult_price_paisa)
+            + ($children * (int) $ticketType->additional_child_price_paisa);
+
+        return [
+            'adults' => $adults,
+            'children' => $children,
+            'infants' => $infants,
+            'subtotal_paisa' => $subtotal,
+            'participation_type' => $children + $infants > 0 ? 'family' : ($adults > 1 ? 'couple' : 'single'),
+        ];
+    }
+
+    /**
+     * The registrant is the attendee, so guests are only the *additional*
+     * heads. An infant needs a real age below the ticket type's threshold —
+     * that age is what makes the stored `infants_count` defensible rather
+     * than a number nothing backs up.
+     *
+     * @param  array{adults: int, children: int, infants: int, subtotal_paisa: int, participation_type: string}  $party
+     */
+    private function seedGuests(Registration $registration, array $party): void
+    {
+        $sort = 0;
+
+        for ($n = 1; $n < $party['adults']; $n++) {
+            RegistrationGuest::create([
+                'registration_id' => $registration->id,
+                'full_name' => fake()->name(),
+                'relation' => 'spouse',
+                'age_group' => 'adult',
+                'age' => fake()->numberBetween(25, 65),
+                'gender' => fake()->randomElement(['male', 'female']),
+                'sort_order' => $sort++,
+            ]);
+        }
+
+        for ($n = 0; $n < $party['children']; $n++) {
+            RegistrationGuest::create([
+                'registration_id' => $registration->id,
+                'full_name' => fake()->firstName(),
+                'relation' => 'child',
+                'age_group' => 'child',
+                'age' => fake()->numberBetween(4, 15),
+                'gender' => fake()->randomElement(['male', 'female']),
+                'sort_order' => $sort++,
+            ]);
+        }
+
+        for ($n = 0; $n < $party['infants']; $n++) {
+            RegistrationGuest::create([
+                'registration_id' => $registration->id,
+                'full_name' => fake()->firstName(),
+                'relation' => 'child',
+                'age_group' => 'child',
+                'age' => max(0, (int) $registration->ticketType?->child_free_under_age - 1),
+                'gender' => fake()->randomElement(['male', 'female']),
+                'sort_order' => $sort++,
+            ]);
+        }
     }
 
     private function seedStaffUsers(): void
