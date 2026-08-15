@@ -42,8 +42,12 @@ class SettingController extends Controller
                                             new OAT\Property(property: 'group', type: 'string'),
                                             new OAT\Property(property: 'value', type: 'string', nullable: true),
                                             new OAT\Property(property: 'typed_value', description: 'Value cast to its declared type'),
+                                            new OAT\Property(property: 'type', description: 'Declared value type', type: 'string', enum: ['string', 'int', 'money', 'bool', 'datetime', 'json']),
+                                            new OAT\Property(property: 'is_public', description: 'Whether this setting is exposed on the public event endpoint', type: 'boolean'),
                                             new OAT\Property(property: 'label', type: 'string'),
                                             new OAT\Property(property: 'description', type: 'string', nullable: true),
+                                            new OAT\Property(property: 'updated_at', type: 'string', format: 'date-time', nullable: true),
+                                            new OAT\Property(property: 'updated_by', description: 'Name of the staff member who last changed it', type: 'string', nullable: true),
                                         ],
                                         type: 'object'
                                     )
@@ -60,7 +64,7 @@ class SettingController extends Controller
     {
         abort_unless((bool) $request->user()?->can('settings.view'), Response::HTTP_FORBIDDEN);
 
-        $settings = EventSetting::all()->groupBy('group');
+        $settings = EventSetting::with('updatedBy')->get()->groupBy('group');
         $data = $settings->map(function (Collection $group) {
             return EventSettingResource::collection($group);
         });
@@ -109,8 +113,12 @@ class SettingController extends Controller
                             new OAT\Property(property: 'group', type: 'string'),
                             new OAT\Property(property: 'value', type: 'string', nullable: true),
                             new OAT\Property(property: 'typed_value', description: 'Value cast to its declared type'),
+                            new OAT\Property(property: 'type', description: 'Declared value type', type: 'string', enum: ['string', 'int', 'money', 'bool', 'datetime', 'json']),
+                            new OAT\Property(property: 'is_public', description: 'Whether this setting is exposed on the public event endpoint', type: 'boolean'),
                             new OAT\Property(property: 'label', type: 'string'),
                             new OAT\Property(property: 'description', type: 'string', nullable: true),
+                            new OAT\Property(property: 'updated_at', type: 'string', format: 'date-time', nullable: true),
+                            new OAT\Property(property: 'updated_by', description: 'Name of the staff member who last changed it', type: 'string', nullable: true),
                         ]
                     )
                 )
@@ -127,7 +135,7 @@ class SettingController extends Controller
         $oldData = $setting->toArray();
 
         $setting->update([
-            'value' => $request->input('value'),
+            'value' => $setting->castForStorage($request->input('value')),
             'updated_by_user_id' => $request->user()?->id,
         ]);
 
@@ -146,6 +154,6 @@ class SettingController extends Controller
             'request_id' => $requestId,
         ]);
 
-        return new EventSettingResource($setting->refresh());
+        return new EventSettingResource($setting->refresh()->load('updatedBy'));
     }
 }

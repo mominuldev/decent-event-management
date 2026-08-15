@@ -1,135 +1,218 @@
-import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil } from 'lucide-react';
-import { Badge, Button, Card, CardHeader, Input, Select, Skeleton } from '@/components/ui';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Eye, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Button, Card, EmptyState, ErrorState, Input, Skeleton } from '@/components/ui';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { useToast } from '@/components/Toast';
-import { titleCase } from '@/lib/format';
+import { cn } from '@/lib/cn';
 import * as settingsApi from './api';
-import type { EventSetting } from './types';
+import { groupMeta, sortGroups } from './groups';
+import SettingRow from './SettingRow';
+import type { EventSetting, SettingsByGroup } from './types';
 
-function SettingRow({ setting }: { setting: EventSetting }) {
-    const { can } = useAuth();
-    const { push } = useToast();
-    const queryClient = useQueryClient();
-    const [editing, setEditing] = useState(false);
-    const [draft, setDraft] = useState<string>(
-        typeof setting.typed_value === 'object' && setting.typed_value !== null
-            ? JSON.stringify(setting.typed_value)
-            : String(setting.typed_value ?? ''),
-    );
+function matches(setting: EventSetting, query: string): boolean {
+    const haystack = `${setting.label} ${setting.key} ${setting.description ?? ''}`.toLowerCase();
+    return query
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean)
+        .every((term) => haystack.includes(term));
+}
 
-    const canEdit = can('settings.update');
-    const kind =
-        typeof setting.typed_value === 'boolean' ? 'boolean' :
-        typeof setting.typed_value === 'number' ? 'number' :
-        typeof setting.typed_value === 'object' && setting.typed_value !== null ? 'json' :
-        'string';
-
-    const updateMutation = useMutation({
-        mutationFn: () => {
-            const value =
-                kind === 'boolean' ? draft === 'true' :
-                kind === 'number' ? Number(draft) :
-                draft;
-            return settingsApi.updateSetting(setting.key, value);
-        },
-        onSuccess: () => {
-            push('success', `${setting.label} updated.`);
-            void queryClient.invalidateQueries({ queryKey: ['settings'] });
-            setEditing(false);
-        },
-        onError: (e: Error) => push('critical', e.message),
-    });
+function GroupCard({ group, settings, canEdit }: { group: string; settings: EventSetting[]; canEdit: boolean }) {
+    const { label, description, Icon } = groupMeta(group);
 
     return (
-        <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-3.5 last:border-0">
-            <div className="min-w-0 flex-1">
-                <div className="text-[13.5px] font-medium text-text">{setting.label}</div>
-                {setting.description && <div className="mt-0.5 text-[12.5px] text-text-muted">{setting.description}</div>}
-                <div className="mt-0.5 text-[11px] text-text-faint">{setting.key}</div>
+        <Card>
+            <div className="flex items-start gap-3 border-b border-border px-5 py-4">
+                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-text-muted">
+                    <Icon size={17} />
+                </div>
+                <div className="min-w-0">
+                    <h2 className="text-[15px] font-semibold text-text">{label}</h2>
+                    {description && <p className="mt-0.5 text-[12.5px] leading-relaxed text-text-muted">{description}</p>}
+                </div>
             </div>
-
-            <div className="flex shrink-0 items-center gap-2">
-                {editing ? (
-                    <>
-                        {kind === 'boolean' ? (
-                            <Select value={draft} onChange={(e) => setDraft(e.target.value)} className="w-28">
-                                <option value="true">True</option>
-                                <option value="false">False</option>
-                            </Select>
-                        ) : (
-                            <Input
-                                type={kind === 'number' ? 'number' : 'text'}
-                                value={draft}
-                                onChange={(e) => setDraft(e.target.value)}
-                                className="w-56"
-                                autoFocus
-                            />
-                        )}
-                        <Button variant="outline" size="sm" onClick={() => setEditing(false)} disabled={updateMutation.isPending}>Cancel</Button>
-                        <Button size="sm" onClick={() => void updateMutation.mutateAsync()} disabled={updateMutation.isPending}>
-                            {updateMutation.isPending ? 'Saving…' : 'Save'}
-                        </Button>
-                    </>
-                ) : (
-                    <>
-                        {kind === 'boolean' ? (
-                            <Badge tone={setting.typed_value ? 'success' : 'neutral'}>{setting.typed_value ? 'True' : 'False'}</Badge>
-                        ) : (
-                            <span className="tnum max-w-[220px] truncate text-[13px] text-text" title={draft}>{draft || '—'}</span>
-                        )}
-                        {canEdit && (
-                            <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
-                                <Pencil size={14} />
-                            </Button>
-                        )}
-                    </>
-                )}
+            <div>
+                {settings.map((s) => (
+                    <SettingRow key={s.key} setting={s} canEdit={canEdit} />
+                ))}
             </div>
-        </div>
+        </Card>
     );
 }
 
 export default function SettingsPage() {
+    const { can } = useAuth();
+    const canEdit = can('settings.update');
+
     const { data, isLoading, isError, refetch } = useQuery({
         queryKey: ['settings'],
         queryFn: settingsApi.fetchSettings,
     });
 
+    const [query, setQuery] = useState('');
+    const [selected, setSelected] = useState<string | null>(null);
+
+    const groups = useMemo(() => sortGroups(Object.keys(data ?? {})), [data]);
+    const searching = query.trim().length > 0;
+
+    // Search spans every group — otherwise a reader has to already know which
+    // section a setting lives in to find it, which is the thing they came here
+    // to look up.
+    const filtered = useMemo<SettingsByGroup>(() => {
+        if (!data) return {};
+        if (!searching) return data;
+
+        return Object.fromEntries(
+            Object.entries(data)
+                .map(([group, settings]) => [group, settings.filter((s) => matches(s, query))] as const)
+                .filter(([, settings]) => settings.length > 0),
+        );
+    }, [data, query, searching]);
+
+    const activeGroup = selected && groups.includes(selected) ? selected : groups[0];
+    const visibleGroups = searching ? sortGroups(Object.keys(filtered)) : activeGroup ? [activeGroup] : [];
+    const resultCount = Object.values(filtered).reduce((n, s) => n + s.length, 0);
+
     return (
         <div className="space-y-6">
-            <div>
-                <h1 className="text-[26px] font-bold tracking-tight text-text">Settings</h1>
-                <p className="mt-1 text-[14px] text-text-muted">Event configuration — change dates, cutoffs, and toggles without a deployment.</p>
+            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div>
+                    <h1 className="text-[26px] font-bold tracking-tight text-text">Settings</h1>
+                    <p className="mt-1 max-w-2xl text-[14px] text-text-muted">
+                        Event configuration — change dates, cutoffs and toggles without a deployment. Changes take
+                        effect immediately and every edit is recorded in the activity log.
+                    </p>
+                </div>
+
+                <div className="relative w-full md:w-72">
+                    <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-faint" />
+                    <Input
+                        type="search"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Search settings…"
+                        aria-label="Search settings"
+                        className="pl-9"
+                    />
+                    {searching && (
+                        <button
+                            type="button"
+                            onClick={() => setQuery('')}
+                            aria-label="Clear search"
+                            className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-lg text-text-faint hover:bg-surface-2 hover:text-text"
+                        >
+                            <X size={14} />
+                        </button>
+                    )}
+                </div>
             </div>
 
+            {!canEdit && !isLoading && (
+                <div className="flex items-center gap-2 rounded-xl border border-border bg-surface-2 px-4 py-3 text-[13px] text-text-muted">
+                    <Eye size={15} className="shrink-0" />
+                    You have read-only access to settings. Ask a Super Admin for the <code className="font-mono text-[12px]">settings.update</code> permission to make changes.
+                </div>
+            )}
+
             {isLoading && (
-                <div className="space-y-3">
-                    {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}
+                <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+                    <Skeleton className="hidden h-64 w-full lg:block" />
+                    <div className="space-y-4">
+                        {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-40 w-full" />)}
+                    </div>
                 </div>
             )}
 
             {isError && (
-                <Card className="flex items-center justify-between px-5 py-6">
-                    <span className="text-[13.5px] text-critical-fg">Failed to load settings.</span>
-                    <Button variant="outline" size="sm" onClick={() => void refetch()}>Retry</Button>
+                <Card>
+                    <ErrorState message="Settings could not be loaded." onRetry={() => void refetch()} />
                 </Card>
             )}
 
-            {data && Object.entries(data).map(([group, settings]) => (
-                <Card key={group}>
-                    <CardHeader title={titleCase(group)} />
-                    <div className="mt-2">
-                        {settings.map((s) => <SettingRow key={s.key} setting={s} />)}
-                    </div>
+            {data && groups.length === 0 && (
+                <Card>
+                    <EmptyState
+                        icon={<SlidersHorizontal size={20} />}
+                        title="No settings configured yet"
+                        description="Run the event setting seeder to populate the defaults."
+                    />
                 </Card>
-            ))}
+            )}
 
-            {data && Object.keys(data).length === 0 && (
-                <Card className="grid place-items-center px-6 py-16 text-center">
-                    <p className="text-[13.5px] text-text-muted">No settings configured yet.</p>
-                </Card>
+            {data && groups.length > 0 && (
+                <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+                    <nav aria-label="Setting sections" className="lg:sticky lg:top-6 lg:self-start">
+                        <ul className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
+                            {groups.map((group) => {
+                                const { label, Icon } = groupMeta(group);
+                                const count = (data[group] ?? []).length;
+                                const isActive = !searching && group === activeGroup;
+                                const hits = searching ? (filtered[group] ?? []).length : null;
+
+                                return (
+                                    <li key={group} className="shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setSelected(group);
+                                                setQuery('');
+                                            }}
+                                            aria-current={isActive ? 'page' : undefined}
+                                            className={cn(
+                                                'flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[13px] font-medium transition-colors',
+                                                isActive
+                                                    ? 'bg-surface-2 text-text'
+                                                    : 'text-text-muted hover:bg-surface-2 hover:text-text',
+                                                searching && hits === 0 && 'opacity-45',
+                                            )}
+                                        >
+                                            <Icon size={15} className="shrink-0" />
+                                            <span className="flex-1 truncate">{label}</span>
+                                            <span className="tnum text-[11.5px] text-text-faint">
+                                                {searching ? hits : count}
+                                            </span>
+                                        </button>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    </nav>
+
+                    <div className="space-y-6">
+                        {searching && (
+                            <p className="text-[13px] text-text-muted">
+                                {resultCount === 0
+                                    ? 'No settings match your search.'
+                                    : `${resultCount} setting${resultCount === 1 ? '' : 's'} matching “${query.trim()}”.`}
+                            </p>
+                        )}
+
+                        {searching && resultCount === 0 && (
+                            <Card>
+                                <EmptyState
+                                    icon={<Search size={20} />}
+                                    title="Nothing found"
+                                    description="Try a shorter term, or search by the setting key such as “registration.closes_at”."
+                                />
+                                <div className="flex justify-center pb-8">
+                                    <Button variant="outline" size="sm" onClick={() => setQuery('')}>
+                                        Clear search
+                                    </Button>
+                                </div>
+                            </Card>
+                        )}
+
+                        {visibleGroups.map((group) => (
+                            <GroupCard
+                                key={group}
+                                group={group}
+                                settings={filtered[group] ?? []}
+                                canEdit={canEdit}
+                            />
+                        ))}
+                    </div>
+                </div>
             )}
         </div>
     );

@@ -9,9 +9,12 @@ export async function fetchSettings(): Promise<SettingsByGroup> {
 
 export async function updateSetting(key: string, value: unknown): Promise<EventSetting> {
     try {
-        const { data } = await api.patch(`/admin/settings/${key}`, { value });
+        const { data } = await api.patch(`/admin/settings/${encodeURIComponent(key)}`, { value });
         return unwrap<EventSetting>(data);
     } catch (e) {
-        throw new Error(toApiError(e).message);
+        const error = toApiError(e);
+        // There is exactly one field, so its validation message is more useful
+        // than the generic "The given data was invalid." envelope message.
+        throw new Error(error.errors?.value?.[0] ?? error.message);
     }
 }

@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
+import type { ButtonHTMLAttributes, ComponentPropsWithRef, ReactNode, SelectHTMLAttributes } from 'react';
 import { cn } from '@/lib/cn';
 
 /* ---- Card ---------------------------------------------------------------- */
@@ -95,7 +95,8 @@ export function IconButton({ className, children, ...rest }: BtnProps) {
 }
 
 /* ---- Input ----------------------------------------------------------------- */
-export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
+/** `ComponentPropsWithRef` so callers can focus the field — React 19 passes `ref` through the spread. */
+export function Input({ className, ...rest }: ComponentPropsWithRef<'input'>) {
     return (
         <input
             className={cn(
@@ -121,7 +122,7 @@ export function Select({ className, children, ...rest }: SelectHTMLAttributes<HT
     );
 }
 
-export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function Textarea({ className, ...rest }: ComponentPropsWithRef<'textarea'>) {
     return (
         <textarea
             className={cn(
@@ -130,6 +131,50 @@ export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLText
             )}
             {...rest}
         />
+    );
+}
+
+/* ---- Switch ---------------------------------------------------------------- */
+/**
+ * A real `role="switch"` button rather than a styled checkbox, so screen
+ * readers announce on/off state and the whole control is one tab stop.
+ */
+export function Switch({
+    checked,
+    onChange,
+    disabled,
+    label,
+    className,
+}: {
+    checked: boolean;
+    onChange: (next: boolean) => void;
+    disabled?: boolean;
+    label: string;
+    className?: string;
+}) {
+    return (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={checked}
+            aria-label={label}
+            disabled={disabled}
+            onClick={() => onChange(!checked)}
+            className={cn(
+                'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
+                'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
+                checked ? 'bg-accent' : 'bg-border-strong',
+                disabled && 'cursor-not-allowed opacity-50',
+                className,
+            )}
+        >
+            <span
+                className={cn(
+                    'inline-block h-4.5 w-4.5 rounded-full bg-white shadow transition-transform',
+                    checked ? 'translate-x-[1.375rem]' : 'translate-x-1',
+                )}
+            />
+        </button>
     );
 }
 
