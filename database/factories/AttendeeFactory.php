@@ -31,6 +31,43 @@ class AttendeeFactory extends Factory
         'নাসরিন সুলতানা',
     ];
 
+    /**
+     * Keeps the batch-year and class columns consistent with whatever
+     * `participant_type` the row *ends up* with.
+     *
+     * `definition()` derives both from the type it picked itself, which is
+     * wrong the moment a caller overrides that type — and DummyDataSeeder
+     * does exactly that, replacing it with one the chosen ticket type allows.
+     * The overridden row then kept a batch year derived from the discarded
+     * type: seeded former students with no batch year (9 of 17 in a real dev
+     * database) and sponsors carrying one. The public form requires a batch
+     * year from a current or former student
+     * (`StoreRegistrationRequest::rules()`), so a seeded student without one
+     * is a fixture no registration could have produced.
+     *
+     * Runs `afterMaking` rather than in `definition()` because that is the
+     * only hook that sees the caller's overrides merged in.
+     */
+    public function configure(): static
+    {
+        return $this->afterMaking(function (Attendee $attendee): void {
+            $isStudent = in_array($attendee->participant_type, ['current_student', 'former_student'], true);
+
+            $attendee->fill([
+                // Filled only when absent, so an explicit year from a test or
+                // seeder survives. Cleared for everyone else: a teacher or
+                // sponsor has no SSC batch, and a stale one left behind by an
+                // overridden type makes the reporting segment lie.
+                'ssc_batch_year' => $isStudent
+                    ? $attendee->ssc_batch_year ?? fake()->numberBetween(1971, 2024)
+                    : null,
+                'current_class' => $attendee->participant_type === 'current_student'
+                    ? $attendee->current_class ?? fake()->randomElement(['9', '10'])
+                    : null,
+            ]);
+        });
+    }
+
     public function definition(): array
     {
         $participantType = fake()->randomElement([
@@ -60,6 +97,8 @@ class AttendeeFactory extends Factory
             'date_of_birth' => fake()->boolean(60) ? fake()->dateTimeBetween('-70 years', '-15 years') : null,
             'occupation' => fake()->jobTitle(),
             'participant_type' => $participantType,
+            // Derived from the type picked directly above; `configure()` is
+            // what reconciles these two when a caller overrides that type.
             'ssc_batch_year' => $needsBatchYear ? fake()->numberBetween(1971, 2024) : null,
             'current_class' => $participantType === 'current_student' ? fake()->randomElement(['9', '10']) : null,
             'tshirt_required' => fake()->boolean(70),
