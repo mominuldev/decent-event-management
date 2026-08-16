@@ -19,15 +19,27 @@ class StoreRegistrationRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'full_name' => ['required', 'string', 'max:200'],
-            'full_name_bn' => ['nullable', 'string', 'max:200'],
+            // max:150, not max:200: both columns are VARCHAR(150), so the
+            // longer limit turned an over-length name into a database error
+            // (a 500) instead of a field-level 422.
+            'full_name' => ['required', 'string', 'max:150'],
+            'full_name_bn' => ['required', 'string', 'max:150'],
+            // Required here but nullable in the column, deliberately: this is
+            // a rule about what the public form may submit, not a claim that
+            // every attendee row already carries one. Attendees created
+            // before this — and by an admin, who edits rather than registers
+            // — legitimately have neither.
+            'father_name' => ['required', 'string', 'max:150'],
             'mobile' => ['required', 'string', 'max:20'],
             'email' => ['nullable', 'email', 'max:254'],
             'gender' => ['required', 'string', Rule::in(['male', 'female'])],
             'date_of_birth' => ['nullable', 'date'],
-            'occupation' => ['nullable', 'string', 'max:100'],
+            'occupation' => ['required', 'string', 'max:100'],
             'designation' => ['nullable', 'string', 'max:100'],
             'organization' => ['nullable', 'string', 'max:200'],
+            // One free-text line, not a structured address block — see the
+            // migration for why.
+            'current_address' => ['required', 'string', 'max:255'],
             'participant_type' => ['required', 'string', Rule::in(['current_student', 'former_student', 'teacher', 'staff', 'guardian', 'guest', 'sponsor', 'other'])],
             'ssc_batch_year' => ['required_if:participant_type,current_student,former_student', 'nullable', 'integer', 'min:1971', 'max:'.date('Y')],
             'current_class' => ['nullable', 'string', 'max:50'],

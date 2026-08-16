@@ -27,15 +27,29 @@ class RegistrationController extends Controller
                 mediaType: 'application/json',
                 schema: new OAT\Schema(
                     properties: [
-                        new OAT\Property(property: 'full_name', type: 'string', maxLength: 200, required: ['full_name']),
-                        new OAT\Property(property: 'full_name_bn', type: 'string', maxLength: 200, description: 'Bengali name'),
+                        new OAT\Property(property: 'full_name', type: 'string', maxLength: 150, required: ['full_name']),
+                        new OAT\Property(
+                            property: 'full_name_bn',
+                            type: 'string',
+                            maxLength: 150,
+                            description: 'Bengali name — the ticket PDF and the gate list both render it',
+                            required: ['full_name_bn']
+                        ),
+                        new OAT\Property(property: 'father_name', type: 'string', maxLength: 150, required: ['father_name']),
                         new OAT\Property(property: 'mobile', type: 'string', maxLength: 20, required: ['mobile']),
                         new OAT\Property(property: 'email', type: 'string', format: 'email', maxLength: 254),
                         new OAT\Property(property: 'gender', type: 'string', enum: ['male', 'female'], required: ['gender']),
                         new OAT\Property(property: 'date_of_birth', type: 'string', format: 'date'),
-                        new OAT\Property(property: 'occupation', type: 'string', maxLength: 100),
+                        new OAT\Property(property: 'occupation', type: 'string', maxLength: 100, required: ['occupation']),
                         new OAT\Property(property: 'designation', type: 'string', maxLength: 100),
                         new OAT\Property(property: 'organization', type: 'string', maxLength: 200),
+                        new OAT\Property(
+                            property: 'current_address',
+                            type: 'string',
+                            maxLength: 255,
+                            description: 'Where the registrant currently lives, as one free-text line',
+                            required: ['current_address']
+                        ),
                         new OAT\Property(
                             property: 'participant_type',
                             type: 'string',
@@ -142,7 +156,29 @@ class RegistrationController extends Controller
                     )
                 )
             ),
-            new OAT\Response(response: 422, description: 'Validation error'),
+            new OAT\Response(
+                response: 422,
+                description: 'Field validation error, or a registration the caller may not make. '.
+                    'The latter carries a `code` the form can branch on: `sold_out`, '.
+                    '`participant_type_not_allowed`, or `email_already_registered` — the email '.
+                    'given belongs to an attendee reached by a different mobile number. '.
+                    'A returning registrant re-using their own email is matched, not refused.',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(
+                                property: 'code',
+                                type: 'string',
+                                enum: ['sold_out', 'participant_type_not_allowed', 'email_already_registered']
+                            ),
+                            new OAT\Property(property: 'message', type: 'string'),
+                            new OAT\Property(property: 'errors', type: 'object'),
+                            new OAT\Property(property: 'request_id', type: 'string', nullable: true),
+                        ]
+                    )
+                )
+            ),
         ]
     )]
     public function store(StoreRegistrationRequest $request, CreateRegistration $action): JsonResponse
@@ -204,9 +240,12 @@ class RegistrationController extends Controller
                                             new OAT\Property(property: 'ulid', type: 'string'),
                                             new OAT\Property(property: 'full_name', type: 'string'),
                                             new OAT\Property(property: 'full_name_bn', type: 'string'),
+                                            new OAT\Property(property: 'father_name', type: 'string', nullable: true),
                                             new OAT\Property(property: 'mobile', type: 'string'),
                                             new OAT\Property(property: 'email', type: 'string', format: 'email'),
                                             new OAT\Property(property: 'gender', type: 'string'),
+                                            new OAT\Property(property: 'occupation', type: 'string', nullable: true),
+                                            new OAT\Property(property: 'current_address', type: 'string', nullable: true),
                                             new OAT\Property(property: 'participant_type', type: 'string'),
                                             new OAT\Property(property: 'ssc_batch_year', type: 'integer'),
                                         ]

@@ -39,6 +39,24 @@ class RegistrationRejectedException extends RuntimeException
         );
     }
 
+    /**
+     * The email belongs to an attendee reached by a different mobile number.
+     *
+     * A returning registrant is matched on their mobile number (ADR-08), so
+     * re-using their own email is not a conflict and never reaches this.
+     * What does reach it is one address being claimed by two people — which
+     * has to be refused here, in the caller's own words, rather than left to
+     * surface as an integrity-constraint 500 after capacity was reserved.
+     */
+    public static function emailAlreadyRegistered(): self
+    {
+        return new self(
+            'This email address is already registered under a different mobile number. '
+            .'Register with that number, or use another email address.',
+            'email_already_registered',
+        );
+    }
+
     public function render(Request $request): JsonResponse
     {
         return response()->json([

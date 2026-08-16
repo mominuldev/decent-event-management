@@ -25,6 +25,7 @@ class Attendee extends AuthUserBase
     protected $fillable = [
         'full_name',
         'full_name_bn',
+        'father_name',
         'mobile',
         'whatsapp_number',
         'email',
@@ -40,6 +41,7 @@ class Attendee extends AuthUserBase
         'tshirt_required',
         'tshirt_size',
         'address_district',
+        'current_address',
         'country',
         'blood_group',
         'emergency_contact_name',

@@ -35,6 +35,7 @@ class ProfileController extends Controller
                             new OAT\Property(property: 'ulid', type: 'string'),
                             new OAT\Property(property: 'full_name', type: 'string'),
                             new OAT\Property(property: 'full_name_bn', type: 'string', nullable: true),
+                            new OAT\Property(property: 'father_name', type: 'string', nullable: true),
                             new OAT\Property(property: 'mobile', type: 'string'),
                             new OAT\Property(property: 'email', type: 'string', format: 'email', nullable: true),
                             new OAT\Property(property: 'gender', type: 'string', nullable: true),
@@ -48,6 +49,7 @@ class ProfileController extends Controller
                             new OAT\Property(property: 'tshirt_required', type: 'boolean'),
                             new OAT\Property(property: 'tshirt_size', type: 'string', nullable: true),
                             new OAT\Property(property: 'address_district', type: 'string', nullable: true),
+                            new OAT\Property(property: 'current_address', type: 'string', nullable: true),
                             new OAT\Property(property: 'country', type: 'string', nullable: true),
                             new OAT\Property(property: 'blood_group', type: 'string', nullable: true),
                             new OAT\Property(property: 'emergency_contact_name', type: 'string', nullable: true),
@@ -83,6 +85,7 @@ class ProfileController extends Controller
                     properties: [
                         new OAT\Property(property: 'full_name', type: 'string'),
                         new OAT\Property(property: 'full_name_bn', type: 'string', nullable: true),
+                        new OAT\Property(property: 'father_name', type: 'string', nullable: true),
                         new OAT\Property(property: 'whatsapp_number', type: 'string', nullable: true),
                         new OAT\Property(property: 'email', type: 'string', format: 'email', nullable: true),
                         new OAT\Property(property: 'occupation', type: 'string', nullable: true),
@@ -97,6 +100,7 @@ class ProfileController extends Controller
                             nullable: true
                         ),
                         new OAT\Property(property: 'address_district', type: 'string', nullable: true),
+                        new OAT\Property(property: 'current_address', type: 'string', nullable: true),
                         new OAT\Property(property: 'country', type: 'string', nullable: true),
                         new OAT\Property(property: 'blood_group', type: 'string', enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'], nullable: true),
                         new OAT\Property(property: 'emergency_contact_name', type: 'string', nullable: true),

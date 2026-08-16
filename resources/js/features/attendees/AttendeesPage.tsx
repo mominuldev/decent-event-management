@@ -41,8 +41,11 @@ function AttendeeDetail({ ulid, onClose }: { ulid: string; onClose: () => void }
             setForm({
                 full_name: data.full_name,
                 full_name_bn: data.full_name_bn,
+                father_name: data.father_name,
                 mobile: data.mobile,
                 email: data.email,
+                occupation: data.occupation,
+                current_address: data.current_address,
                 participant_type: data.participant_type,
                 ssc_batch_year: data.ssc_batch_year,
                 is_verified: data.is_verified,
@@ -102,6 +105,24 @@ function AttendeeDetail({ ulid, onClose }: { ulid: string; onClose: () => void }
                             />
                         </div>
                         <div>
+                            <Label htmlFor="father_name">Father's name</Label>
+                            <Input
+                                id="father_name"
+                                value={form.father_name ?? ''}
+                                disabled={!canEdit}
+                                onChange={(e) => setForm({ ...form, father_name: e.target.value || null })}
+                            />
+                        </div>
+                        <div>
+                            <Label htmlFor="occupation">Occupation</Label>
+                            <Input
+                                id="occupation"
+                                value={form.occupation ?? ''}
+                                disabled={!canEdit}
+                                onChange={(e) => setForm({ ...form, occupation: e.target.value || null })}
+                            />
+                        </div>
+                        <div>
                             <Label htmlFor="mobile">Mobile</Label>
                             <Input
                                 id="mobile"
@@ -147,6 +168,17 @@ function AttendeeDetail({ ulid, onClose }: { ulid: string; onClose: () => void }
                                 ))}
                             </Select>
                         </div>
+                    </div>
+
+                    <div>
+                        <Label htmlFor="current_address">Current address</Label>
+                        <Textarea
+                            id="current_address"
+                            rows={2}
+                            value={form.current_address ?? ''}
+                            disabled={!canEdit}
+                            onChange={(e) => setForm({ ...form, current_address: e.target.value || null })}
+                        />
                     </div>
 
                     <div>

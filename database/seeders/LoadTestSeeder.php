@@ -63,17 +63,34 @@ class LoadTestSeeder extends Seeder
                     'teacher', 'staff', 'guest',
                 ]);
                 $needsBatchYear = in_array($participantType, ['current_student', 'former_student'], true);
+                $ulid = (string) Str::ulid();
 
                 $rows[] = [
-                    'ulid' => (string) Str::ulid(),
+                    'ulid' => $ulid,
                     'full_name' => fake()->name(),
+                    'full_name_bn' => fake()->randomElement([
+                        'রহিম উদ্দিন', 'সালমা খাতুন', 'প্রদীপ কুমার দাস', 'ফারহানা ইসলাম',
+                        'মোঃ কামরুল হাসান', 'সুমাইয়া আক্তার', 'অক্ষয় চন্দ্র রায়', 'নাসরিন সুলতানা',
+                    ]),
+                    'father_name' => fake()->name('male'),
                     'mobile' => '+8801'.fake()->unique()->numerify('#########'),
-                    'email' => fake()->boolean(60) ? fake()->safeEmail() : null,
+                    // `attendees.email` is unique, and this seeder writes
+                    // 22,000 rows — far past what faker's email pool can
+                    // supply distinctly, with or without `unique()` (which
+                    // throws an OverflowException once it gives up rather
+                    // than silently repeating).
+                    //
+                    // Derived from the row's own ULID rather than its
+                    // position in the loop, so a second run on a database
+                    // that already holds a first one does not collide on
+                    // `attendee0@…` all over again.
+                    'email' => fake()->boolean(60) ? strtolower($ulid).'@example.test' : null,
                     'gender' => fake()->randomElement(['male', 'female']),
                     'participant_type' => $participantType,
                     'ssc_batch_year' => $needsBatchYear ? fake()->numberBetween(1971, 2024) : null,
                     'tshirt_required' => fake()->boolean(70) ? 1 : 0,
                     'tshirt_size' => fake()->randomElement(['S', 'M', 'L', 'XL', 'XXL']),
+                    'current_address' => fake()->buildingNumber().', '.fake()->streetName().', '.fake()->city(),
                     'country' => 'BD',
                     'is_verified' => fake()->boolean(40) ? 1 : 0,
                     'created_at' => $now,

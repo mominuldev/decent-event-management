@@ -47,6 +47,10 @@ class CentennialTicketFlowTest extends TestCase
             'mobile' => '+8801712345678',
             'email' => 'rahim@example.com',
             'gender' => 'male',
+            'full_name_bn' => 'রহিম উদ্দিন',
+            'father_name' => 'Abdul Karim',
+            'occupation' => 'Engineer',
+            'current_address' => 'House 12, Road 5, Dhanmondi, Dhaka',
             'participant_type' => 'former_student',
             'ssc_batch_year' => 2004,
             'ticket_type_ulid' => $ticketType->ulid,
@@ -102,6 +106,7 @@ class CentennialTicketFlowTest extends TestCase
 
         $family = $this->register($this->payload($ticket, [
             'mobile' => '+8801712000002',
+            'email' => 'family@example.com',
             'participation_type' => 'family',
             'adults_count' => 2,
             'children_count' => 1,
@@ -295,8 +300,13 @@ class CentennialTicketFlowTest extends TestCase
         foreach (['former_student', 'current_student', 'teacher', 'staff', 'guardian', 'other'] as $type) {
             $needsBatch = in_array($type, ['former_student', 'current_student'], true);
 
+            // Six different people, so six different emails: an address
+            // identifies one attendee, and sharing one here would refuse
+            // every registration after the first for a reason that has
+            // nothing to do with participant type.
             $registration = $this->register($this->payload($ticket, [
                 'mobile' => '+'.$mobile++,
+                'email' => "{$type}@example.com",
                 'participant_type' => $type,
                 'ssc_batch_year' => $needsBatch ? 2004 : null,
             ]));

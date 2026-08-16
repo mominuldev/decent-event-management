@@ -9,6 +9,7 @@ use App\Domain\Registration\Exceptions\RegistrationRejectedException;
 use App\Domain\Registration\Models\Attendee;
 use App\Domain\Registration\Models\Registration;
 use App\Domain\Registration\Models\RegistrationGuest;
+use App\Domain\Registration\Support\AttendeeIdentity;
 use App\Domain\Shared\Models\EventSetting;
 use App\Domain\Ticketing\Models\TicketType;
 use Illuminate\Support\Facades\DB;
@@ -25,29 +26,38 @@ class CreateRegistration
             /** @var TicketType $ticketType */
             $ticketType = TicketType::where('ulid', $data['ticket_type_ulid'])->firstOrFail();
 
-            // Checked before reserving, so a rejected registration never
-            // holds capacity it is not entitled to.
+            $mobile = AttendeeIdentity::normaliseMobile($data['mobile'] ?? null);
+            $email = AttendeeIdentity::normaliseEmail($data['email'] ?? null);
+
+            /** @var Attendee|null $attendee */
+            $attendee = Attendee::where('mobile', $mobile)->first();
+
+            // Both checked before reserving, so a rejected registration
+            // never holds capacity it is not entitled to.
             $this->assertParticipantTypeAllowed($ticketType, (string) $data['participant_type']);
+            $this->assertEmailAvailable($email, $attendee);
 
             if (! $ticketType->tryReserve()) {
                 throw RegistrationRejectedException::soldOut();
             }
 
-            $mobile = preg_replace('/[^0-9+]/', '', (string) $data['mobile']);
-
-            /** @var Attendee|null $attendee */
-            $attendee = Attendee::where('mobile', $mobile)->first();
-
             if ($attendee) {
                 $attendee->update([
                     'full_name' => $data['full_name'],
                     'full_name_bn' => $data['full_name_bn'] ?? $attendee->full_name_bn,
-                    'email' => $data['email'] ?? $attendee->email,
+                    // Kept on the `?? existing` pattern the rest of this
+                    // branch uses even though the FormRequest makes all three
+                    // required: this Action is also reachable from a seeder
+                    // or a console command, which must not fatal on a key the
+                    // HTTP layer happens to guarantee.
+                    'father_name' => $data['father_name'] ?? $attendee->father_name,
+                    'email' => $email ?? $attendee->email,
                     'gender' => $data['gender'],
                     'date_of_birth' => $data['date_of_birth'] ?? $attendee->date_of_birth,
                     'occupation' => $data['occupation'] ?? $attendee->occupation,
                     'designation' => $data['designation'] ?? $attendee->designation,
                     'organization' => $data['organization'] ?? $attendee->organization,
+                    'current_address' => $data['current_address'] ?? $attendee->current_address,
                     'tshirt_required' => $data['tshirt_required'] ?? $attendee->tshirt_required,
                     'tshirt_size' => $data['tshirt_size'] ?? $attendee->tshirt_size,
                     'current_class' => $data['current_class'] ?? $attendee->current_class,
@@ -57,13 +67,15 @@ class CreateRegistration
                 $attendee = Attendee::create([
                     'full_name' => $data['full_name'],
                     'full_name_bn' => $data['full_name_bn'] ?? null,
+                    'father_name' => $data['father_name'] ?? null,
                     'mobile' => $mobile,
-                    'email' => $data['email'] ?? null,
+                    'email' => $email,
                     'gender' => $data['gender'],
                     'date_of_birth' => $data['date_of_birth'] ?? null,
                     'occupation' => $data['occupation'] ?? null,
                     'designation' => $data['designation'] ?? null,
                     'organization' => $data['organization'] ?? null,
+                    'current_address' => $data['current_address'] ?? null,
                     'participant_type' => $data['participant_type'],
                     'ssc_batch_year' => $data['ssc_batch_year'] ?? null,
                     'current_class' => $data['current_class'] ?? null,
@@ -186,6 +198,36 @@ class CreateRegistration
 
         if (! in_array($participantType, $allowed, true)) {
             throw RegistrationRejectedException::participantTypeNotAllowed($participantType);
+        }
+    }
+
+    /**
+     * An email address identifies exactly one attendee.
+     *
+     * `attendees.email` is unique alongside `attendees.mobile`, but the two
+     * cannot be enforced the same way at this entry point: the mobile number
+     * is the dedupe key, so a returning registrant is *expected* to send one
+     * that already exists. The email is only a conflict when it is held by
+     * somebody other than the attendee this registration resolved to —
+     * which is why this takes the already-resolved attendee rather than
+     * being a `unique` rule on the FormRequest.
+     *
+     * Soft-deleted attendees count, because the unique index counts them.
+     */
+    private function assertEmailAvailable(?string $email, ?Attendee $attendee): void
+    {
+        if ($email === null) {
+            return;
+        }
+
+        $query = Attendee::withTrashed()->where('email', $email);
+
+        if ($attendee !== null) {
+            $query->whereKeyNot($attendee->getKey());
+        }
+
+        if ($query->exists()) {
+            throw RegistrationRejectedException::emailAlreadyRegistered();
         }
     }
 

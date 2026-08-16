@@ -65,6 +65,10 @@ class EndToEndTest extends TestCase
             'mobile' => '+8801712345678',
             'email' => 'rahim@example.com',
             'gender' => 'male',
+            'full_name_bn' => 'রহিম উদ্দিন',
+            'father_name' => 'Abdul Karim',
+            'occupation' => 'Engineer',
+            'current_address' => 'House 12, Road 5, Dhanmondi, Dhaka',
             'participant_type' => 'former_student',
             'ssc_batch_year' => 2010,
             'ticket_type_ulid' => $ticketType->ulid,
@@ -269,6 +273,10 @@ class EndToEndTest extends TestCase
             'mobile' => '+8801611223344',
             'email' => 'salma@example.com',
             'gender' => 'female',
+            'full_name_bn' => 'রহিম উদ্দিন',
+            'father_name' => 'Abdul Karim',
+            'occupation' => 'Engineer',
+            'current_address' => 'House 12, Road 5, Dhanmondi, Dhaka',
             'participant_type' => 'former_student',
             'ssc_batch_year' => 2011,
             'ticket_type_ulid' => $ticketType->ulid,
@@ -411,6 +419,10 @@ class EndToEndTest extends TestCase
             'mobile' => '+8801812345678',
             'email' => 'karim@example.com',
             'gender' => 'male',
+            'full_name_bn' => 'রহিম উদ্দিন',
+            'father_name' => 'Abdul Karim',
+            'occupation' => 'Engineer',
+            'current_address' => 'House 12, Road 5, Dhanmondi, Dhaka',
             'participant_type' => 'former_student',
             'ssc_batch_year' => 2015,
             'ticket_type_ulid' => $ticketType->ulid,
@@ -447,6 +459,10 @@ class EndToEndTest extends TestCase
             'mobile' => '+8801912345678',
             'email' => 'test@example.com',
             'gender' => 'male',
+            'full_name_bn' => 'রহিম উদ্দিন',
+            'father_name' => 'Abdul Karim',
+            'occupation' => 'Engineer',
+            'current_address' => 'House 12, Road 5, Dhanmondi, Dhaka',
             'participant_type' => 'former_student',
             'ssc_batch_year' => 2012,
             'ticket_type_ulid' => $ticketType->ulid,
@@ -461,10 +477,14 @@ class EndToEndTest extends TestCase
             ->postJson(route('api.v1.public.registrations.store'), $payload);
         $firstResponse->assertStatus(201);
 
-        // Different idempotency key should create separate registration
+        // Different idempotency key should create separate registration.
+        // A different person, so a different email too — an address belongs
+        // to one attendee, and reusing it here would be testing the
+        // idempotency path against a payload the API refuses on its own.
         $payload2 = $payload;
         $payload2['idempotency_key'] = 'test-idempotency-key-22222';
         $payload2['mobile'] = '+8801912345679';
+        $payload2['email'] = 'test2@example.com';
 
         $secondResponse = $this->withHeader('Idempotency-Key', 'test-idempotency-key-22222')
             ->postJson(route('api.v1.public.registrations.store'), $payload2);
@@ -503,6 +523,10 @@ class EndToEndTest extends TestCase
             'mobile' => '+8801711220011',
             'email' => 'nasrin@example.com',
             'gender' => 'female',
+            'full_name_bn' => 'রহিম উদ্দিন',
+            'father_name' => 'Abdul Karim',
+            'occupation' => 'Engineer',
+            'current_address' => 'House 12, Road 5, Dhanmondi, Dhaka',
             'participant_type' => 'former_student',
             'ssc_batch_year' => 2008,
             'ticket_type_ulid' => $ticketType->ulid,
@@ -555,6 +579,10 @@ class EndToEndTest extends TestCase
             'mobile' => '+8801511998877',
             'email' => 'sponsor@example.com',
             'gender' => 'male',
+            'full_name_bn' => 'রহিম উদ্দিন',
+            'father_name' => 'Abdul Karim',
+            'occupation' => 'Engineer',
+            'current_address' => 'House 12, Road 5, Dhanmondi, Dhaka',
             'participant_type' => 'sponsor',
             'ticket_type_ulid' => $ticketType->ulid,
             'participation_type' => 'single',
@@ -612,6 +640,10 @@ class EndToEndTest extends TestCase
             'mobile' => '+8801611998877',
             'email' => 'vip@example.com',
             'gender' => 'male',
+            'full_name_bn' => 'রহিম উদ্দিন',
+            'father_name' => 'Abdul Karim',
+            'occupation' => 'Engineer',
+            'current_address' => 'House 12, Road 5, Dhanmondi, Dhaka',
             'participant_type' => 'guest',
             'ticket_type_ulid' => $ticketType->ulid,
             'participation_type' => 'single',

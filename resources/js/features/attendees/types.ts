@@ -4,6 +4,7 @@ export interface Attendee {
     ulid: string;
     full_name: string;
     full_name_bn: string | null;
+    father_name: string | null;
     mobile: string;
     email: string | null;
     gender: string | null;
@@ -17,6 +18,7 @@ export interface Attendee {
     tshirt_required: boolean;
     tshirt_size: string | null;
     address_district: string | null;
+    current_address: string | null;
     country: string | null;
     blood_group: string | null;
     emergency_contact_name: string | null;
@@ -30,8 +32,11 @@ export interface Attendee {
 export interface UpdateAttendeePayload {
     full_name?: string;
     full_name_bn?: string | null;
+    father_name?: string | null;
     mobile?: string;
     email?: string | null;
+    occupation?: string | null;
+    current_address?: string | null;
     participant_type?: ParticipantType;
     ssc_batch_year?: number | null;
     is_verified?: boolean;
