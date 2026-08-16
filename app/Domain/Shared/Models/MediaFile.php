@@ -2,10 +2,12 @@
 
 namespace App\Domain\Shared\Models;
 
+use App\Domain\Shared\Services\GenerateMediaThumbnail;
 use App\Domain\Shared\Support\HasUlid;
 use Database\Factories\MediaFileFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
@@ -44,6 +46,33 @@ class MediaFile extends Model
             'scanned_at' => 'datetime',
             'expires_at' => 'datetime',
         ];
+    }
+
+    /**
+     * The small derived rendition, when one exists. Deliberately outside
+     * `$fillable` — nothing should mass-assign a variant link; it is written
+     * by {@see GenerateMediaThumbnail} through
+     * `forceFill()`, the same discipline as `qr_codes.image_media_id`.
+     *
+     * @return BelongsTo<self, $this>
+     */
+    public function thumbnail(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'thumbnail_media_id');
+    }
+
+    /**
+     * The cheapest rendition that still shows the image — the thumbnail when
+     * one has been generated, otherwise the file itself.
+     *
+     * Falling back rather than returning null matters for two real cases: a
+     * photo uploaded before thumbnails existed and not yet backfilled, and an
+     * original already smaller than the thumbnail budget (for which no
+     * derivative is generated at all — see GenerateMediaThumbnail).
+     */
+    public function smallest(): self
+    {
+        return $this->thumbnail ?? $this;
     }
 
     public function passedVirusScan(): bool

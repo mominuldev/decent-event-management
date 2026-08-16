@@ -13,8 +13,12 @@ Route::prefix('public')->name('public.')->group(base_path('routes/api/public.php
 // authorization, minted only after a policy check by the issuing endpoint
 // (e.g. Attendee\TicketController::downloadPdf), so this route carries no
 // auth middleware of its own. docs/06 §6.4 file-serving rules.
+// Asset traffic, not API calls — one admin screen can request a hundred of
+// these at once (the attendee list's avatars), so it gets its own bucket
+// rather than starving the SPA's real requests out of the shared `api` one.
 Route::get('media/{mediaFile:ulid}', [SignedMediaController::class, 'show'])
-    ->middleware('signed')
+    ->middleware(['signed', 'throttle:media'])
+    ->withoutMiddleware('throttle:api')
     ->name('media.show');
 
 // Admin console — unauthenticated

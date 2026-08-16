@@ -93,6 +93,15 @@ class AppServiceProvider extends ServiceProvider
         // Generous but bounded — gate scanning can burst well above normal
         // API traffic during a rush at the door.
         RateLimiter::for('scanner', fn ($request) => Limit::perMinute(120)->by($request->user()?->id ?: $request->ip()));
+
+        // Signed private media is asset traffic, not API calls, and one screen
+        // fetches many at once — a page of the admin attendee list renders up
+        // to 100 avatars. Left on the shared `api` bucket, loading one page
+        // would eat most of a staff member's 60/min and starve the SPA's real
+        // requests. Signature-authorized and read-only, so a higher ceiling
+        // costs nothing but bandwidth; docs/06 §6.7 allows 300/min for admin
+        // traffic anyway.
+        RateLimiter::for('media', fn ($request) => Limit::perMinute(300)->by($request->user()?->id ?: $request->ip()));
     }
 
     /**

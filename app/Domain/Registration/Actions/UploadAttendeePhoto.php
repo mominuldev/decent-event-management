@@ -6,6 +6,7 @@ use App\Domain\Registration\Models\Attendee;
 use App\Domain\Registration\Models\Registration;
 use App\Domain\Shared\Models\ActivityLog;
 use App\Domain\Shared\Models\MediaFile;
+use App\Domain\Shared\Services\GenerateMediaThumbnail;
 use GdImage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -48,6 +49,8 @@ class UploadAttendeePhoto
         'image/png' => 'png',
         'image/webp' => 'webp',
     ];
+
+    public function __construct(private readonly GenerateMediaThumbnail $thumbnailer) {}
 
     public function execute(
         Registration $registration,
@@ -106,6 +109,14 @@ class UploadAttendeePhoto
                 'uploaded_by_type' => 'attendee',
                 'uploaded_by_id' => $attendee->id,
             ]);
+
+            // Derived here rather than on a queue: the admin attendee list is
+            // the first thing to read a new photo back, and a list that has to
+            // wait for a worker would fall back to the full-size original —
+            // the very download this exists to avoid. GD has already proven it
+            // can decode and encode these exact bytes a few lines above, so a
+            // failure now is a bug worth surfacing, not something to swallow.
+            $this->thumbnailer->execute($media);
 
             $previous = $attendee->profile_photo_media_id;
 

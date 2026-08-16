@@ -173,6 +173,10 @@
                                                         "type": "string",
                                                         "nullable": true
                                                     },
+                                                    "profile_photo_thumb_url": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
                                                     "created_at": {
                                                         "type": "string",
                                                         "format": "date-time"
@@ -327,6 +331,10 @@
                                                     "type": "boolean"
                                                 },
                                                 "profile_photo_url": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "profile_photo_thumb_url": {
                                                     "type": "string",
                                                     "nullable": true
                                                 },
@@ -7746,6 +7754,10 @@
                                             "type": "boolean"
                                         },
                                         "profile_photo_url": {
+                                            "type": "string",
+                                            "nullable": true
+                                        },
+                                        "profile_photo_thumb_url": {
                                             "type": "string",
                                             "nullable": true
                                         },

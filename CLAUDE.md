@@ -356,6 +356,23 @@ Tightening the admin path to match the public one is the tempting mistake: it wo
 - All copy is bilingual EN/বাংলা in `lib/i18n/copy.ts` (`ticketForm.attendee`, `ticketForm.errors`, `ticketForm.review`, `profile`), matching the existing per-form locale toggle. `tsc --noEmit`, ESLint (0 errors) and `next build` clean.
 - **Verified end to end against the running backend**, not just types: the exact body `draftToRegistrationInput()` now builds returns 201 with all four round-tripping, Bangla included (`রহিম উদ্দিন`, `আব্দুল করিম`).
 
+### ✅ Attendee photos are shown in the admin console, and images have thumbnails — 2026-08-16
+
+The admin attendee list and detail dialog now show the attendee's photo. Doing that naively is what surfaced the real work: the only rendition that existed was the ~1024px badge photo sized for the A5 ticket PDF (a real one measured **231 KB**), and a 20-row list would have pulled 4.6 MB to fill twenty 36px circles.
+
+- **`media_files.thumbnail_media_id`** (migration `2026_08_16_110000_*`) — a nullable self-FK, parent → derivative. The variant relationship belongs to the media, not to each consumer: hanging a second FK off `attendees` would have repeated the idea once per table that references an image. The child is marked by `collection = 'thumbnail'`, which keeps it out of every existing `collection`-scoped listing (the CMS library filters on `UploadContentMedia::COLLECTIONS`) without those queries learning about variants. Outside `$fillable` and written with `forceFill()`, same discipline as `qr_codes.image_media_id`.
+- **`App\Domain\Shared\Services\GenerateMediaThumbnail`** — 128px longest side (covers the 36px list avatar and the 72px dialog one at 2x), idempotent (returns early when `thumbnail_media_id` is set), and **shared rather than copied**. That is a deliberate departure from the convention `UploadAttendeePhoto`/`UpdateAttendeeProfilePhoto` follow of duplicating their re-encode step: this one has a caller that is not an upload path at all (the backfill command), and a third copy living in a console command is precisely how the two upload paths would drift.
+- **Output is WebP whatever went in.** Not cosmetic — the same 128px pixels measured **20 KB as PNG against 1.8 KB as WebP** (99.2% off the 231 KB original), and the list renders twenty at once, so the format is most of the win rather than the smaller dimensions. WebP also keeps the alpha that switching to JPEG would flatten. Falls back to the source format when GD is built without WebP, since the row records its own `mime_type` and a mixed estate stays self-describing.
+- **An image already inside the budget gets no derivative at all** and is left unlinked, rather than pointed at itself — `MediaFile::smallest()` falls back to the original. That same fallback is what makes the API safe before the backfill has run.
+- **`php artisan media:backfill-thumbnails`** — `--collection` (default `profile_photo`, because that is the only collection anything reads a thumbnail for today), `--chunk`, `--dry-run`. Uses `chunkById`, not `chunk`: generating a thumbnail sets the very column the query filters on, so an offset walk would skip a row at every page boundary as the result set shrank beneath it. Re-runnable, reports skips individually (a bare count makes "nothing left to do" and "nothing worked" look identical), exits non-zero on a real failure.
+- Replacing or removing a photo now soft-deletes **its thumbnail with it** — it is orphaned by the same FK move and would otherwise stay servable through its own signed URL for a full 15 minutes.
+- `AttendeeResource` gained `profile_photo_thumb_url` alongside the existing full-size `profile_photo_url` (the ticket PDF and detail paths still want the original); admin index/show eager-load `profilePhoto.thumbnail`.
+- **The signed-media route got its own rate-limit bucket.** `GET /api/v1/media/{ulid}` shared the global `api` limiter (60/min per user, `AppServiceProvider`), which was fine when the only consumer was a one-at-a-time ticket-PDF download; one list render of 20 avatars ate a third of a staff member's minute. It now uses a `media` limiter at 300/min and `withoutMiddleware('throttle:api')`, so asset fetches cannot starve the SPA's real API calls. docs/06 §6.7 already allows 300/min for admin traffic.
+- SPA: shared `Avatar` in `components/ui.tsx` (photo with an initials fallback, and an `onError` fallback for the moment a 15-minute signed URL expires under a page left open), used in the list's Name column and in a summary strip at the top of the attendee dialog. That strip reads from `form`, not `data`, so it tracks edits in progress instead of contradicting the controls directly beneath it.
+- 11 tests in `tests/Feature/Media/MediaThumbnailTest.php`. Full suite **418 passing**, Pint and PHPStan level 8 clean, SPA `typecheck` + `build` clean. OpenAPI regenerated (still 107 paths — a response-shape change to documented endpoints). Verified against the running app: the admin list returns a thumb URL distinct from the full-size one, serving 1,784 bytes of `image/webp`, and a real browser renders it in an `<img>` despite the route's `Content-Disposition: attachment` (disposition does not apply to subresource loads).
+
+**Still open:** a signed URL is minted fresh on every response (`now()->addMinutes(15)`), so each list refetch produces new URLs and the browser cannot reuse its cache. At ~1.8 KB per avatar that is now minor; if it ever matters, round the expiry to a stable bucket so repeat renders hit the cache.
+
 ### 💳 Payments — development environment
 
 Development runs against the **SSLCommerz sandbox** (<https://developer.sslcommerz.com/doc/v4/>). Credentials are self-service — no merchant onboarding — so the full money path is live in development. **`sslcommerz` is the public checkout's default gateway** (`services.payment.default_method`, `PAYMENT_DEFAULT_METHOD`); `bkash`/`nagad`/`rocket` still resolve to `FakeGateway` pending Phase 4B, so never make one of them the default.
@@ -491,6 +508,11 @@ php artisan app:generate-open-api-spec   # writes public/docs/openapi.json
 php artisan db:seed                              # RBAC, settings, ticket types, sessions, gates
 php artisan db:seed --class=DummyDataSeeder      # demo registrations/payments/tickets for local dev
 php artisan db:seed --class=LoadTestSeeder       # bulk volume for performance work
+```
+
+**Media thumbnails** — new uploads derive one inline; this is only for images stored before thumbnails existed (safe to re-run, `--dry-run` reports without writing):
+```bash
+php artisan media:backfill-thumbnails
 ```
 
 **Backup / restore** (Phase 9 — see CLAUDE.md's Phase 9 section for what this does and doesn't cover):

@@ -5,6 +5,7 @@ namespace App\Domain\Registration\Actions;
 use App\Domain\Registration\Models\Attendee;
 use App\Domain\Shared\Models\ActivityLog;
 use App\Domain\Shared\Models\MediaFile;
+use App\Domain\Shared\Services\GenerateMediaThumbnail;
 use GdImage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -40,6 +41,8 @@ class UpdateAttendeeProfilePhoto
         'image/png' => 'png',
         'image/webp' => 'webp',
     ];
+
+    public function __construct(private readonly GenerateMediaThumbnail $thumbnailer) {}
 
     public function execute(
         Attendee $attendee,
@@ -83,6 +86,10 @@ class UpdateAttendeeProfilePhoto
                 'uploaded_by_id' => $attendee->id,
             ]);
 
+            // Same reasoning as UploadAttendeePhoto: derived inline so the
+            // first read of the new photo already has a small rendition.
+            $this->thumbnailer->execute($media);
+
             // Queried by the FK directly rather than through the `profilePhoto`
             // relation: a caller may already have lazy-loaded (and cached)
             // that relation before this Action ever ran — e.g. the same
@@ -97,6 +104,9 @@ class UpdateAttendeeProfilePhoto
             // The old file is orphaned the moment the FK moves off it — soft
             // delete so a stale signed URL someone still has open resolves to
             // nothing rather than staying servable for its full 15 minutes.
+            // Its thumbnail is orphaned by exactly the same move and is just
+            // as servable, so it goes with it.
+            $previous?->thumbnail?->delete();
             $previous?->delete();
 
             // Audit lives in the Action, not the controller (D8) — a photo

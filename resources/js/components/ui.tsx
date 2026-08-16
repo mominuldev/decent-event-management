@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { ButtonHTMLAttributes, ComponentPropsWithRef, ReactNode, SelectHTMLAttributes } from 'react';
 import { cn } from '@/lib/cn';
 
@@ -183,6 +184,72 @@ export function Label({ children, htmlFor }: { children: ReactNode; htmlFor?: st
         <label htmlFor={htmlFor} className="mb-1.5 block text-[12.5px] font-semibold text-text">
             {children}
         </label>
+    );
+}
+
+/* ---- Avatar ------------------------------------------------------------------ */
+function initialsOf(name: string) {
+    return (
+        name
+            .split(/\s+/)
+            .filter(Boolean)
+            .map((part) => [...part][0] ?? '')
+            .slice(0, 2)
+            .join('')
+            .toUpperCase() || '—'
+    );
+}
+
+/**
+ * Photo with an initials fallback. `src` is a short-TTL signed URL
+ * (`MediaFile::temporarySignedUrl()`, 15 min) served from our own origin, so
+ * one left open past its expiry starts 403ing — `onError` drops back to the
+ * initials rather than leaving a broken-image glyph in the row.
+ */
+export function Avatar({
+    src,
+    name,
+    size = 32,
+    className,
+}: {
+    src?: string | null;
+    name: string;
+    size?: number;
+    className?: string;
+}) {
+    const [failed, setFailed] = useState(false);
+
+    // A new URL (re-fetch, different row) deserves a fresh attempt.
+    useEffect(() => setFailed(false), [src]);
+
+    const box = cn('shrink-0 overflow-hidden rounded-full', className);
+
+    if (src && !failed) {
+        return (
+            <img
+                src={src}
+                alt=""
+                width={size}
+                height={size}
+                loading="lazy"
+                onError={() => setFailed(true)}
+                className={cn(box, 'object-cover ring-1 ring-inset ring-border')}
+                style={{ width: size, height: size }}
+            />
+        );
+    }
+
+    return (
+        <div
+            aria-hidden
+            className={cn(
+                box,
+                'grid place-items-center bg-brand-100 font-bold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300',
+            )}
+            style={{ width: size, height: size, fontSize: Math.max(10, Math.round(size * 0.36)) }}
+        >
+            {initialsOf(name)}
+        </div>
     );
 }
 

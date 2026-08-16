@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Search, ShieldCheck, Trash2 } from 'lucide-react';
-import { Badge, Button, Card, CardHeader, Input, Label, Select, Skeleton, Textarea } from '@/components/ui';
+import { Avatar, Badge, Button, Card, CardHeader, Input, Label, Select, Skeleton, Textarea } from '@/components/ui';
 import { Dialog, ConfirmDialog } from '@/components/Dialog';
 import { DataTable } from '@/components/DataTable';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -85,6 +85,25 @@ function AttendeeDetail({ ulid, onClose }: { ulid: string; onClose: () => void }
                 </div>
             ) : (
                 <div className="space-y-4">
+                    <div className="flex items-center gap-4 rounded-xl border border-border bg-surface-2 px-4 py-3">
+                        <Avatar src={data?.profile_photo_thumb_url} name={data?.full_name ?? ''} size={72} />
+                        {/* Driven by `form`, not `data`, so the summary tracks
+                            edits in progress instead of contradicting the
+                            controls directly beneath it. */}
+                        <div className="min-w-0 space-y-1.5">
+                            {form.full_name_bn && (
+                                <div lang="bn" className="truncate text-[15px] font-semibold text-text">{form.full_name_bn}</div>
+                            )}
+                            <div className="flex flex-wrap items-center gap-1.5">
+                                <Badge tone="neutral">{participantLabel(form.participant_type ?? 'other')}</Badge>
+                                {form.is_verified
+                                    ? <Badge tone="success">Verified</Badge>
+                                    : <Badge tone="neutral">Unverified</Badge>}
+                                {form.ssc_batch_year && <Badge tone="neutral">SSC {form.ssc_batch_year}</Badge>}
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <Label htmlFor="full_name">Full name</Label>
@@ -242,9 +261,12 @@ const columns: ColumnDef<Attendee, unknown>[] = [
         accessorKey: 'full_name',
         header: 'Name',
         cell: (ctx) => (
-            <div>
-                <div className="font-medium text-text">{ctx.row.original.full_name}</div>
-                <div className="text-[12px] text-text-faint">{ctx.row.original.mobile}</div>
+            <div className="flex items-center gap-3">
+                <Avatar src={ctx.row.original.profile_photo_thumb_url} name={ctx.row.original.full_name} size={36} />
+                <div className="min-w-0">
+                    <div className="truncate font-medium text-text">{ctx.row.original.full_name}</div>
+                    <div className="text-[12px] text-text-faint">{ctx.row.original.mobile}</div>
+                </div>
             </div>
         ),
     },

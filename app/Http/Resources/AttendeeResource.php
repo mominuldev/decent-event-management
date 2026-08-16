@@ -43,10 +43,15 @@ class AttendeeResource extends JsonResource
             'emergency_contact_phone' => $this->emergency_contact_phone,
             'notes' => $this->notes,
             'is_verified' => $this->is_verified,
-            // Short-TTL signed URL (docs/06 §6.4), not the raw private-disk
+            // Short-TTL signed URLs (docs/06 §6.4), not the raw private-disk
             // path — `profilePhoto` lazy-loads here if a caller hasn't
             // eager-loaded it, which is fine for a single-resource response.
             'profile_photo_url' => $this->profilePhoto?->temporarySignedUrl(),
+            // The rendition an avatar should actually fetch. Falls back to the
+            // full-size photo (~1024px, sized for the A5 ticket PDF) only when
+            // no derivative exists, so a list never silently pulls hundreds of
+            // KB per row once `media:backfill-thumbnails` has run.
+            'profile_photo_thumb_url' => $this->profilePhoto?->smallest()->temporarySignedUrl(),
             'created_at' => $this->created_at?->toISOString(),
         ];
     }

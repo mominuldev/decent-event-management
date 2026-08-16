@@ -22,6 +22,11 @@ class RemoveAttendeeProfilePhoto
         $previous = MediaFile::find($previousMediaId);
 
         $attendee->forceFill(['profile_photo_media_id' => null])->save();
+
+        // The thumbnail exists only to stand in for this file; removing the
+        // photo without it would leave a small copy of the same photograph
+        // still servable through its own signed URL.
+        $previous?->thumbnail?->delete();
         $previous?->delete();
 
         // Audit lives in the Action, not the controller (D8).

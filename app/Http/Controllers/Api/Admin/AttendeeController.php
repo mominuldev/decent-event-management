@@ -87,6 +87,7 @@ class AttendeeController extends Controller
                                         new OAT\Property(property: 'notes', type: 'string', nullable: true),
                                         new OAT\Property(property: 'is_verified', type: 'boolean'),
                                         new OAT\Property(property: 'profile_photo_url', type: 'string', nullable: true),
+                                        new OAT\Property(property: 'profile_photo_thumb_url', type: 'string', nullable: true),
                                         new OAT\Property(property: 'created_at', type: 'string', format: 'date-time'),
                                     ],
                                     type: 'object'
@@ -106,7 +107,7 @@ class AttendeeController extends Controller
     {
         abort_unless((bool) $request->user()?->can('attendee.view_any'), Response::HTTP_FORBIDDEN);
 
-        $query = Attendee::query()->with(['profilePhoto']);
+        $query = Attendee::query()->with(['profilePhoto.thumbnail']);
 
         if ($request->filled('search')) {
             $search = (string) $request->input('search');
@@ -180,6 +181,7 @@ class AttendeeController extends Controller
                                     new OAT\Property(property: 'notes', type: 'string', nullable: true),
                                     new OAT\Property(property: 'is_verified', type: 'boolean'),
                                     new OAT\Property(property: 'profile_photo_url', type: 'string', nullable: true),
+                                    new OAT\Property(property: 'profile_photo_thumb_url', type: 'string', nullable: true),
                                     new OAT\Property(property: 'created_at', type: 'string', format: 'date-time'),
                                 ],
                                 type: 'object'
@@ -198,7 +200,7 @@ class AttendeeController extends Controller
         abort_unless((bool) $request->user()?->can('attendee.view'), Response::HTTP_FORBIDDEN);
 
         $attendee->load([
-            'profilePhoto',
+            'profilePhoto.thumbnail',
             'registrations.ticketType',
             'registrations.payments',
             'registrations.tickets',

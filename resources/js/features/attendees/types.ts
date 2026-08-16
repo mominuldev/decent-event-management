@@ -26,6 +26,8 @@ export interface Attendee {
     notes: string | null;
     is_verified: boolean;
     profile_photo_url?: string | null;
+    /** Small rendition for avatars; falls back server-side to the full photo. */
+    profile_photo_thumb_url?: string | null;
     created_at: string;
 }
 

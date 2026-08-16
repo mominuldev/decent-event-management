@@ -57,6 +57,7 @@ class ProfileController extends Controller
                             new OAT\Property(property: 'notes', type: 'string', nullable: true),
                             new OAT\Property(property: 'is_verified', type: 'boolean'),
                             new OAT\Property(property: 'profile_photo_url', type: 'string', nullable: true),
+                            new OAT\Property(property: 'profile_photo_thumb_url', type: 'string', nullable: true),
                             new OAT\Property(property: 'created_at', type: 'string', format: 'date-time', nullable: true),
                         ]
                     )
