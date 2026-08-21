@@ -215,10 +215,17 @@ class ScannerFlowTest extends TestCase
     {
         Ticket::factory()->create(['status' => 'active']);
 
-        $this->withToken($this->plainTextToken)
+        $response = $this->withToken($this->plainTextToken)
             ->withHeaders(['X-Gate-Id' => $this->gate->ulid])
-            ->getJson(route('scanner.v1.manifest.show'))
-            ->assertStatus(200);
+            ->getJson(route('scanner.v1.manifest.show'));
+
+        $response->assertStatus(200);
+
+        // The manifest streams, and the device is recorded as synced only
+        // once the last row has actually been written — so the body has to
+        // be drained before that has happened. See ManifestScaleTest's
+        // interrupted-stream case for why the ordering is deliberate.
+        $response->streamedContent();
 
         $this->device->refresh();
         $this->assertSame((int) Ticket::max('manifest_version'), $this->device->manifest_version);
