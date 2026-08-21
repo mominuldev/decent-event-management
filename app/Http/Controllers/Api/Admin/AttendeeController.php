@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Domain\Registration\Actions\ExportAttendees;
 use App\Domain\Registration\Models\Attendee;
+use App\Domain\Registration\Support\AttendeeListFilters;
 use App\Domain\Shared\Models\ActivityLog;
+use App\Domain\Shared\Models\User;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\ExportAttendeesRequest;
 use App\Http\Requests\Admin\UpdateAttendeeRequest;
 use App\Http\Resources\AttendeeResource;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -107,28 +110,92 @@ class AttendeeController extends Controller
     {
         abort_unless((bool) $request->user()?->can('attendee.view_any'), Response::HTTP_FORBIDDEN);
 
-        $query = Attendee::query()->with(['profilePhoto.thumbnail']);
-
-        if ($request->filled('search')) {
-            $search = (string) $request->input('search');
-            $query->where(function (Builder $q) use ($search): void {
-                $q->where('full_name', 'like', "%{$search}%")
-                    ->orWhere('mobile', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%");
-            });
-        }
-
-        if ($request->filled('participant_type')) {
-            $query->where('participant_type', (string) $request->input('participant_type'));
-        }
-
-        if ($request->filled('ssc_batch_year')) {
-            $query->where('ssc_batch_year', (int) $request->input('ssc_batch_year'));
-        }
+        // Filtering and ordering live in AttendeeListFilters so the export
+        // endpoint below selects exactly the rows this list shows — an export
+        // that quietly disagrees with the screen it was launched from is worse
+        // than none at all.
+        $query = AttendeeListFilters::apply(
+            Attendee::query()->with(['profilePhoto.thumbnail']),
+            $request->only(['search', 'participant_type', 'ssc_batch_year']),
+        );
 
         $perPage = min((int) $request->input('per_page', 15), 100);
 
         return AttendeeResource::collection($query->paginate($perPage));
+    }
+
+    #[OAT\Get(
+        path: '/admin/attendees/export',
+        summary: 'Download the filtered attendee list as a spreadsheet or PDF',
+        description: 'Returns a binary file, not JSON. Each row carries the attendee\'s profile photo, name, '
+            .'father\'s name, current address, occupation, organization and mobile number. The filter parameters '
+            .'are identical to GET /admin/attendees, so an export always contains exactly the rows that list shows. '
+            .'Generated synchronously; a filter set selecting more rows than the format\'s configured ceiling is '
+            .'refused with 422 export_too_large rather than run to a timeout.',
+        tags: ['Attendees'],
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OAT\Parameter(
+                name: 'format',
+                in: 'query',
+                required: true,
+                description: 'File format to generate',
+                schema: new OAT\Schema(type: 'string', enum: ['xlsx', 'pdf'])
+            ),
+            new OAT\Parameter(
+                name: 'search',
+                in: 'query',
+                required: false,
+                description: 'Partial match against name, mobile, or email',
+                schema: new OAT\Schema(type: 'string', maxLength: 150)
+            ),
+            new OAT\Parameter(
+                name: 'participant_type',
+                in: 'query',
+                required: false,
+                schema: new OAT\Schema(type: 'string', enum: AttendeeListFilters::PARTICIPANT_TYPES)
+            ),
+            new OAT\Parameter(
+                name: 'ssc_batch_year',
+                in: 'query',
+                required: false,
+                schema: new OAT\Schema(type: 'integer')
+            ),
+        ],
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'The generated file, as an attachment',
+                content: [
+                    new OAT\MediaType(
+                        mediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        schema: new OAT\Schema(type: 'string', format: 'binary')
+                    ),
+                    new OAT\MediaType(
+                        mediaType: 'application/pdf',
+                        schema: new OAT\Schema(type: 'string', format: 'binary')
+                    ),
+                ]
+            ),
+            new OAT\Response(response: 401, description: 'Unauthenticated'),
+            new OAT\Response(response: 403, description: 'Missing attendee.export permission'),
+            new OAT\Response(response: 422, description: 'Validation error, or export_too_large for the selected filters'),
+        ]
+    )]
+    public function export(ExportAttendeesRequest $request, ExportAttendees $action): Response
+    {
+        /** @var 'xlsx'|'pdf' $format */
+        $format = $request->validated('format');
+
+        $user = $request->user();
+
+        return $action->execute(
+            filters: $request->filters(),
+            format: $format,
+            actor: $user instanceof User ? $user : null,
+            ipAddress: $request->ip(),
+            requestId: $request->header('X-Request-Id'),
+        )->response();
     }
 
     #[OAT\Get(

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Search, ShieldCheck, Trash2 } from 'lucide-react';
+import { FileSpreadsheet, FileText, Search, ShieldCheck, Trash2 } from 'lucide-react';
 import { Avatar, Badge, Button, Card, CardHeader, Input, Label, Select, Skeleton, Textarea } from '@/components/ui';
 import { Dialog, ConfirmDialog } from '@/components/Dialog';
 import { DataTable } from '@/components/DataTable';
@@ -291,7 +291,58 @@ const columns: ColumnDef<Attendee, unknown>[] = [
     },
 ];
 
+/**
+ * Export controls for the current filter set.
+ *
+ * Placed in the filter row, and wired to the same state the table reads, so
+ * "export" unambiguously means "what I am looking at" — the backend applies
+ * the identical filters through AttendeeListFilters.
+ *
+ * There is no TanStack Query cache entry for this: a download is a one-off
+ * side effect, not server state, and caching it would hand the operator a
+ * stale file after they changed a filter.
+ */
+function ExportButtons({ filters }: { filters: attendeesApi.AttendeeFilters }) {
+    const { push } = useToast();
+    const [pending, setPending] = useState<attendeesApi.ExportFormat | null>(null);
+
+    async function run(format: attendeesApi.ExportFormat) {
+        setPending(format);
+        try {
+            await attendeesApi.exportAttendees(filters, format);
+        } catch (e) {
+            push('critical', e instanceof Error ? e.message : 'Export failed.');
+        } finally {
+            setPending(null);
+        }
+    }
+
+    return (
+        <div className="ml-auto flex items-end gap-2">
+            <Button
+                variant="outline"
+                onClick={() => void run('xlsx')}
+                disabled={pending !== null}
+                title="Download the filtered list as an Excel workbook"
+            >
+                <FileSpreadsheet size={15} />
+                {pending === 'xlsx' ? 'Preparing…' : 'Excel'}
+            </Button>
+            <Button
+                variant="outline"
+                onClick={() => void run('pdf')}
+                disabled={pending !== null}
+                title="Download the filtered list as a PDF"
+            >
+                <FileText size={15} />
+                {pending === 'pdf' ? 'Preparing…' : 'PDF'}
+            </Button>
+        </div>
+    );
+}
+
 export default function AttendeesPage() {
+    const { can } = useAuth();
     const [search, setSearch] = useState('');
     const [participantType, setParticipantType] = useState<ParticipantType | ''>('');
     const [batchYear, setBatchYear] = useState('');
@@ -362,6 +413,15 @@ export default function AttendeesPage() {
                             ))}
                         </Select>
                     </div>
+                    {can('attendee.export') && (
+                        <ExportButtons
+                            filters={{
+                                search: debouncedSearch,
+                                participant_type: participantType,
+                                ssc_batch_year: batchYear ? Number(batchYear) : '',
+                            }}
+                        />
+                    )}
                 </div>
 
                 <DataTable

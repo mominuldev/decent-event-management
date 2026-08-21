@@ -28,6 +28,11 @@ return [
         'attendee.delete',
         'attendee.merge_duplicates',
         'attendee.view_contact_details',
+        // Separate from attendee.view_any deliberately: the list view shows a
+        // page at a time behind an audited session, an export puts every
+        // matching row — names, parents' names, addresses and mobile numbers —
+        // into a file that leaves the system entirely.
+        'attendee.export',
         'guest.manage',
 
         // Tickets
@@ -139,7 +144,8 @@ return [
             'registration.view_any', 'registration.view', 'registration.create',
             'registration.update', 'registration.cancel', 'registration.export',
             'attendee.view_any', 'attendee.view', 'attendee.update',
-            'attendee.merge_duplicates', 'attendee.view_contact_details', 'guest.manage',
+            'attendee.merge_duplicates', 'attendee.view_contact_details',
+            'attendee.export', 'guest.manage',
 
             'ticket.view_any', 'ticket.view', 'ticket.issue', 'ticket.reissue',
             'ticket.void', 'ticket.download_pdf', 'ticket.transfer', 'ticket_type.view_any',

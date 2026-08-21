@@ -16,6 +16,7 @@ use App\Domain\Ticketing\Models\Ticket;
 use App\Domain\Ticketing\Models\TicketType;
 use Database\Seeders\RbacSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -155,6 +156,17 @@ class ComprehensivePermissionTest extends TestCase
 
         Sanctum::actingAs($this->volunteer, ['*'], 'web-admin');
         $this->getJson(route('api.v1.admin.attendees.show', ['attendee' => $attendee->ulid]))->assertStatus(403);
+    }
+
+    public function test_attendee_export_http(): void
+    {
+        Storage::fake('local');
+
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->get(route('api.v1.admin.attendees.export', ['format' => 'xlsx']))->assertStatus(200);
+
+        Sanctum::actingAs($this->volunteer, ['*'], 'web-admin');
+        $this->get(route('api.v1.admin.attendees.export', ['format' => 'xlsx']))->assertStatus(403);
     }
 
     public function test_attendee_delete_http(): void

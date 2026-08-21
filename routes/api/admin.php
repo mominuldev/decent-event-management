@@ -26,6 +26,9 @@ use App\Http\Controllers\Api\Admin\VolunteerController;
 use Illuminate\Support\Facades\Route;
 
 Route::apiResource('registrations', RegistrationController::class)->except(['store']);
+// Registered before the apiResource, or `export` is swallowed by the
+// `{attendee}` binding and answers 404 instead of downloading.
+Route::get('attendees/export', [AttendeeController::class, 'export'])->name('attendees.export');
 Route::apiResource('attendees', AttendeeController::class)->except(['store']);
 Route::apiResource('ticket-types', TicketTypeController::class);
 Route::apiResource('tickets', TicketController::class)->only(['index', 'show']);
