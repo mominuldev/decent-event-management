@@ -1,11 +1,20 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Eye, EyeOff, GripVertical, Plus, Trash2 } from 'lucide-react';
-import { Badge, Button, Input, Label, Select } from '@/components/ui';
+import { Badge, Button, Input, Label, Select, Textarea } from '@/components/ui';
 import { cn } from '@/lib/cn';
-import { BLOCK_SCHEMAS, readList, readText, type ListEntry } from '../blocks';
+import {
+    BLOCK_SCHEMAS,
+    isTranslatableItemField,
+    readItems,
+    readList,
+    readText,
+    type BlockField,
+    type ListEntry,
+    type RepeaterItemField,
+} from '../blocks';
 import { BLOCK_TYPES, type BlockData, type BlockDraft, type BlockType, type MediaFile } from '../types';
 import { BilingualField, type EditLocale } from './BilingualField';
-import { MediaField } from './MediaPicker';
+import { ImagePathField, MediaField } from './MediaPicker';
 
 let draftSeq = 0;
 
@@ -84,6 +93,156 @@ function ListField({
     );
 }
 
+/**
+ * A repeatable row of fields — guests, attractions, testimonials, packages.
+ *
+ * The two language arrays are kept strictly index-aligned: adding, removing
+ * and reordering apply to both at once, and a row field the schema marks
+ * untranslatable (an image path, a link, an icon or tone key) is written to
+ * both with the same value. Without that lockstep, `ContentLocale::pickArray`
+ * — which falls back per *key*, not per array element — would happily serve a
+ * Bangla array of four rows where English has six.
+ */
+function RepeaterField({
+    field,
+    locale,
+    block,
+    onChange,
+}: {
+    field: BlockField;
+    locale: EditLocale;
+    block: BlockDraft;
+    onChange: (next: BlockDraft) => void;
+}) {
+    const itemFields: RepeaterItemField[] = field.item ?? [];
+    const en = readItems(block.data[field.key]);
+    const bn = readItems(block.data_bn[field.key]);
+    const count = Math.max(en.length, bn.length);
+
+    const rows = Array.from({ length: count }, (_, i) => ({ en: en[i] ?? {}, bn: bn[i] ?? {} }));
+
+    const commit = (next: { en: Record<string, string>; bn: Record<string, string> }[]) =>
+        onChange({
+            ...block,
+            data: { ...block.data, [field.key]: next.map((row) => row.en) },
+            data_bn: { ...block.data_bn, [field.key]: next.map((row) => row.bn) },
+        });
+
+    const setValue = (index: number, itemField: RepeaterItemField, value: string) =>
+        commit(
+            rows.map((row, i) => {
+                if (i !== index) return row;
+
+                // Untranslatable keys carry one value into both languages, so
+                // switching the edit locale never shows a stale image or link.
+                if (!isTranslatableItemField(itemField)) {
+                    return {
+                        en: { ...row.en, [itemField.key]: value },
+                        bn: { ...row.bn, [itemField.key]: value },
+                    };
+                }
+
+                return locale === 'bn'
+                    ? { ...row, bn: { ...row.bn, [itemField.key]: value } }
+                    : { ...row, en: { ...row.en, [itemField.key]: value } };
+            }),
+        );
+
+    const move = (from: number, to: number) => {
+        if (to < 0 || to >= rows.length) return;
+        const next = [...rows];
+        const [moved] = next.splice(from, 1);
+        next.splice(to, 0, moved);
+        commit(next);
+    };
+
+    const noun = field.itemLabel ?? 'entry';
+
+    return (
+        <div>
+            <div className="flex items-baseline justify-between">
+                <Label>{field.label}</Label>
+                <span className="mb-1.5 text-[11px] text-text-faint">
+                    {rows.length} {rows.length === 1 ? noun : `${noun}s`}
+                </span>
+            </div>
+
+            <div className="space-y-3">
+                {rows.map((row, i) => (
+                    <div key={i} className="rounded-xl border border-border bg-surface-2 p-3">
+                        <div className="mb-2 flex items-center gap-1">
+                            <span className="text-[11.5px] font-semibold uppercase tracking-wide text-text-faint">
+                                {noun} {i + 1}
+                            </span>
+                            <div className="ml-auto flex items-center gap-1">
+                                <Button type="button" variant="ghost" size="sm" aria-label={`Move ${noun} up`} disabled={i === 0} onClick={() => move(i, i - 1)}>
+                                    <ChevronUp size={14} />
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" aria-label={`Move ${noun} down`} disabled={i === rows.length - 1} onClick={() => move(i, i + 1)}>
+                                    <ChevronDown size={14} />
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" aria-label={`Remove ${noun}`} onClick={() => commit(rows.filter((_, j) => j !== i))}>
+                                    <Trash2 size={14} />
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2.5">
+                            {itemFields.map((itemField) => {
+                                const translatable = isTranslatableItemField(itemField);
+                                const value = translatable && locale === 'bn'
+                                    ? readText(row.bn[itemField.key])
+                                    : readText(row.en[itemField.key]);
+
+                                if (itemField.kind === 'image') {
+                                    return (
+                                        <ImagePathField
+                                            key={itemField.key}
+                                            label={itemField.label}
+                                            value={value}
+                                            placeholder={itemField.placeholder}
+                                            onChange={(next) => setValue(i, itemField, next)}
+                                        />
+                                    );
+                                }
+
+                                const Control = itemField.kind === 'textarea' ? Textarea : Input;
+
+                                return (
+                                    <div key={itemField.key}>
+                                        <div className="flex items-baseline justify-between">
+                                            <Label>{itemField.label}</Label>
+                                            {translatable && (
+                                                <span className={cn(
+                                                    'mb-1.5 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+                                                    locale === 'bn' ? 'bg-info-bg text-info-fg' : 'bg-surface-2 text-text-faint',
+                                                )}>
+                                                    {locale === 'bn' ? 'বাংলা' : 'English'}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <Control
+                                            value={value}
+                                            placeholder={itemField.placeholder}
+                                            onChange={(e: { target: { value: string } }) => setValue(i, itemField, e.target.value)}
+                                        />
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ))}
+
+                <Button type="button" variant="outline" size="sm" onClick={() => commit([...rows, { en: {}, bn: {} }])}>
+                    <Plus size={14} /> Add {noun}
+                </Button>
+            </div>
+
+            {field.help && <p className="mt-1 text-[11.5px] text-text-faint">{field.help}</p>}
+        </div>
+    );
+}
+
 function BlockCard({
     block,
     index,
@@ -149,7 +308,15 @@ function BlockCard({
                     )}
 
                     {schema.fields.map((field) =>
-                        field.kind === 'list' ? (
+                        field.kind === 'repeater' ? (
+                            <RepeaterField
+                                key={field.key}
+                                field={field}
+                                locale={locale}
+                                block={block}
+                                onChange={onChange}
+                            />
+                        ) : field.kind === 'list' ? (
                             <ListField
                                 key={field.key}
                                 label={field.label}

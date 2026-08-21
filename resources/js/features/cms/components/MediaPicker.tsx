@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ImageIcon, Upload, X } from 'lucide-react';
-import { Button, EmptyState, Label, Skeleton } from '@/components/ui';
+import { Button, EmptyState, Input, Label, Skeleton } from '@/components/ui';
 import { Dialog } from '@/components/Dialog';
 import { useToast } from '@/components/Toast';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -184,6 +184,60 @@ export function MediaField({
             {help && <p className="mt-1 text-[11.5px] text-text-faint">{help}</p>}
 
             <MediaPicker open={picking} onClose={() => setPicking(false)} onSelect={onChange} collection={collection} />
+        </div>
+    );
+}
+
+/**
+ * An image stored as a *path string* rather than a media-library reference —
+ * what every repeatable row on the homepage blocks uses (see
+ * `blocks.ts`'s `ItemFieldKind`). The library is still one click away: picking
+ * a file writes its public URL into the same string, so an editor can either
+ * type `/images/home/guests/selim.jpg` (the seeded, site-shipped art) or
+ * upload a replacement and never know the difference.
+ */
+export function ImagePathField({
+    label,
+    value,
+    onChange,
+    collection = 'content',
+    placeholder,
+}: {
+    label: string;
+    value: string;
+    onChange: (next: string) => void;
+    collection?: MediaCollection;
+    placeholder?: string;
+}) {
+    const [picking, setPicking] = useState(false);
+
+    return (
+        <div>
+            <Label>{label}</Label>
+            <div className="flex items-center gap-2">
+                {value ? (
+                    <img src={value} alt="" className="h-10 w-10 shrink-0 rounded-lg border border-border object-cover" />
+                ) : (
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-dashed border-border text-text-faint">
+                        <ImageIcon size={15} />
+                    </span>
+                )}
+                <Input
+                    value={value}
+                    placeholder={placeholder ?? '/images/home/…'}
+                    onChange={(e) => onChange(e.target.value)}
+                />
+                <Button type="button" variant="outline" size="sm" onClick={() => setPicking(true)}>
+                    Library
+                </Button>
+            </div>
+
+            <MediaPicker
+                open={picking}
+                onClose={() => setPicking(false)}
+                onSelect={(media) => onChange(media.url ?? '')}
+                collection={collection}
+            />
         </div>
     );
 }

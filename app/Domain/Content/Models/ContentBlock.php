@@ -37,6 +37,20 @@ class ContentBlock extends Model
         'schedule',
         'gallery',
         'video',
+        // Home-page sections. These are narrower than the generic types
+        // above on purpose: each one maps to exactly one bespoke section of
+        // the centenary homepage design, so the editor fills the fields that
+        // section actually draws rather than approximating it with a
+        // `rich_text` + `image` pair the renderer would have to guess at.
+        'home_hero',
+        'stat_bar',
+        'history_teaser',
+        'milestone_timeline',
+        'guest_carousel',
+        'attraction_grid',
+        'testimonial_carousel',
+        'pricing_teaser',
+        'cta_banner',
     ];
 
     protected $fillable = [

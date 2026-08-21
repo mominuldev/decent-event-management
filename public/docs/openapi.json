@@ -2431,7 +2431,16 @@
                                                         "sponsor_grid",
                                                         "schedule",
                                                         "gallery",
-                                                        "video"
+                                                        "video",
+                                                        "home_hero",
+                                                        "stat_bar",
+                                                        "history_teaser",
+                                                        "milestone_timeline",
+                                                        "guest_carousel",
+                                                        "attraction_grid",
+                                                        "testimonial_carousel",
+                                                        "pricing_teaser",
+                                                        "cta_banner"
                                                     ]
                                                 },
                                                 "data": {
@@ -9028,7 +9037,16 @@
                                                                     "sponsor_grid",
                                                                     "schedule",
                                                                     "gallery",
-                                                                    "video"
+                                                                    "video",
+                                                                    "home_hero",
+                                                                    "stat_bar",
+                                                                    "history_teaser",
+                                                                    "milestone_timeline",
+                                                                    "guest_carousel",
+                                                                    "attraction_grid",
+                                                                    "testimonial_carousel",
+                                                                    "pricing_teaser",
+                                                                    "cta_banner"
                                                                 ]
                                                             },
                                                             "position": {

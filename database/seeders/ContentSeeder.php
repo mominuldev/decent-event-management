@@ -35,32 +35,12 @@ class ContentSeeder extends Seeder
 
     private function seedPages(): void
     {
+        // `home` is deliberately absent: it is thirteen bespoke sections
+        // rather than a handful of generic blocks, so {@see HomePageSeeder}
+        // owns that page — and holds position 0, which is why the pages here
+        // start at 1.
         /** @var array<int, array{slug: string, title: string, title_bn: string, excerpt: string, excerpt_bn: string, blocks: array<int, array{type: string, data: array<string, mixed>, data_bn: array<string, mixed>}>}> $pages */
         $pages = [
-            [
-                'slug' => 'home',
-                'title' => 'Centenary Celebration',
-                'title_bn' => 'শতবর্ষ উদযাপন',
-                'excerpt' => 'One hundred years of the institution, celebrated by the people who made it.',
-                'excerpt_bn' => 'প্রতিষ্ঠানের একশ বছর, উদযাপন করছেন যাঁরা একে গড়ে তুলেছেন।',
-                'blocks' => [
-                    [
-                        'type' => 'hero',
-                        'data' => ['heading' => 'A Hundred Years', 'subheading' => 'Come home for the centenary.', 'cta_label' => 'Register now', 'cta_url' => '/register'],
-                        'data_bn' => ['heading' => 'একশ বছর', 'subheading' => 'শতবর্ষে ফিরে আসুন।', 'cta_label' => 'নিবন্ধন করুন', 'cta_url' => '/register'],
-                    ],
-                    [
-                        'type' => 'rich_text',
-                        'data' => ['heading' => 'About the celebration', 'body' => 'Three days of reunion, remembrance and renewal, open to every former student, teacher and member of staff.'],
-                        'data_bn' => ['heading' => 'উদযাপন সম্পর্কে', 'body' => 'তিন দিনের পুনর্মিলনী, স্মৃতিচারণ ও নবায়ন — সকল প্রাক্তন শিক্ষার্থী, শিক্ষক ও কর্মচারীর জন্য উন্মুক্ত।'],
-                    ],
-                    [
-                        'type' => 'sponsor_grid',
-                        'data' => ['heading' => 'Our sponsors'],
-                        'data_bn' => ['heading' => 'আমাদের পৃষ্ঠপোষক'],
-                    ],
-                ],
-            ],
             [
                 'slug' => 'about',
                 'title' => 'About',
@@ -135,7 +115,7 @@ class ContentSeeder extends Seeder
                     'status' => 'published',
                     'published_at' => now(),
                     'is_indexable' => true,
-                    'position' => $position,
+                    'position' => $position + 1,
                 ]
             );
 

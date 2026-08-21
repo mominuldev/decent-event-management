@@ -18,6 +18,9 @@ class DatabaseSeeder extends Seeder
             TicketTypeSeeder::class,
             EventSessionSeeder::class,
             GateSeeder::class,
+            // Before ContentSeeder: that seeder's menu pass resolves menu
+            // items to pages by slug, and `home` is created here.
+            HomePageSeeder::class,
             ContentSeeder::class,
             NotificationTemplateSeeder::class,
             DummyDataSeeder::class,

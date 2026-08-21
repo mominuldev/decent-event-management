@@ -25,6 +25,11 @@ export const PAGE_TEMPLATES = ['standard', 'landing', 'article', 'contact'] as c
 export const BLOCK_TYPES = [
     'rich_text', 'hero', 'image', 'cta', 'stat_row',
     'faq_list', 'sponsor_grid', 'schedule', 'gallery', 'video',
+    // Home-page sections — see ContentBlock::TYPES for why these are their
+    // own types rather than compositions of the generic ones.
+    'home_hero', 'stat_bar', 'history_teaser', 'milestone_timeline',
+    'guest_carousel', 'attraction_grid', 'testimonial_carousel',
+    'pricing_teaser', 'cta_banner',
 ] as const;
 
 export type BlockType = (typeof BLOCK_TYPES)[number];
