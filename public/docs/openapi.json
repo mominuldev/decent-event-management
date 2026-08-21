@@ -211,6 +211,100 @@
                 ]
             }
         },
+        "/admin/attendees/export": {
+            "get": {
+                "tags": [
+                    "Attendees"
+                ],
+                "summary": "Download the filtered attendee list as a spreadsheet or PDF",
+                "description": "Returns a binary file, not JSON. Each row carries the attendee's profile photo, name, father's name, current address, occupation, organization and mobile number. The filter parameters are identical to GET /admin/attendees, so an export always contains exactly the rows that list shows. Generated synchronously; a filter set selecting more rows than the format's configured ceiling is refused with 422 export_too_large rather than run to a timeout.",
+                "operationId": "048ef0cb525f01aa0282e2117ee429eb",
+                "parameters": [
+                    {
+                        "name": "format",
+                        "in": "query",
+                        "description": "File format to generate",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "xlsx",
+                                "pdf"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "description": "Partial match against name, mobile, or email",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 150
+                        }
+                    },
+                    {
+                        "name": "participant_type",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "current_student",
+                                "former_student",
+                                "teacher",
+                                "staff",
+                                "guardian",
+                                "guest",
+                                "sponsor",
+                                "other"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "ssc_batch_year",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The generated file, as an attachment",
+                        "content": {
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            },
+                            "application/pdf": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Missing attendee.export permission"
+                    },
+                    "422": {
+                        "description": "Validation error, or export_too_large for the selected filters"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/admin/attendees/{attendee}": {
             "get": {
                 "tags": [
@@ -739,6 +833,70 @@
                     },
                     "401": {
                         "description": "Unauthenticated"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/auth/reauth": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Re-confirm credentials for an action that requires re-authentication",
+                "description": "Proves a person is present at the keyboard before a high-consequence action such as QR signing key rotation (docs/06 §6.5). The confirmation is bound to the access token used, lasts a few minutes, and does not issue a new token.",
+                "operationId": "c56c7ecc5fc37652f0866bf603e27887",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "password"
+                                ],
+                                "properties": {
+                                    "password": {
+                                        "type": "string",
+                                        "format": "password"
+                                    },
+                                    "totp_code": {
+                                        "description": "Required when the account has 2FA confirmed",
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Re-authenticated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "confirmed": {
+                                            "type": "boolean"
+                                        },
+                                        "expires_in_minutes": {
+                                            "type": "integer"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "422": {
+                        "description": "Password or TOTP code incorrect"
                     }
                 },
                 "security": [
@@ -2431,16 +2589,7 @@
                                                         "sponsor_grid",
                                                         "schedule",
                                                         "gallery",
-                                                        "video",
-                                                        "home_hero",
-                                                        "stat_bar",
-                                                        "history_teaser",
-                                                        "milestone_timeline",
-                                                        "guest_carousel",
-                                                        "attraction_grid",
-                                                        "testimonial_carousel",
-                                                        "pricing_teaser",
-                                                        "cta_banner"
+                                                        "video"
                                                     ]
                                                 },
                                                 "data": {
@@ -4828,6 +4977,197 @@
                                 }
                             }
                         }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/qr-signing/keys": {
+            "get": {
+                "tags": [
+                    "QR Signing Keys"
+                ],
+                "summary": "List QR signing keys and rotation readiness",
+                "description": "Returns every known key with its lifecycle state, which key ids this server holds private material for but has not published yet, and — for a pending key — how much of the scanner fleet has confirmed it holds the new public key.",
+                "operationId": "88615a677f3530b2b5496530d77701b6",
+                "responses": {
+                    "200": {
+                        "description": "Key inventory and readiness",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        },
+                                        "meta": {
+                                            "properties": {
+                                                "active_key_id": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "unpublished_key_ids": {
+                                                    "description": "Private key material this server holds that has not been published to devices yet",
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "readiness": {
+                                                    "description": "Fleet sync status for the pending key, when one exists",
+                                                    "type": "object",
+                                                    "nullable": true
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Missing qr.rotate_signing_key"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "QR Signing Keys"
+                ],
+                "summary": "Publish a new signing key to scanner devices (rotation step 1)",
+                "description": "Registers a key id this server already holds the private half of, deriving and publishing its public key. Devices pick it up on their next manifest sync. Nothing signs with it until it is activated.",
+                "operationId": "8982b7febc1599e7085faf997635fe4b",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "key_id"
+                                ],
+                                "properties": {
+                                    "key_id": {
+                                        "type": "string",
+                                        "maxLength": 32
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Key published to devices"
+                    },
+                    "403": {
+                        "description": "Missing qr.rotate_signing_key, or re-authentication required"
+                    },
+                    "422": {
+                        "description": "Key already registered, or no private key available for it"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/qr-signing/keys/{key}/activate": {
+            "post": {
+                "tags": [
+                    "QR Signing Keys"
+                ],
+                "summary": "Start signing new tickets with this key (rotation step 3)",
+                "description": "Refuses unless every active scanner device has completed a manifest sync since the key was published — activating early is what breaks a gate. `force` overrides that and is recorded distinctly in the audit trail.",
+                "operationId": "b1bdeba24cded60927ad9cf3220d5977",
+                "parameters": [
+                    {
+                        "name": "key",
+                        "in": "path",
+                        "description": "Signing key ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "force": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Key activated; the previous key is retired but still verifies"
+                    },
+                    "403": {
+                        "description": "Missing qr.rotate_signing_key, or re-authentication required"
+                    },
+                    "422": {
+                        "description": "Devices not synced, or no private key available for this key"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/qr-signing/keys/{key}/retire": {
+            "post": {
+                "tags": [
+                    "QR Signing Keys"
+                ],
+                "summary": "Call off a published-but-unactivated key",
+                "description": "Retires a pending key. A retired key still verifies tickets already signed with it; it simply stops being a rotation candidate. The active key cannot be retired this way.",
+                "operationId": "1f20bcb77cea2b4529af42006fcb2364",
+                "parameters": [
+                    {
+                        "name": "key",
+                        "in": "path",
+                        "description": "Signing key ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Key retired"
+                    },
+                    "403": {
+                        "description": "Missing qr.rotate_signing_key, or re-authentication required"
+                    },
+                    "422": {
+                        "description": "Cannot retire the active signing key"
                     }
                 },
                 "security": [
@@ -9037,16 +9377,7 @@
                                                                     "sponsor_grid",
                                                                     "schedule",
                                                                     "gallery",
-                                                                    "video",
-                                                                    "home_hero",
-                                                                    "stat_bar",
-                                                                    "history_teaser",
-                                                                    "milestone_timeline",
-                                                                    "guest_carousel",
-                                                                    "attraction_grid",
-                                                                    "testimonial_carousel",
-                                                                    "pricing_teaser",
-                                                                    "cta_banner"
+                                                                    "video"
                                                                 ]
                                                             },
                                                             "position": {
@@ -10561,13 +10892,14 @@
                 "tags": [
                     "Scanner"
                 ],
-                "summary": "Fetch the offline admission manifest (ETag-based delta sync)",
+                "summary": "Fetch the offline admission manifest (ETag delta sync, streamed, optionally paginated)",
+                "description": "Streams the manifest so server memory stays flat regardless of ticket count. The default response is the complete manifest and its body shape is unchanged, so a client that does not paginate keeps working. Pass `limit` to opt into bounded, resumable pages.",
                 "operationId": "b97a7eef8bbae8c7fb69ee2f789d5c1c",
                 "parameters": [
                     {
                         "name": "If-None-Match",
                         "in": "header",
-                        "description": "ETag returned by a previous manifest fetch; when it still matches, a 304 is returned with no body. Only applies to a cold-start fetch (no `since`).",
+                        "description": "ETag returned by a previous manifest fetch; when it still matches, a 304 is returned with no body. Only applies to a cold-start fetch (no `since`, no `after`).",
                         "required": false,
                         "schema": {
                             "type": "string"
@@ -10578,7 +10910,28 @@
                         "in": "query",
                         "description": "The device's last-known manifest version. When given, only tickets with a manifest_version greater than this are returned — voided/refunded/expired tickets included, so revocations reach the device. Omit for a cold start, which returns every currently admissible ticket.",
                         "schema": {
-                            "type": "integer"
+                            "type": "integer",
+                            "minimum": 0
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "Opt in to bounded pages of at most this many entries. When more remain, `meta.next_cursor` is the value to pass back as `after`. Omit for the complete manifest in one streamed response.",
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 5000,
+                            "minimum": 1
+                        }
+                    },
+                    {
+                        "name": "after",
+                        "in": "query",
+                        "description": "Resume from this cursor (the `meta.next_cursor` of the previous page). Entries are ordered by ticket ULID, so a sync interrupted on a poor connection resumes instead of restarting.",
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 26,
+                            "minLength": 26
                         }
                     }
                 ],
@@ -10633,8 +10986,13 @@
                                         "meta": {
                                             "properties": {
                                                 "manifest_version": {
-                                                    "description": "Highest manifest_version across all tickets right now — pass back as `since` next fetch",
+                                                    "description": "Highest manifest_version across all tickets right now — pass back as `since` next fetch, but only once every page has been fetched",
                                                     "type": "integer"
+                                                },
+                                                "next_cursor": {
+                                                    "description": "Present only when `limit` was given. Non-null means more entries remain: pass it back as `after`. Null means this was the last page and the sync is complete.",
+                                                    "type": "string",
+                                                    "nullable": true
                                                 },
                                                 "active_key_id": {
                                                     "type": "string"
@@ -10657,6 +11015,9 @@
                     },
                     "401": {
                         "description": "Missing or invalid scanner token"
+                    },
+                    "422": {
+                        "description": "Invalid since/limit/after parameter"
                     }
                 },
                 "security": [
@@ -11002,6 +11363,10 @@
         {
             "name": "Payments",
             "description": "Payment processing and management"
+        },
+        {
+            "name": "QR Signing Keys",
+            "description": "Every route here needs `qr.rotate_signing_key` (Super Admin only — the\nEvent Manager role deliberately excludes it) and the mutating ones\nadditionally need recent re-authentication."
         },
         {
             "name": "Registrations",
