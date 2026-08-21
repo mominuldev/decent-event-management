@@ -115,6 +115,13 @@ jobs:
       - name: Boot-check the built image
         run: docker run --rm --entrypoint php release-candidate:${{ github.sha }} artisan --version
 
+      # PDF rendering is an out-of-process dependency, so a base-image change
+      # that moves or drops the Chromium binary would not fail any of the
+      # checks above — it would surface as tickets failing to render in
+      # production. One cheap assertion here closes that.
+      - name: Assert the PDF renderer's binary is present
+        run: docker run --rm --entrypoint /usr/bin/chromium release-candidate:${{ github.sha }} --version
+
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3

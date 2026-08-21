@@ -1,27 +1,30 @@
-<style>
-    body { font-family: freeserif; font-size: 10.5pt; color: #1a1a1a; }
+@extends('pdf.layout')
+
+@section('styles')
+    body { font-size: 10.5pt; }
     .header { text-align: center; border-bottom: 2px solid #1a1a1a; padding-bottom: 8px; margin-bottom: 12px; }
-    .event-name { font-size: 16pt; font-weight: bold; }
+    .event-name { font-size: 16pt; font-weight: 700; }
     .subtitle { font-size: 11pt; color: #444444; margin-top: 2px; }
     table.layout { width: 100%; border-collapse: collapse; }
     table.layout td { vertical-align: top; }
+    .details { width: 100%; border-collapse: collapse; }
     .details td { padding: 3px 0; }
     .label { color: #555555; width: 40%; }
-    .value { font-weight: bold; }
-    /* FreeSerifBold.ttf (mpdf's bundled bold weight) has zero glyph coverage
-       for the Bengali block — bolding Bangla text does not degrade it, it
-       makes it disappear outright (confirmed via hb-shape: every codepoint
-       maps to .notdef). holder_name_bn is the one dynamic field here that
-       is genuinely Bangla script, so it opts back out of the bold weight. */
-    .value.bn-value { font-weight: normal; }
+    /* Bold Bangla is safe now. Under mpdf it was not: its bundled
+       FreeSerifBold.ttf has zero Bengali coverage, so bolding Bangla text
+       did not degrade it, it removed it from the page. The bundled Noto
+       Sans Bengali is a variable font carrying every weight. */
+    .value { font-weight: 700; }
     .qr-cell { text-align: center; width: 40%; padding-left: 12px; }
     .qr-cell img { width: 130px; height: 130px; }
     .qr-caption { font-size: 8pt; color: #555555; margin-top: 4px; }
-    .photo { width: 70px; height: 70px; border: 1px solid #cccccc; margin-bottom: 8px; }
+    .qr-missing { font-size: 9pt; color: #a12; border: 1px dashed #a12; padding: 10px 6px; }
+    .photo { width: 70px; height: 70px; border: 1px solid #cccccc; margin-bottom: 8px; object-fit: cover; }
     .footer { margin-top: 16px; border-top: 1px solid #cccccc; padding-top: 6px; font-size: 8pt; color: #666666; }
     .ticket-number { font-size: 9pt; color: #777777; text-align: center; margin-top: 4px; }
-</style>
+@endsection
 
+@section('content')
 <div class="header">
     <div class="event-name">{{ $eventName }}</div>
     <div class="subtitle">Admission Ticket &middot; প্রবেশপত্র</div>
@@ -36,7 +39,7 @@
             <table class="details">
                 <tr>
                     <td class="label">Holder &middot; ধারণকারী</td>
-                    <td class="value{{ $ticket->holder_name_bn ? ' bn-value' : '' }}">{{ $ticket->holder_name_bn ?: $ticket->holder_name }}</td>
+                    <td class="value">{{ $ticket->holder_name_bn ?: $ticket->holder_name }}</td>
                 </tr>
                 @if ($ticket->holder_batch_year)
                     <tr>
@@ -73,8 +76,20 @@
             </table>
         </td>
         <td class="qr-cell">
-            <img src="{{ $qrDataUri }}" alt="QR code" width="130" height="130">
-            <div class="qr-caption">Present this code at the gate<br>প্রবেশদ্বারে এই কোডটি দেখান</div>
+            @if ($qrDataUri)
+                <img src="{{ $qrDataUri }}" alt="QR code" width="130" height="130">
+                <div class="qr-caption">Present this code at the gate<br>প্রবেশদ্বারে এই কোডটি দেখান</div>
+            @else
+                {{-- A ticket with no qr_codes row still renders, but it says so.
+                     Rendering the <img> unconditionally puts a broken-image icon
+                     where the QR belongs, which reads as a printing fault rather
+                     than a ticket that cannot admit anyone. --}}
+                <div class="qr-missing">
+                    QR code unavailable<br>
+                    কিউআর কোড পাওয়া যায়নি
+                    <div class="qr-caption">Contact the organising committee before travelling.<br>ভ্রমণের আগে আয়োজক কমিটির সঙ্গে যোগাযোগ করুন।</div>
+                </div>
+            @endif
         </td>
     </tr>
 </table>
@@ -88,3 +103,4 @@
     এই টিকিট হস্তান্তরযোগ্য নয়। প্রবেশের জন্য গেটে এটি (ডিজিটাল বা প্রিন্ট করা) দেখাতে হবে।
     হারিয়ে গেলে বা নষ্ট হলে পুনরায় ইস্যুর জন্য আয়োজক কমিটিকে জানান।
 </div>
+@endsection

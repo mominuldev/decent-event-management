@@ -64,6 +64,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         nginx \
         supervisor \
         unzip \
+        # Ticket and directory PDFs are rendered by headless Chrome rather
+        # than a PHP library — see config/pdf.php. This is a correctness
+        # dependency, not a convenience: mpdf dropped Bengali conjuncts from
+        # the extractable text layer entirely, and roughly half of the names
+        # on this roster contain one.
+        chromium \
+        # Chromium ships no fonts. The faces the documents actually use are
+        # bundled in resources/fonts and loaded via @font-face, so this set
+        # is only a sane fallback for anything a template does not pin.
+        fonts-liberation \
+        fonts-noto-core \
     && docker-php-ext-configure gd --with-jpeg --with-freetype --with-webp \
     && docker-php-ext-install -j"$(nproc)" \
         pdo_mysql \
@@ -79,6 +90,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Cheap, standard opcache defaults for a request-response PHP-FPM app — not
 # tuned against real production traffic, since nothing here can generate any.
+# Pinned rather than left to auto-detection: config/pdf.php probes a list of
+# well-known paths, and naming it here means a base-image change that moves
+# or renames the binary fails the build's own boot check instead of surfacing
+# as a failed ticket render in production.
+ENV CHROME_BINARY=/usr/bin/chromium
+
 COPY docker/php/opcache-production.ini /usr/local/etc/php/conf.d/opcache-production.ini
 COPY docker/nginx.conf /etc/nginx/sites-enabled/default
 COPY docker/supervisord.conf /etc/supervisor/supervisord.conf

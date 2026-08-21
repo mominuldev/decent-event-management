@@ -3,50 +3,42 @@
 namespace App\Domain\Ticketing\Services;
 
 use App\Domain\Shared\Models\EventSetting;
+use App\Domain\Shared\Services\HtmlToPdfRenderer;
 use App\Domain\Ticketing\Models\Ticket;
 use Illuminate\Support\Facades\Storage;
-use Mpdf\Mpdf;
-use Mpdf\Output\Destination;
 
 /**
- * Bilingual (EN/Bangla) A5 ticket PDF. Uses mpdf's bundled `freeserif`
- * (GNU FreeFont, ttfonts/FreeSerif*.ttf) rather than a downloaded Noto
- * build — current Noto Sans Bengali releases use an OpenType GPOS lookup
- * (Type 5, Format 3) that mpdf's font engine can't parse, which silently
- * drops complex-script shaping (conjuncts render as broken base+virama
- * sequences instead of the correct ligature).
+ * Bilingual (EN/Bangla) A5 ticket PDF, rendered by headless Chrome via
+ * {@see HtmlToPdfRenderer}.
  *
- * Phase 8 finding, 2026-08-04, worse than the paragraph above previously
- * claimed: FreeSerif is *not* a fully verified Indic choice, on two counts
- * confirmed with `hb-shape` and `pdftotext` against this exact pipeline —
- *   1. FreeSerifBold.ttf has zero Bengali glyph coverage (every Bengali
- *      codepoint maps to .notdef). Any Bangla text rendered bold does not
- *      degrade, it disappears from the page entirely. resources/views/
- *      tickets/pdf.blade.php's `.bn-value` class works around this for the
- *      one dynamic Bangla field (holder_name_bn) by opting it out of the
- *      `.value` class's bold weight — any *other* template that puts
- *      Bangla text in a bold context needs the same treatment.
- *   2. Independent of bold: mpdf's built-in Bengali OTL/ligature engine
- *      does not emit a correct ToUnicode CMap entry for consonant-conjunct
- *      clusters (e.g. `দ্দ`) — the PDF's extractable text layer gets a
- *      private-use-area codepoint in place of the conjunct, not the real
- *      characters. Pre-base vowel signs (ি/ে/ৈ) also extract in visual
- *      rather than logical order. Visually the print may still look
- *      approximately right (unverified — physical print testing per
- *      docs/08 is still out of scope here); what's proven broken is
- *      text-layer fidelity: copy-paste, search, and accessibility tooling
- *      see garbage for any conjunct-bearing name, which covers a large
- *      share of real Bengali names. No fix is implemented for this —  it
- *      needs either a HarfBuzz-based pre-shaping pass feeding mpdf
- *      pre-shaped glyph runs, or a different PDF rendering engine
- *      entirely. Tracked, not silently dropped: see
- *      tests/Feature/Ticketing/GenerateTicketAssetsJobTest.php's Bangla
- *      test for what is and is not asserted as a result.
+ * It used to be mpdf, and the move was a correctness fix rather than a
+ * preference. Two defects, both confirmed against this exact pipeline with
+ * `pdftotext` and `hb-shape`, are closed by it:
+ *
+ *   1. mpdf assigns a synthetic private-use codepoint (TTFontFile's 0xE000
+ *      fallback) to every glyph absent from the font's cmap — which is every
+ *      Bengali conjunct ligature — and wrote that into the PDF's ToUnicode
+ *      map. Extractors discard private-use codepoints, so the characters did
+ *      not come out mangled, they came out MISSING: a real name like
+ *      "মোহাম্মদ রহিম উদ্দিন" extracted as "মাহাদ রিহম উিন". Pre-base vowel
+ *      signs additionally extracted in visual rather than logical order,
+ *      which no ToUnicode map can express — that needs /ActualText, which
+ *      mpdf cannot emit at all.
+ *   2. mpdf's bundled FreeSerifBold.ttf has zero Bengali coverage, so bold
+ *      Bangla did not degrade, it disappeared from the page. The template no
+ *      longer needs the `.bn-value` opt-out that worked around it.
+ *
+ * Chrome shapes with HarfBuzz and writes a correct multi-character ToUnicode
+ * map; every case round-trips. Fonts are bundled in resources/fonts rather
+ * than taken from the host, so a ticket is identical on a developer's
+ * machine and in the production image. See tests/Feature/Ticketing/
+ * BanglaPdfTextLayerTest.php, which asserts the round trip directly.
  */
 class GenerateTicketPdf
 {
     public function __construct(
         private readonly RenderTicketQrImage $qrImage,
+        private readonly HtmlToPdfRenderer $renderer,
     ) {}
 
     public function render(Ticket $ticket): string
@@ -72,12 +64,13 @@ class GenerateTicketPdf
             'sessionVenue' => $session?->venue,
             'photoDataUri' => $this->photoDataUri($ticket),
             'qrDataUri' => $qrDataUri,
+            'fontFaceCss' => $this->renderer->fontFaceCss(),
+            'title' => 'Ticket '.$ticket->ticket_number,
+            'pageSize' => 'A5',
+            'pageMargin' => '12mm',
         ])->render();
 
-        $mpdf = new Mpdf(['format' => 'A5', 'margin_left' => 12, 'margin_right' => 12, 'margin_top' => 12, 'margin_bottom' => 12]);
-        $mpdf->WriteHTML($html);
-
-        return $mpdf->Output('', Destination::STRING_RETURN);
+        return $this->renderer->render($html);
     }
 
     private function photoDataUri(Ticket $ticket): ?string

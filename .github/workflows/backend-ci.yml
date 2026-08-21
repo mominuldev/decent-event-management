@@ -104,6 +104,17 @@ jobs:
       - run: composer install --no-interaction --prefer-dist
       - run: cp .env.example .env
       - run: php artisan key:generate
+      # Ticket and directory PDFs render through headless Chrome
+      # (config/pdf.php), and the Bangla text-layer tests read the result
+      # back with pdftotext. Both are installed explicitly rather than
+      # relying on whatever the runner image happens to ship, so a runner
+      # image change shows up as a failed install rather than as tests
+      # quietly skipping themselves.
+      - name: Install Chromium and poppler-utils for PDF tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends chromium-browser poppler-utils \
+            || sudo apt-get install -y --no-install-recommends chromium poppler-utils
       - name: Wait for MySQL
         run: |
           for i in $(seq 1 30); do

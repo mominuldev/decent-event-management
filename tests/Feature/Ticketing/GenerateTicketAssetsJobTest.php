@@ -76,35 +76,27 @@ class GenerateTicketAssetsJobTest extends TestCase
     }
 
     /**
-     * Phase 8 "Bangla text correctness end-to-end" — proves the attendee's
-     * Bangla name survives form -> database (holder_name_bn, added here
-     * since the PDF previously only ever snapshotted the Latin name) ->
-     * rendered PDF, by extracting the PDF's real text layer with
-     * `pdftotext` rather than only asserting the file is non-empty.
+     * The Bangla text layer, asserted as a real round trip.
      *
-     * What this does and does not prove, found the hard way while writing
-     * it (see GenerateTicketPdf.php's docblock for the full detail):
-     *  - It DOES catch total data loss — `.value`'s bold weight made
-     *    Bengali text disappear outright (FreeSerifBold has no Bengali
-     *    glyphs at all), which the assertion below on a conjunct-free word
-     *    guards against regressing.
-     *  - It deliberately does NOT assert the attendee's name survives
-     *    byte-for-byte. mpdf's Bengali OTL engine does not emit a correct
-     *    ToUnicode entry for consonant-conjunct clusters (confirmed with
-     *    `hb-shape` + `pdftotext` against this exact pipeline) — a name
-     *    containing one, like "উদ্দিন" (দ্দ), extracts with the conjunct
-     *    replaced by a private-use-area codepoint, not the real
-     *    characters. That is a real, currently-unfixed gap in the PDF's
-     *    text-layer accessibility for a large share of real Bengali names
-     *    — flagged, not silently dropped — not something this test should
-     *    paper over by asserting it works.
-     *  - Conjunct rendering on an actual printed page stays a
-     *    physical-print test per docs/08 Phase 6/8 notes regardless;
-     *    nothing here can simulate that.
+     * This test used to assert almost nothing on purpose — only that a
+     * conjunct-free label survived, and that the attendee's name had not
+     * vanished *entirely* — because mpdf could not produce a correct text
+     * layer for Bengali and pinning the mangled bytes would have frozen the
+     * bug in place. Rendering moved to headless Chrome (see
+     * config/pdf.php and GenerateTicketPdf's docblock), so the real
+     * assertion is now possible and is what runs.
+     *
+     * The name is chosen adversarially: "রহিম উদ্দিন" carries both failure
+     * modes at once — the দ্দ conjunct, which mpdf dropped from the text
+     * layer completely, and the pre-base vowel sign ি, which mpdf emitted
+     * in visual rather than logical order.
+     *
+     * Still out of scope, and not simulated here: how any of this looks on
+     * an actual printed page (docs/08 Phase 6/8 physical-print testing).
      */
     public function test_bangla_holder_name_survives_into_the_rendered_pdf_text_layer(): void
     {
-        if (! is_executable('/opt/homebrew/bin/pdftotext') && trim((string) shell_exec('command -v pdftotext')) === '') {
+        if (trim((string) shell_exec('command -v pdftotext')) === '') {
             $this->markTestSkipped('pdftotext (poppler-utils) is not installed in this environment.');
         }
 
@@ -125,18 +117,65 @@ class GenerateTicketAssetsJobTest extends TestCase
         $this->assertSame('রহিম উদ্দিন', $ticket->holder_name_bn);
 
         $pdfPath = Storage::disk('local')->path($ticket->pdf->path);
+        $text = Process::run(['pdftotext', '-enc', 'UTF-8', $pdfPath, '-'])->output();
 
-        $result = Process::run(['pdftotext', '-enc', 'UTF-8', $pdfPath, '-']);
-        $text = $result->output();
-
-        // Conjunct- and pre-base-vowel-free, so it round-trips exactly —
-        // this is the regression guard for the bold/disappearing-text bug.
+        // Static bilingual label — no conjunct, no pre-base vowel.
         $this->assertStringContainsString('ধারণকারী', $text, 'Static Bangla label text is missing from the rendered PDF.');
 
-        // The attendee's name contains a conjunct (দ্দ) and a pre-base
-        // vowel sign (ি), neither of which mpdf's Bengali OTL engine
-        // extracts intact — see the docblock above. Only its
-        // conjunct-free, matra-free prefix is asserted.
-        $this->assertStringContainsString('উ', $text, "The attendee's Bangla name did not survive at all into the PDF text layer.");
+        // The whole name, intact and in logical order. Whitespace is
+        // normalised out because pdftotext inserts word breaks from glyph
+        // advances, which splits a Bengali word without losing a character
+        // of it — that is an extractor heuristic, not a defect in the PDF.
+        $normalised = preg_replace('/\s+/u', '', $text) ?? '';
+
+        $this->assertStringContainsString(
+            'রহিমউদ্দিন',
+            $normalised,
+            "The attendee's Bangla name did not survive intact into the PDF text layer — "
+            .'the দ্দ conjunct or the pre-base ি vowel sign has been dropped or reordered.'
+        );
+    }
+
+    /**
+     * Bold Bangla, which is a separate defect from the text layer.
+     *
+     * mpdf's bundled FreeSerifBold.ttf has zero glyph coverage for the
+     * Bengali block, so bold Bangla did not degrade — it disappeared from
+     * the page. The ticket template carried a `.bn-value` class purely to
+     * opt the one dynamic Bangla field back out of bold. That workaround is
+     * gone, and this asserts it is not needed: the holder name is rendered
+     * bold and still extracts.
+     */
+    public function test_bangla_renders_in_bold_without_disappearing(): void
+    {
+        if (trim((string) shell_exec('command -v pdftotext')) === '') {
+            $this->markTestSkipped('pdftotext (poppler-utils) is not installed in this environment.');
+        }
+
+        $ticketType = TicketType::factory()->create();
+        $attendee = Attendee::factory()->create([
+            'full_name' => 'Mohammad Rahim',
+            'full_name_bn' => 'মোহাম্মদ রহিম',
+        ]);
+        $registration = Registration::factory()->create([
+            'attendee_id' => $attendee->id,
+            'ticket_type_id' => $ticketType->id,
+            'status' => 'paid',
+        ]);
+
+        $ticket = app(IssueTicket::class)->execute($registration);
+        $ticket->refresh()->load('pdf');
+
+        $pdfPath = Storage::disk('local')->path($ticket->pdf->path);
+        $text = Process::run(['pdftotext', '-enc', 'UTF-8', $pdfPath, '-'])->output();
+        $normalised = preg_replace('/\s+/u', '', $text) ?? '';
+
+        // The holder name is styled `font-weight: 700` by the template.
+        $this->assertStringContainsString('মোহাম্মদরহিম', $normalised);
+
+        // And a bold face genuinely carrying Bengali glyphs is embedded,
+        // rather than the text silently falling back to a regular weight.
+        $fonts = Process::run(['pdffonts', $pdfPath])->output();
+        $this->assertMatchesRegularExpression('/Bengali-\w*Bold/i', $fonts, 'No bold Bengali face was embedded in the ticket PDF.');
     }
 }
