@@ -15,6 +15,7 @@ import PageEditorPage from '@/features/cms/PageEditorPage';
 import NotificationsPage from '@/features/notifications/NotificationsPage';
 import ReportsPage from '@/features/reports/ReportsPage';
 import SettingsPage from '@/features/settings/SettingsPage';
+import SigningKeysPage from '@/features/security/SigningKeysPage';
 import Placeholder from '@/features/misc/Placeholder';
 
 // Protected page = auth gate + dashboard chrome.
@@ -48,6 +49,7 @@ export const router = createBrowserRouter([
     { path: '/notifications', element: page(<NotificationsPage />) },
     { path: '/reports', element: page(<ReportsPage />) },
     { path: '/settings', element: page(<SettingsPage />) },
+    { path: '/security/signing-keys', element: page(<SigningKeysPage />) },
 
     { path: '*', element: page(<Placeholder title="Page not found" note="Check the URL or use the navigation on the left." />) },
 ]);

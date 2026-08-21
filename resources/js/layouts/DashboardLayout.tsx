@@ -1,10 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import {
-    LayoutDashboard, Users, ClipboardList, Wallet, Ticket, QrCode, Bell, FileText,
-    BarChart3, Settings, Search, BellRing, Menu, X, Sun, Moon, LogOut, ChevronRight, ChevronDown,
-    Globe, Award, CalendarClock, HelpCircle, Images, Image as ImageIcon, Compass,
-} from 'lucide-react';
+import { Award, BarChart3, Bell, BellRing, CalendarClock, ChevronDown, ChevronRight, ClipboardList, Compass, FileText, Globe, HelpCircle, Image as ImageIcon, Images, KeyRound, LayoutDashboard, LogOut, Menu, Moon, QrCode, Search, Settings, Sun, Ticket, Users, Wallet, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useTheme } from '@/app/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -64,7 +60,10 @@ const NAV: Group[] = [
     },
     {
         heading: 'Settings',
-        items: [{ to: '/settings', label: 'Settings', icon: Settings, permission: 'settings.view' }],
+        items: [
+            { to: '/settings', label: 'Settings', icon: Settings, permission: 'settings.view' },
+            { to: '/security/signing-keys', label: 'Signing keys', icon: KeyRound, permission: 'qr.rotate_signing_key' },
+        ],
     },
 ];
 

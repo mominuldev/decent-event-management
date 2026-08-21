@@ -134,4 +134,18 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Re-authentication Window
+    |--------------------------------------------------------------------------
+    |
+    | How long a confirmed password stays good for operations that require
+    | re-auth (docs/06 §6.5 — QR signing key rotation). Short on purpose:
+    | the control exists to prove someone is at the keyboard for this
+    | specific action, and a long window defeats that.
+    |
+    */
+
+    'reauthentication_ttl_minutes' => (int) env('REAUTH_TTL_MINUTES', 5),
+
 ];

@@ -169,6 +169,21 @@ class ComprehensivePermissionTest extends TestCase
         $this->get(route('api.v1.admin.attendees.export', ['format' => 'xlsx']))->assertStatus(403);
     }
 
+    /**
+     * The rotation *mutations* additionally require re-authentication, which
+     * Sanctum::actingAs() cannot satisfy (it issues a TransientToken, not a
+     * personal access token) — those are covered end to end in
+     * QrKeyRotationTest. What belongs here is the permission gate itself.
+     */
+    public function test_qr_rotate_signing_key_http(): void
+    {
+        Sanctum::actingAs($this->superAdmin, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.qr-signing.keys.index'))->assertStatus(200);
+
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->getJson(route('api.v1.admin.qr-signing.keys.index'))->assertStatus(403);
+    }
+
     public function test_attendee_delete_http(): void
     {
         $forSuperAdmin = Attendee::factory()->create();

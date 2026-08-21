@@ -4,6 +4,7 @@ use App\Http\Middleware\EnsureDeviceActive;
 use App\Http\Middleware\EnsureGateAssigned;
 use App\Http\Middleware\EnsureIdempotency;
 use App\Http\Middleware\EnsureIpnFromAllowlistedIp;
+use App\Http\Middleware\EnsureRecentlyReauthenticated;
 use App\Http\Middleware\EnsureWithinCheckInWindow;
 use App\Http\Middleware\SetSecurityHeaders;
 use Illuminate\Foundation\Application;
@@ -37,6 +38,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'ipn.allowlist' => EnsureIpnFromAllowlistedIp::class,
             'abilities' => CheckAbilities::class,
             'ability' => CheckForAnyAbility::class,
+            'reauth' => EnsureRecentlyReauthenticated::class,
         ]);
 
         $middleware->throttleApi();

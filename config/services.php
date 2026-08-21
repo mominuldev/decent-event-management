@@ -86,6 +86,13 @@ return [
     'qr_signing' => [
         'active_key_id' => env('QR_SIGNING_KEY_ID', 'key-1'),
         'active_private_key' => env('QR_SIGNING_PRIVATE_KEY'),
+
+        // key_id => base64 private key, for holding the incoming key
+        // alongside the current one during a rotation. Adding a key here is
+        // deliberately harmless on its own — it becomes the signing key only
+        // when a Super Admin activates it, and only once every scanner
+        // device has confirmed it holds the matching public key.
+        'private_keys' => json_decode((string) env('QR_SIGNING_PRIVATE_KEYS', '{}'), true) ?: [],
         'retired_public_keys' => json_decode((string) env('QR_SIGNING_PUBLIC_KEYS', '{}'), true) ?: [],
     ],
 

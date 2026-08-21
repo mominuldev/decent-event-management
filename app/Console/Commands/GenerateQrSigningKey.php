@@ -13,12 +13,17 @@ use Illuminate\Support\Str;
  * currently blank, so every environment gets its own key rather than a
  * secret shared across every clone of this repository.
  *
- * Without the flag, this is the rotation path: it only prints the new
- * keypair. Rotation is a Super Admin, re-auth-gated, staged procedure
- * (publish the new public key, confirm every scanner device has synced it,
- * only then start signing with it — see docs/06 §6.5) — this command
- * deliberately does not automate that ordering, since running it blind
- * would risk signing with a key no device can verify yet.
+ * Without the flag, this is the rotation path: it prints a new keypair for
+ * an operator to add to QR_SIGNING_PRIVATE_KEYS (or the secret manager
+ * behind it) *alongside* the current key. That step is deliberately inert —
+ * making key material available signs nothing.
+ *
+ * The staged part of rotation (publish → confirm every scanner device has
+ * synced → only then sign with it, Super Admin and re-auth gated, docs/06
+ * §6.5) now lives behind /api/v1/admin/qr-signing/keys and the admin
+ * console, where the ordering is enforced rather than remembered. This
+ * command no longer describes an .env-editing procedure, because following
+ * one by hand is exactly what that ordering gate exists to replace.
  */
 class GenerateQrSigningKey extends Command
 {
@@ -81,17 +86,22 @@ class GenerateQrSigningKey extends Command
 
         $this->info("New QR signing key: {$keyId}");
         $this->newLine();
-        $this->line("QR_SIGNING_KEY_ID={$keyId}");
-        $this->line("QR_SIGNING_PRIVATE_KEY={$secretB64}");
+        $this->comment('1. Add this to QR_SIGNING_PRIVATE_KEYS, keeping any existing entries:');
+        $this->line("   QR_SIGNING_PRIVATE_KEYS='".json_encode([$keyId => $secretB64], JSON_UNESCAPED_SLASHES)."'");
         $this->newLine();
-        $this->comment('Rotation procedure (docs/06 §6.5) — do not skip the ordering:');
-        $this->line('  1. Add the CURRENT active key to QR_SIGNING_PUBLIC_KEYS (old_key_id => its public key)');
-        $this->line("     so tickets already printed/emailed keep verifying: public key = {$publicB64}");
-        $this->line('  2. Deploy that change and confirm every scanner device has synced the manifest');
-        $this->line('     (its published `meta.keys` now includes the old key alongside the still-active one).');
-        $this->line('  3. Only then deploy QR_SIGNING_KEY_ID / QR_SIGNING_PRIVATE_KEY above to start signing new');
-        $this->line('     tickets with the new key.');
-        $this->line('  4. Notify all Event Managers that the rotation completed.');
+        $this->line("   (public half, for reference — not a secret: {$publicB64})");
+        $this->newLine();
+        $this->comment('2. Deploy. Adding a key here signs nothing on its own; it only makes the key');
+        $this->line('   available to be activated later.');
+        $this->newLine();
+        $this->comment('3. Finish the rotation in the admin console under QR Signing Keys, or via the API:');
+        $this->line("     POST /api/v1/admin/qr-signing/keys              {\"key_id\": \"{$keyId}\"}");
+        $this->line('     GET  /api/v1/admin/qr-signing/keys              (watch every device confirm the new key)');
+        $this->line('     POST /api/v1/admin/qr-signing/keys/{ulid}/activate');
+        $this->newLine();
+        $this->comment('Activation refuses while any active scanner device has not synced since the key');
+        $this->line('was published — that ordering is what stops a rotation breaking the gate. Event');
+        $this->line('Managers are notified automatically once it completes (docs/06 §6.5).');
     }
 
     /**

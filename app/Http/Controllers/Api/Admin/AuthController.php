@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Domain\Shared\Models\User;
 use App\Domain\Shared\Services\TwoFactorAuthenticationService;
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\EnsureRecentlyReauthenticated;
 use App\Http\Requests\Admin\LoginRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OAT;
 
 /**
@@ -241,6 +243,85 @@ class AuthController extends Controller
         $user->currentAccessToken()->delete();
 
         return response()->json(['message' => 'Logged out.']);
+    }
+
+    #[OAT\Post(
+        path: '/admin/auth/reauth',
+        summary: 'Re-confirm credentials for an action that requires re-authentication',
+        description: 'Proves a person is present at the keyboard before a high-consequence action such as QR signing key rotation (docs/06 §6.5). The confirmation is bound to the access token used, lasts a few minutes, and does not issue a new token.',
+        tags: ['Authentication'],
+        security: [['bearerAuth' => []]],
+        requestBody: new OAT\RequestBody(
+            required: true,
+            content: new OAT\MediaType(
+                mediaType: 'application/json',
+                schema: new OAT\Schema(
+                    required: ['password'],
+                    properties: [
+                        new OAT\Property(property: 'password', type: 'string', format: 'password'),
+                        new OAT\Property(property: 'totp_code', type: 'string', description: 'Required when the account has 2FA confirmed'),
+                    ]
+                )
+            )
+        ),
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Re-authenticated',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(property: 'confirmed', type: 'boolean'),
+                            new OAT\Property(property: 'expires_in_minutes', type: 'integer'),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 401, description: 'Unauthenticated'),
+            new OAT\Response(response: 422, description: 'Password or TOTP code incorrect'),
+        ]
+    )]
+    public function reauth(Request $request): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        $request->validate([
+            'password' => ['required', 'string'],
+            'totp_code' => ['sometimes', 'string'],
+        ]);
+
+        // Deliberately does NOT run registerFailedAttempt(): this caller is
+        // already authenticated, and letting a mistyped confirmation lock
+        // the account would turn a fumbled re-auth into a lockout in the
+        // middle of the very incident the operator is responding to.
+        if (! Hash::check($request->string('password'), $user->password)) {
+            throw ValidationException::withMessages([
+                'password' => ['The password is incorrect.'],
+            ]);
+        }
+
+        // Where 2FA is confirmed, re-auth means both factors again — a
+        // password alone is exactly what a shoulder-surfer or a reused
+        // credential gets you, and this gate exists for the case where the
+        // token itself may already be in the wrong hands.
+        if ($user->two_factor_confirmed_at !== null) {
+            $code = $request->string('totp_code')->value();
+
+            if ($code === '' || $user->two_factor_secret === null || ! $this->twoFactor->verify($user->two_factor_secret, $code)) {
+                throw ValidationException::withMessages([
+                    'totp_code' => ['The two-factor code is incorrect or missing.'],
+                ]);
+            }
+        }
+
+        $ttl = EnsureRecentlyReauthenticated::confirm($request);
+
+        return response()->json([
+            'confirmed' => true,
+            'expires_in_minutes' => $ttl,
+        ]);
     }
 
     private function registerFailedAttempt(User $user): void

@@ -25,9 +25,14 @@ class QrSigner
     /**
      * @param  array{active_key_id?: string, active_private_key?: string, retired_public_keys?: array<string, string>}|null  $config
      */
-    public function __construct(?array $config = null)
+    public function __construct(?array $config = null, ?QrSigningKeyRegistry $registry = null)
     {
-        $config ??= (array) config('services.qr_signing', []);
+        // With no explicit config, the effective key set comes from the
+        // registry: env supplies the private key material, `qr_signing_keys`
+        // supplies which key is active and which are published. The registry
+        // falls back to plain config when that table has no rows, so an
+        // environment that has never rotated is unaffected.
+        $config ??= ($registry ?? new QrSigningKeyRegistry)->resolve();
 
         $this->activeKeyId = (string) ($config['active_key_id'] ?? '');
         $keys = [];

@@ -2,9 +2,11 @@
 
 namespace App\Providers;
 
+use App\Domain\CheckIn\Services\CheckInDeviceFleetStatus;
 use App\Domain\Content\Events\ContentChanged;
 use App\Domain\Content\Listeners\RevalidateFrontendContent;
 use App\Domain\Notification\Channels\NotificationChannelResolver;
+use App\Domain\Notification\Listeners\NotifyEventManagersOfKeyRotation;
 use App\Domain\Notification\Listeners\QueueManualPaymentVerifiedNotification;
 use App\Domain\Notification\Listeners\QueuePaymentFailedNotification;
 use App\Domain\Notification\Listeners\QueuePaymentSucceededNotification;
@@ -20,9 +22,12 @@ use App\Domain\Payment\Models\Payment;
 use App\Domain\Registration\Events\RegistrationCreated;
 use App\Domain\Registration\Models\Attendee;
 use App\Domain\Registration\Models\Registration;
+use App\Domain\Ticketing\Contracts\ScannerFleetStatus;
+use App\Domain\Ticketing\Events\SigningKeyRotated;
 use App\Domain\Ticketing\Events\TicketIssued;
 use App\Domain\Ticketing\Listeners\GenerateTicketAssets;
 use App\Domain\Ticketing\Listeners\IssueTicketForSucceededPayment;
+use App\Domain\Ticketing\Models\QrSigningKey;
 use App\Domain\Ticketing\Models\Ticket;
 use App\Listeners\CheckApplicationHealth;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -43,6 +48,12 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(PaymentGatewayResolver::class);
         $this->app->singleton(NotificationChannelResolver::class);
+
+        // Ticketing asks "is the scanner fleet ready for a key rotation?"
+        // through an interface it owns; CheckIn answers it. The module
+        // boundary (CLAUDE.md, D6) forbids Ticketing querying
+        // check_in_devices itself.
+        $this->app->bind(ScannerFleetStatus::class, CheckInDeviceFleetStatus::class);
     }
 
     /**
@@ -63,6 +74,7 @@ class AppServiceProvider extends ServiceProvider
             'payment' => Payment::class,
             'ticket' => Ticket::class,
             'attendee' => Attendee::class,
+            'qr_signing_key' => QrSigningKey::class,
         ]);
 
         Event::listen(PaymentSucceeded::class, IssueTicketForSucceededPayment::class);
@@ -75,6 +87,11 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(ManualPaymentVerified::class, QueueManualPaymentVerifiedNotification::class);
         Event::listen(RefundIssued::class, QueueRefundIssuedNotification::class);
         Event::listen(TicketIssued::class, QueueTicketDeliveredNotification::class);
+
+        // docs/06 §6.5 — rotating the QR signing key notifies all Event
+        // Managers. Ticketing publishes the event and knows nothing about
+        // who is told; only this listener does.
+        Event::listen(SigningKeyRotated::class, NotifyEventManagersOfKeyRotation::class);
 
         // First dispatch to the `tickets` Horizon lane (docs/08 Phase 6):
         // renders the QR PNG and bilingual PDF off the issuance transaction.

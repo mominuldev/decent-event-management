@@ -30,6 +30,7 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
 Route::prefix('admin')->name('admin.')->middleware(['auth:web-admin', 'ability:admin,2fa-setup'])->group(function (): void {
     Route::post('auth/logout', [AdminAuthController::class, 'logout'])->name('auth.logout');
     Route::get('auth/me', [AdminAuthController::class, 'me'])->name('auth.me');
+    Route::post('auth/reauth', [AdminAuthController::class, 'reauth'])->name('auth.reauth');
 
     Route::post('auth/2fa/setup', [TwoFactorController::class, 'setup'])->name('auth.2fa.setup');
     Route::post('auth/2fa/confirm', [TwoFactorController::class, 'confirm'])->name('auth.2fa.confirm');

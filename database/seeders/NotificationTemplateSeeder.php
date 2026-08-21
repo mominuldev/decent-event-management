@@ -45,6 +45,27 @@ class NotificationTemplateSeeder extends Seeder
     {
         return [
             [
+                // Staff-facing, unlike every other template here — docs/06
+                // §6.5 requires a key rotation to notify all Event Managers.
+                // Email only: it is an audit-trail message with detail that
+                // does not belong in an SMS, and no Event Manager is at a
+                // gate relying on it to admit anybody.
+                'key' => 'qr_signing_key_rotated',
+                'variables' => ['key_id', 'rotated_by', 'rotated_at', 'device_warning'],
+                'channels' => [
+                    'email' => [
+                        'en' => [
+                            'subject' => 'QR signing key rotated ({{key_id}})',
+                            'body' => '<p>The QR ticket signing key was rotated to <strong>{{key_id}}</strong> by {{rotated_by}} on {{rotated_at}}.</p><p>{{device_warning}}</p><p>Tickets issued before this rotation remain valid — the previous key is retired from signing but still published to devices for verification.</p>',
+                        ],
+                        'bn' => [
+                            'subject' => 'QR স্বাক্ষর কী পরিবর্তন করা হয়েছে ({{key_id}})',
+                            'body' => '<p>QR টিকিট স্বাক্ষর কী <strong>{{key_id}}</strong>-এ পরিবর্তন করেছেন {{rotated_by}}, {{rotated_at}} তারিখে।</p><p>{{device_warning}}</p><p>এই পরিবর্তনের আগে ইস্যু করা টিকিটগুলো বৈধ থাকবে — পুরোনো কী স্বাক্ষরের জন্য অবসরপ্রাপ্ত হলেও যাচাইয়ের জন্য ডিভাইসে প্রকাশিত থাকে।</p>',
+                        ],
+                    ],
+                ],
+            ],
+            [
                 'key' => 'registration_received',
                 'variables' => ['full_name', 'registration_number', 'registration_ulid'],
                 'channels' => [

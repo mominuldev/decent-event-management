@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\Admin\DeviceController;
 use App\Http\Controllers\Api\Admin\GateController;
 use App\Http\Controllers\Api\Admin\NotificationController;
 use App\Http\Controllers\Api\Admin\PaymentController;
+use App\Http\Controllers\Api\Admin\QrSigningKeyController;
 use App\Http\Controllers\Api\Admin\RegistrationController;
 use App\Http\Controllers\Api\Admin\ReportController;
 use App\Http\Controllers\Api\Admin\RoleController;
@@ -110,3 +111,17 @@ Route::get('check-ins/live-dashboard', [CheckInController::class, 'liveDashboard
 Route::post('check-ins/manual-override', [CheckInController::class, 'manualOverride'])->name('check-ins.manual-override');
 Route::apiResource('check-ins', CheckInController::class)->only(['index', 'show']);
 Route::post('check-ins/{check_in:ulid}/resolve-conflict', [CheckInController::class, 'resolveConflict'])->name('check-ins.resolve-conflict');
+
+// QR signing key rotation (docs/06 §6.5). Super Admin only via
+// `qr.rotate_signing_key`; every mutation additionally requires recent
+// re-authentication, because rotating the wrong way breaks every scanner
+// at the gate and an unattended session must not be able to do it.
+Route::prefix('qr-signing')->name('qr-signing.')->group(function (): void {
+    Route::get('keys', [QrSigningKeyController::class, 'index'])->name('keys.index');
+
+    Route::middleware('reauth')->group(function (): void {
+        Route::post('keys', [QrSigningKeyController::class, 'store'])->name('keys.store');
+        Route::post('keys/{key:ulid}/activate', [QrSigningKeyController::class, 'activate'])->name('keys.activate');
+        Route::post('keys/{key:ulid}/retire', [QrSigningKeyController::class, 'retire'])->name('keys.retire');
+    });
+});
