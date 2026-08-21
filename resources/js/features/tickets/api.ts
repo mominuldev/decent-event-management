@@ -1,9 +1,10 @@
 import { api, toApiError } from '@/lib/api';
 import type { PaginatedResponse } from '@/lib/pagination';
 import { unwrap } from '@/lib/pagination';
+import type { SortParams } from '@/lib/sorting';
 import type { Ticket, TicketType, TicketTypePayload } from './types';
 
-export interface TicketFilters {
+export interface TicketFilters extends SortParams {
     status?: string;
     ticket_type_id?: number | '';
     search?: string;
@@ -17,6 +18,8 @@ export async function fetchTickets(filters: TicketFilters): Promise<PaginatedRes
             status: filters.status || undefined,
             ticket_type_id: filters.ticket_type_id || undefined,
             search: filters.search || undefined,
+            sort: filters.sort,
+            direction: filters.direction,
             page: filters.page,
             per_page: filters.per_page,
         },

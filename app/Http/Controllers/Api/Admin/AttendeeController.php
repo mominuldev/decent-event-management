@@ -46,6 +46,18 @@ class AttendeeController extends Controller
                 schema: new OAT\Schema(type: 'integer')
             ),
             new OAT\Parameter(
+                name: 'sort',
+                in: 'query',
+                description: 'Column to order by. Unknown values fall back to the default.',
+                schema: new OAT\Schema(type: 'string', default: 'created_at', enum: ['full_name', 'participant_type', 'ssc_batch_year', 'is_verified', 'created_at'])
+            ),
+            new OAT\Parameter(
+                name: 'direction',
+                in: 'query',
+                description: 'Order direction. Defaults to newest first.',
+                schema: new OAT\Schema(type: 'string', default: 'desc', enum: ['asc', 'desc'])
+            ),
+            new OAT\Parameter(
                 name: 'per_page',
                 in: 'query',
                 description: 'Results per page, capped at 100',
@@ -116,7 +128,7 @@ class AttendeeController extends Controller
         // than none at all.
         $query = AttendeeListFilters::apply(
             Attendee::query()->with(['profilePhoto.thumbnail']),
-            $request->only(['search', 'participant_type', 'ssc_batch_year']),
+            $request->only(['search', 'participant_type', 'ssc_batch_year', 'sort', 'direction']),
         );
 
         $perPage = min((int) $request->input('per_page', 15), 100);
@@ -160,6 +172,19 @@ class AttendeeController extends Controller
                 in: 'query',
                 required: false,
                 schema: new OAT\Schema(type: 'integer')
+            ),
+            new OAT\Parameter(
+                name: 'sort',
+                in: 'query',
+                required: false,
+                description: 'Column to order by — identical to GET /admin/attendees, so the file matches the screen.',
+                schema: new OAT\Schema(type: 'string', default: 'created_at', enum: ['full_name', 'participant_type', 'ssc_batch_year', 'is_verified', 'created_at'])
+            ),
+            new OAT\Parameter(
+                name: 'direction',
+                in: 'query',
+                required: false,
+                schema: new OAT\Schema(type: 'string', default: 'desc', enum: ['asc', 'desc'])
             ),
         ],
         responses: [

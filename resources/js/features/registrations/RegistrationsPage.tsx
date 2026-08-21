@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Check, Search, Trash2, X } from 'lucide-react';
@@ -9,6 +9,8 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { useToast } from '@/components/Toast';
 import { cn, money } from '@/lib/cn';
 import { totalOf } from '@/lib/pagination';
+import { shortDate } from '@/lib/format';
+import { useTableSorting } from '@/lib/sorting';
 import * as registrationsApi from './api';
 import { EDITABLE_STATUSES, type Registration, type RegistrationStatus, type UpdateRegistrationPayload } from './types';
 
@@ -229,6 +231,7 @@ function RegistrationDetail({ ulid, onClose }: { ulid: string; onClose: () => vo
     );
 }
 
+/** Column ids double as the API's `sort` field names — see lib/sorting.ts. */
 const columns: ColumnDef<Registration, unknown>[] = [
     {
         accessorKey: 'registration_number',
@@ -236,13 +239,17 @@ const columns: ColumnDef<Registration, unknown>[] = [
         cell: (ctx) => <span className="font-medium text-text">{ctx.row.original.registration_number}</span>,
     },
     {
+        // Both of these live behind a relation, so `registrations` cannot be
+        // ordered by them without a join this list will not take on at scale.
         id: 'attendee',
         header: 'Attendee',
+        enableSorting: false,
         cell: (ctx) => ctx.row.original.attendee?.full_name ?? '—',
     },
     {
         id: 'ticket_type',
         header: 'Ticket type',
+        enableSorting: false,
         cell: (ctx) => ctx.row.original.ticket_type?.name ?? '—',
     },
     {
@@ -253,12 +260,14 @@ const columns: ColumnDef<Registration, unknown>[] = [
     {
         accessorKey: 'total_paisa',
         header: 'Total',
+        sortDescFirst: true,
         cell: (ctx) => <span className="tnum">{money(ctx.row.original.total_paisa)}</span>,
     },
     {
         accessorKey: 'created_at',
         header: 'Created',
-        cell: (ctx) => new Date(ctx.row.original.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        sortDescFirst: true,
+        cell: (ctx) => <span className="tnum text-text-muted">{shortDate(ctx.row.original.created_at)}</span>,
     },
 ];
 
@@ -271,14 +280,18 @@ export default function RegistrationsPage() {
     const [selected, setSelected] = useState<string | null>(null);
     const pageSize = 20;
 
+    const resetPage = useCallback(() => setPageIndex(0), []);
+    const { sorting, setSorting, sortParams } = useTableSorting(undefined, resetPage);
+
     const { data, isLoading, isError, refetch } = useQuery({
-        queryKey: ['registrations', search, status, dateFrom, dateTo, pageIndex],
+        queryKey: ['registrations', search, status, dateFrom, dateTo, sortParams, pageIndex],
         queryFn: () =>
             registrationsApi.fetchRegistrations({
                 search,
                 status,
                 date_from: dateFrom,
                 date_to: dateTo,
+                ...sortParams,
                 page: pageIndex + 1,
                 per_page: pageSize,
             }),
@@ -340,6 +353,8 @@ export default function RegistrationsPage() {
                     pageSize={pageSize}
                     totalRows={data ? totalOf(data) : 0}
                     onPageChange={setPageIndex}
+                    sorting={sorting}
+                    onSortingChange={setSorting}
                 />
             </Card>
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Domain\Shared\Models\ActivityLog;
 use App\Domain\Shared\Models\User;
+use App\Domain\Shared\Support\ListSort;
 use App\Domain\Ticketing\Actions\IssueTicket;
 use App\Domain\Ticketing\Models\Ticket;
 use App\Http\Controllers\Controller;
@@ -22,6 +23,25 @@ use Symfony\Component\HttpFoundation\Response;
 #[OAT\Tag(name: 'Tickets')]
 class TicketController extends Controller
 {
+    /**
+     * Sortable columns, public field name => real column. Ticket type is shown
+     * in the table but lives behind a relation, so it is unsortable; holder
+     * name is not — it is snapshotted onto the ticket at issuance, precisely
+     * because a ticket must not change when the attendee record does.
+     *
+     * @var array<string, string>
+     */
+    private const SORTABLE = [
+        'ticket_number' => 'ticket_number',
+        'holder_name' => 'holder_name',
+        'status' => 'status',
+        'admitted_count' => 'admitted_count',
+        'created_at' => 'created_at',
+    ];
+
+    /** Newest first — this list had no ORDER BY at all before. */
+    private const DEFAULT_SORT = 'created_at';
+
     #[OAT\Get(
         path: '/admin/tickets',
         summary: 'List tickets with optional filters',
@@ -42,6 +62,16 @@ class TicketController extends Controller
                 name: 'search',
                 description: 'Search by ticket number or holder name',
                 schema: new OAT\Schema(type: 'string')
+            ),
+            new OAT\QueryParameter(
+                name: 'sort',
+                description: 'Column to order by. Unknown values fall back to the default.',
+                schema: new OAT\Schema(type: 'string', default: 'created_at', enum: ['ticket_number', 'holder_name', 'status', 'admitted_count', 'created_at'])
+            ),
+            new OAT\QueryParameter(
+                name: 'direction',
+                description: 'Order direction. Defaults to newest first.',
+                schema: new OAT\Schema(type: 'string', default: 'desc', enum: ['asc', 'desc'])
             ),
             new OAT\QueryParameter(
                 name: 'per_page',
@@ -118,6 +148,8 @@ class TicketController extends Controller
                     ->orWhere('holder_name', 'like', "%{$search}%");
             });
         }
+
+        ListSort::apply($query, $request->query(), self::SORTABLE, self::DEFAULT_SORT);
 
         $perPage = min((int) $request->query('per_page', 20), 100);
 

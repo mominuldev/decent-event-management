@@ -7,6 +7,7 @@ use App\Domain\Payment\Actions\VerifyManualPayment;
 use App\Domain\Payment\Models\Payment;
 use App\Domain\Shared\Models\ActivityLog;
 use App\Domain\Shared\Models\User;
+use App\Domain\Shared\Support\ListSort;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\RefundPaymentRequest;
 use App\Http\Requests\Admin\RejectManualPaymentRequest;
@@ -24,6 +25,25 @@ use Symfony\Component\HttpFoundation\Response;
 #[OAT\Tag(name: 'Payments')]
 class PaymentController extends Controller
 {
+    /**
+     * Sortable columns, public field name => real column.
+     *
+     * Replaces a bare `->latest()`, which ordered on `created_at` alone: two
+     * payments written in the same second could swap places between one page
+     * and the next. ListSort adds the primary-key tiebreaker that fixes it.
+     *
+     * @var array<string, string>
+     */
+    private const SORTABLE = [
+        'payment_number' => 'payment_number',
+        'method' => 'method',
+        'status' => 'status',
+        'amount_paid_paisa' => 'amount_paid_paisa',
+        'created_at' => 'created_at',
+    ];
+
+    private const DEFAULT_SORT = 'created_at';
+
     #[OAT\Get(
         path: '/admin/payments',
         summary: 'List payments with filters',
@@ -53,6 +73,18 @@ class PaymentController extends Controller
                 in: 'query',
                 description: 'Filter by created_at on or before this date',
                 schema: new OAT\Schema(type: 'string', format: 'date')
+            ),
+            new OAT\Parameter(
+                name: 'sort',
+                in: 'query',
+                description: 'Column to order by. Unknown values fall back to the default.',
+                schema: new OAT\Schema(type: 'string', default: 'created_at', enum: ['payment_number', 'method', 'status', 'amount_paid_paisa', 'created_at'])
+            ),
+            new OAT\Parameter(
+                name: 'direction',
+                in: 'query',
+                description: 'Order direction. Defaults to newest first.',
+                schema: new OAT\Schema(type: 'string', default: 'desc', enum: ['asc', 'desc'])
             ),
             new OAT\Parameter(
                 name: 'per_page',
@@ -113,7 +145,7 @@ class PaymentController extends Controller
     {
         abort_unless((bool) $request->user()?->can('payment.view_any'), Response::HTTP_FORBIDDEN);
 
-        $query = Payment::query()->latest();
+        $query = Payment::query();
 
         if ($request->filled('status')) {
             $query->where('status', (string) $request->query('status'));
@@ -130,6 +162,8 @@ class PaymentController extends Controller
         if ($request->filled('date_to')) {
             $query->whereDate('created_at', '<=', (string) $request->query('date_to'));
         }
+
+        ListSort::apply($query, $request->query(), self::SORTABLE, self::DEFAULT_SORT);
 
         $perPage = min((int) $request->query('per_page', 20), 100);
 

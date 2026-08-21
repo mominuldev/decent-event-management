@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { FileSpreadsheet, FileText, Search, ShieldCheck, Trash2 } from 'lucide-react';
@@ -8,6 +8,8 @@ import { DataTable } from '@/components/DataTable';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useToast } from '@/components/Toast';
 import { totalOf } from '@/lib/pagination';
+import { shortDate } from '@/lib/format';
+import { useTableSorting } from '@/lib/sorting';
 import * as attendeesApi from './api';
 import { PARTICIPANT_TYPES, SSC_BATCH_YEARS, type Attendee, type ParticipantType, type UpdateAttendeePayload } from './types';
 
@@ -256,6 +258,11 @@ function AttendeeDetail({ ulid, onClose }: { ulid: string; onClose: () => void }
     );
 }
 
+/**
+ * Every column id here is also the API's `sort` field name — that id is what
+ * the table sends. A column the server cannot order by is marked
+ * `enableSorting: false` rather than left to fail silently.
+ */
 const columns: ColumnDef<Attendee, unknown>[] = [
     {
         accessorKey: 'full_name',
@@ -288,6 +295,15 @@ const columns: ColumnDef<Attendee, unknown>[] = [
                 ? <Badge tone="success">Verified</Badge>
                 : <Badge tone="neutral">Unverified</Badge>
         ),
+    },
+    {
+        accessorKey: 'created_at',
+        header: 'Added',
+        // The column the table sorts by out of the box. It is shown for that
+        // reason as much as its own: a default order with no column carrying
+        // it leaves the operator no way to see or to return to it.
+        sortDescFirst: true,
+        cell: (ctx) => <span className="tnum text-text-muted">{shortDate(ctx.row.original.created_at)}</span>,
     },
 ];
 
@@ -351,14 +367,17 @@ export default function AttendeesPage() {
     const pageSize = 20;
 
     const debouncedSearch = useDebounced(search);
+    const resetPage = useCallback(() => setPageIndex(0), []);
+    const { sorting, setSorting, sortParams } = useTableSorting(undefined, resetPage);
 
     const { data, isLoading, isError, refetch } = useQuery({
-        queryKey: ['attendees', debouncedSearch, participantType, batchYear, pageIndex],
+        queryKey: ['attendees', debouncedSearch, participantType, batchYear, sortParams, pageIndex],
         queryFn: () =>
             attendeesApi.fetchAttendees({
                 search: debouncedSearch,
                 participant_type: participantType,
                 ssc_batch_year: batchYear ? Number(batchYear) : '',
+                ...sortParams,
                 page: pageIndex + 1,
                 per_page: pageSize,
             }),
@@ -419,6 +438,7 @@ export default function AttendeesPage() {
                                 search: debouncedSearch,
                                 participant_type: participantType,
                                 ssc_batch_year: batchYear ? Number(batchYear) : '',
+                                ...sortParams,
                             }}
                         />
                     )}
@@ -438,6 +458,8 @@ export default function AttendeesPage() {
                     pageSize={pageSize}
                     totalRows={data ? totalOf(data) : 0}
                     onPageChange={setPageIndex}
+                    sorting={sorting}
+                    onSortingChange={setSorting}
                 />
             </Card>
 

@@ -57,6 +57,35 @@
                         }
                     },
                     {
+                        "name": "sort",
+                        "in": "query",
+                        "description": "Column to order by. Unknown values fall back to the default.",
+                        "schema": {
+                            "type": "string",
+                            "default": "created_at",
+                            "enum": [
+                                "full_name",
+                                "participant_type",
+                                "ssc_batch_year",
+                                "is_verified",
+                                "created_at"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "direction",
+                        "in": "query",
+                        "description": "Order direction. Defaults to newest first.",
+                        "schema": {
+                            "type": "string",
+                            "default": "desc",
+                            "enum": [
+                                "asc",
+                                "desc"
+                            ]
+                        }
+                    },
+                    {
                         "name": "per_page",
                         "in": "query",
                         "description": "Results per page, capped at 100",
@@ -267,6 +296,36 @@
                         "required": false,
                         "schema": {
                             "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "in": "query",
+                        "description": "Column to order by — identical to GET /admin/attendees, so the file matches the screen.",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "created_at",
+                            "enum": [
+                                "full_name",
+                                "participant_type",
+                                "ssc_batch_year",
+                                "is_verified",
+                                "created_at"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "direction",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "desc",
+                            "enum": [
+                                "asc",
+                                "desc"
+                            ]
                         }
                     }
                 ],
@@ -4359,6 +4418,35 @@
                         }
                     },
                     {
+                        "name": "sort",
+                        "in": "query",
+                        "description": "Column to order by. Unknown values fall back to the default.",
+                        "schema": {
+                            "type": "string",
+                            "default": "created_at",
+                            "enum": [
+                                "payment_number",
+                                "method",
+                                "status",
+                                "amount_paid_paisa",
+                                "created_at"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "direction",
+                        "in": "query",
+                        "description": "Order direction. Defaults to newest first.",
+                        "schema": {
+                            "type": "string",
+                            "default": "desc",
+                            "enum": [
+                                "asc",
+                                "desc"
+                            ]
+                        }
+                    },
+                    {
                         "name": "per_page",
                         "in": "query",
                         "description": "Results per page, capped at 100",
@@ -5228,6 +5316,34 @@
                         }
                     },
                     {
+                        "name": "sort",
+                        "in": "query",
+                        "description": "Column to order by. Unknown values fall back to the default.",
+                        "schema": {
+                            "type": "string",
+                            "default": "created_at",
+                            "enum": [
+                                "registration_number",
+                                "status",
+                                "total_paisa",
+                                "created_at"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "direction",
+                        "in": "query",
+                        "description": "Order direction. Defaults to newest first.",
+                        "schema": {
+                            "type": "string",
+                            "default": "desc",
+                            "enum": [
+                                "asc",
+                                "desc"
+                            ]
+                        }
+                    },
+                    {
                         "name": "per_page",
                         "in": "query",
                         "description": "Results per page, capped at 100",
@@ -6086,6 +6202,35 @@
                         "description": "Search by ticket number or holder name",
                         "schema": {
                             "type": "string"
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "in": "query",
+                        "description": "Column to order by. Unknown values fall back to the default.",
+                        "schema": {
+                            "type": "string",
+                            "default": "created_at",
+                            "enum": [
+                                "ticket_number",
+                                "holder_name",
+                                "status",
+                                "admitted_count",
+                                "created_at"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "direction",
+                        "in": "query",
+                        "description": "Order direction. Defaults to newest first.",
+                        "schema": {
+                            "type": "string",
+                            "default": "desc",
+                            "enum": [
+                                "asc",
+                                "desc"
+                            ]
                         }
                     },
                     {

@@ -1,9 +1,10 @@
 import { api, toApiError } from '@/lib/api';
 import type { PaginatedResponse } from '@/lib/pagination';
 import { unwrap } from '@/lib/pagination';
+import type { SortParams } from '@/lib/sorting';
 import type { Payment, PaymentMethod, RefundResult } from './types';
 
-export interface PaymentFilters {
+export interface PaymentFilters extends SortParams {
     status?: string;
     method?: PaymentMethod | '';
     date_from?: string;
@@ -19,6 +20,8 @@ export async function fetchPayments(filters: PaymentFilters): Promise<PaginatedR
             method: filters.method || undefined,
             date_from: filters.date_from || undefined,
             date_to: filters.date_to || undefined,
+            sort: filters.sort,
+            direction: filters.direction,
             page: filters.page,
             per_page: filters.per_page,
         },

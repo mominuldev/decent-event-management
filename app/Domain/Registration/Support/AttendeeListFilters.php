@@ -3,6 +3,7 @@
 namespace App\Domain\Registration\Support;
 
 use App\Domain\Registration\Models\Attendee;
+use App\Domain\Shared\Support\ListSort;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -14,11 +15,10 @@ use Illuminate\Database\Eloquent\Builder;
  * downloads a file with a different 40, and has no way to tell. Both callers
  * pass the same request input through here, so a new filter is added once.
  *
- * The ordering is deliberate and applies to the list too. `index()` previously
- * had no ORDER BY at all, which MySQL is free to answer inconsistently between
- * one LIMIT/OFFSET page and the next — the same attendee can appear on page 2
- * and page 3 while another never appears at all. `id` breaks the tie so the
- * order is total, not merely "by name".
+ * Ordering is part of that contract, not an afterthought: it runs through
+ * ListSort here, so an operator who sorts the screen by name and then exports
+ * gets a file in that same order. Both the ordering and the tiebreaking that
+ * keeps LIMIT/OFFSET paging stable are ListSort's to define — see its docblock.
  */
 final class AttendeeListFilters
 {
@@ -41,8 +41,29 @@ final class AttendeeListFilters
     ];
 
     /**
+     * Sortable columns, public field name => real column. Deliberately only
+     * columns of `attendees` itself: the admin table also shows values that
+     * would need a join to sort on, and those are marked unsortable in the
+     * SPA rather than given a join this list cannot afford at 20,000 rows.
+     *
+     * @var array<string, string>
+     */
+    public const SORTABLE = [
+        'full_name' => 'full_name',
+        'participant_type' => 'participant_type',
+        'ssc_batch_year' => 'ssc_batch_year',
+        'is_verified' => 'is_verified',
+        'created_at' => 'created_at',
+    ];
+
+    /** Newest first — an operator opening the screen wants today's arrivals. */
+    public const DEFAULT_SORT = 'created_at';
+
+    public const DEFAULT_DIRECTION = 'desc';
+
+    /**
      * @param  Builder<Attendee>  $query
-     * @param  array<string, mixed>  $filters
+     * @param  array<string, mixed>  $filters  search / participant_type / ssc_batch_year / sort / direction
      * @return Builder<Attendee>
      */
     public static function apply(Builder $query, array $filters): Builder
@@ -69,7 +90,7 @@ final class AttendeeListFilters
             $query->where('ssc_batch_year', (int) $batchYear);
         }
 
-        return $query->orderBy('full_name')->orderBy('id');
+        return ListSort::apply($query, $filters, self::SORTABLE, self::DEFAULT_SORT, self::DEFAULT_DIRECTION);
     }
 
     /**

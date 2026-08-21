@@ -331,21 +331,45 @@ class AttendeeExportTest extends TestCase
         $this->assertSame(['Teacher Person'], $names);
     }
 
-    public function test_export_rows_are_ordered_by_name_like_the_list(): void
+    /**
+     * The export takes its order from the list, both by default and when the
+     * operator has re-sorted the screen — the point of sharing
+     * AttendeeListFilters is that the two cannot disagree.
+     *
+     * The default is newest-first, not alphabetical: the operator is looking
+     * at the most recent registrations, and a file that silently reordered
+     * them would describe a different roster from the one on screen.
+     */
+    public function test_export_rows_follow_the_same_order_as_the_list(): void
     {
-        Attendee::factory()->create(['full_name' => 'Zahir Ahmed']);
-        Attendee::factory()->create(['full_name' => 'Anwar Hossain']);
-        Attendee::factory()->create(['full_name' => 'Munir Chowdhury']);
+        Attendee::factory()->create(['full_name' => 'Zahir Ahmed', 'created_at' => now()->subDays(3)]);
+        Attendee::factory()->create(['full_name' => 'Anwar Hossain', 'created_at' => now()->subDays(2)]);
+        Attendee::factory()->create(['full_name' => 'Munir Chowdhury', 'created_at' => now()->subDay()]);
 
         $this->actingAsEventManager();
 
-        $workbook = $this->readWorkbook(
+        $default = $this->readWorkbook(
             $this->get(route('api.v1.admin.attendees.export', ['format' => 'xlsx']))->getContent()
         );
 
         $this->assertSame(
+            ['Munir Chowdhury', 'Anwar Hossain', 'Zahir Ahmed'],
+            array_column(array_slice($default['rows'], 1), 1),
+            'The export should default to newest first, exactly as the list does.',
+        );
+
+        $byName = $this->readWorkbook(
+            $this->get(route('api.v1.admin.attendees.export', [
+                'format' => 'xlsx',
+                'sort' => 'full_name',
+                'direction' => 'asc',
+            ]))->getContent()
+        );
+
+        $this->assertSame(
             ['Anwar Hossain', 'Munir Chowdhury', 'Zahir Ahmed'],
-            array_column(array_slice($workbook['rows'], 1), 1),
+            array_column(array_slice($byName['rows'], 1), 1),
+            'A re-sorted screen should produce a re-sorted file.',
         );
     }
 
@@ -609,7 +633,14 @@ class AttendeeExportTest extends TestCase
         $this->actingAsEventManager();
 
         $path = tempnam(sys_get_temp_dir(), 'export-pdf-').'.pdf';
-        file_put_contents($path, $this->get(route('api.v1.admin.attendees.export', ['format' => 'pdf']))->getContent());
+        // Sorted explicitly rather than relying on the default order: this
+        // test is about the grid being three wide, and naming the order it
+        // needs keeps it from breaking every time the default changes.
+        file_put_contents($path, $this->get(route('api.v1.admin.attendees.export', [
+            'format' => 'pdf',
+            'sort' => 'full_name',
+            'direction' => 'asc',
+        ]))->getContent());
 
         try {
             $text = (string) shell_exec('pdftotext -enc UTF-8 -layout '.escapeshellarg($path).' - 2>/dev/null');

@@ -6,7 +6,7 @@ import {
     type OnChangeFn,
     type SortingState,
 } from '@tanstack/react-table';
-import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Inbox } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Inbox } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Skeleton, ErrorState, IconButton } from '@/components/ui';
 
@@ -34,6 +34,11 @@ interface DataTableProps<T> {
     onSortingChange?: OnChangeFn<SortingState>;
     density?: 'comfortable' | 'compact';
     onRowClick?: (row: T) => void;
+}
+
+/** The header for a tooltip — only string headers have one worth reading. */
+function headerText(header: unknown): string {
+    return typeof header === 'string' ? header : 'this column';
 }
 
 export function DataTable<T>({
@@ -65,6 +70,15 @@ export function DataTable<T>({
         getRowId,
         manualPagination: true,
         manualSorting: true,
+        // A table whose page has not wired sorting must not offer it. Without
+        // this, every accessor column renders a clickable header that changes
+        // nothing, because manual sorting means the click has to reach the
+        // server and there is nobody listening.
+        enableSorting: Boolean(onSortingChange),
+        // Two-state toggle rather than asc -> desc -> unsorted. Removal would
+        // fall back to the server's default order with no header indicating
+        // it; the default sort is itself a column here, so it stays reachable.
+        enableSortingRemoval: false,
         getCoreRowModel: getCoreRowModel(),
     });
 
@@ -85,17 +99,29 @@ export function DataTable<T>({
                                     const sortable = header.column.getCanSort();
                                     const sortDir = header.column.getIsSorted();
                                     return (
-                                        <th key={header.id} className={cn(cellPad, 'font-semibold first:sticky first:left-0 first:bg-surface')}>
+                                        <th
+                                            key={header.id}
+                                            aria-sort={sortDir ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined}
+                                            className={cn(cellPad, 'font-semibold first:sticky first:left-0 first:bg-surface')}
+                                        >
                                             {header.isPlaceholder ? null : (
                                                 <button
                                                     type="button"
                                                     disabled={!sortable}
                                                     onClick={header.column.getToggleSortingHandler()}
-                                                    className={cn('inline-flex items-center gap-1', sortable && 'cursor-pointer hover:text-text')}
+                                                    title={sortable ? `Sort by ${headerText(header.column.columnDef.header)}` : undefined}
+                                                    className={cn(
+                                                        'inline-flex items-center gap-1',
+                                                        sortable && 'cursor-pointer hover:text-text',
+                                                        sortDir && 'text-text',
+                                                    )}
                                                 >
                                                     {flexRender(header.column.columnDef.header, header.getContext())}
                                                     {sortable && sortDir === 'asc' && <ChevronUp size={13} />}
                                                     {sortable && sortDir === 'desc' && <ChevronDown size={13} />}
+                                                    {/* Held by an unsorted-but-sortable header so adding the
+                                                        chevron on sort does not shift the label sideways. */}
+                                                    {sortable && !sortDir && <ChevronsUpDown size={13} className="opacity-35" />}
                                                 </button>
                                             )}
                                         </th>

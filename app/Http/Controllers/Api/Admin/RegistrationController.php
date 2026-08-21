@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Domain\Registration\Models\Registration;
 use App\Domain\Shared\Models\ActivityLog;
+use App\Domain\Shared\Support\ListSort;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateRegistrationRequest;
 use App\Http\Resources\RegistrationResource;
@@ -18,6 +19,24 @@ use Symfony\Component\HttpFoundation\Response;
 #[OAT\Tag(name: 'Registrations')]
 class RegistrationController extends Controller
 {
+    /**
+     * Sortable columns, public field name => real column. Only columns of
+     * `registrations` itself — attendee name and ticket type are shown in the
+     * table but live behind a relation, and are marked unsortable in the SPA
+     * rather than given a join. See ListSort for why the order is always total.
+     *
+     * @var array<string, string>
+     */
+    private const SORTABLE = [
+        'registration_number' => 'registration_number',
+        'status' => 'status',
+        'total_paisa' => 'total_paisa',
+        'created_at' => 'created_at',
+    ];
+
+    /** Newest first — this list had no ORDER BY at all before, so paging it was not even stable. */
+    private const DEFAULT_SORT = 'created_at';
+
     #[OAT\Get(
         path: '/admin/registrations',
         summary: 'List registrations with search and filters',
@@ -53,6 +72,18 @@ class RegistrationController extends Controller
                 in: 'query',
                 description: 'Filter by created_at on or before this date',
                 schema: new OAT\Schema(type: 'string', format: 'date')
+            ),
+            new OAT\Parameter(
+                name: 'sort',
+                in: 'query',
+                description: 'Column to order by. Unknown values fall back to the default.',
+                schema: new OAT\Schema(type: 'string', default: 'created_at', enum: ['registration_number', 'status', 'total_paisa', 'created_at'])
+            ),
+            new OAT\Parameter(
+                name: 'direction',
+                in: 'query',
+                description: 'Order direction. Defaults to newest first.',
+                schema: new OAT\Schema(type: 'string', default: 'desc', enum: ['asc', 'desc'])
             ),
             new OAT\Parameter(
                 name: 'per_page',
@@ -142,6 +173,8 @@ class RegistrationController extends Controller
         if ($request->filled('date_to')) {
             $query->whereDate('created_at', '<=', (string) $request->input('date_to'));
         }
+
+        ListSort::apply($query, $request->all(), self::SORTABLE, self::DEFAULT_SORT);
 
         $perPage = min((int) $request->input('per_page', 15), 100);
 

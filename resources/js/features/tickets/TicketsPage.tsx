@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Plus, RefreshCw, Search, Trash2, XCircle } from 'lucide-react';
@@ -9,6 +9,8 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { useToast } from '@/components/Toast';
 import { cn, money, num } from '@/lib/cn';
 import { totalOf } from '@/lib/pagination';
+import { shortDate } from '@/lib/format';
+import { useTableSorting } from '@/lib/sorting';
 import * as ticketsApi from './api';
 import type { Ticket, TicketType, TicketTypePayload } from './types';
 
@@ -124,23 +126,49 @@ function TicketDetail({ ulid, onClose }: { ulid: string; onClose: () => void }) 
     );
 }
 
+/** Column ids double as the API's `sort` field names — see lib/sorting.ts. */
 const ticketColumns: ColumnDef<Ticket, unknown>[] = [
     {
         accessorKey: 'ticket_number',
         header: 'Ticket',
         cell: (ctx) => <span className="font-medium text-text">{ctx.row.original.ticket_number}</span>,
     },
-    { id: 'holder', header: 'Holder', cell: (ctx) => ctx.row.original.holder_name ?? '—' },
-    { id: 'type', header: 'Type', cell: (ctx) => ctx.row.original.ticket_type?.name ?? '—' },
+    {
+        // Sortable, unlike the relation columns on the other tables: the
+        // holder's name is snapshotted onto the ticket at issuance, so it is
+        // a real column of `tickets`. It must be an accessorKey rather than a
+        // bare id — TanStack's getCanSort() requires an accessorFn, so an
+        // id-only column renders a sortable-looking header that does nothing.
+        accessorKey: 'holder_name',
+        header: 'Holder',
+        cell: (ctx) => ctx.row.original.holder_name ?? '—',
+    },
+    {
+        // Behind a relation, so the server cannot order by it without a join.
+        id: 'type',
+        header: 'Type',
+        enableSorting: false,
+        cell: (ctx) => ctx.row.original.ticket_type?.name ?? '—',
+    },
     {
         accessorKey: 'status',
         header: 'Status',
         cell: (ctx) => <Badge tone={ticketStatusTone[ctx.row.original.status] ?? 'neutral'}>{titleCase(ctx.row.original.status)}</Badge>,
     },
     {
-        id: 'admits',
+        // Renders both counts but orders on admitted_count — "who has walked
+        // in" is the question this column gets sorted to answer. accessorKey
+        // for the same reason as the holder column above.
+        accessorKey: 'admitted_count',
         header: 'Admits',
+        sortDescFirst: true,
         cell: (ctx) => <span className="tnum">{ctx.row.original.admitted_count} / {ctx.row.original.admits_total}</span>,
+    },
+    {
+        accessorKey: 'created_at',
+        header: 'Issued',
+        sortDescFirst: true,
+        cell: (ctx) => <span className="tnum text-text-muted">{shortDate(ctx.row.original.created_at)}</span>,
     },
 ];
 
@@ -151,9 +179,12 @@ function TicketsTab() {
     const [selected, setSelected] = useState<string | null>(null);
     const pageSize = 20;
 
+    const resetPage = useCallback(() => setPageIndex(0), []);
+    const { sorting, setSorting, sortParams } = useTableSorting(undefined, resetPage);
+
     const { data, isLoading, isError, refetch } = useQuery({
-        queryKey: ['tickets', status, search, pageIndex],
-        queryFn: () => ticketsApi.fetchTickets({ status, search, page: pageIndex + 1, per_page: pageSize }),
+        queryKey: ['tickets', status, search, sortParams, pageIndex],
+        queryFn: () => ticketsApi.fetchTickets({ status, search, ...sortParams, page: pageIndex + 1, per_page: pageSize }),
     });
 
     return (
@@ -198,6 +229,8 @@ function TicketsTab() {
                 pageSize={pageSize}
                 totalRows={data ? totalOf(data) : 0}
                 onPageChange={setPageIndex}
+                sorting={sorting}
+                onSortingChange={setSorting}
             />
 
             {selected && <TicketDetail ulid={selected} onClose={() => setSelected(null)} />}

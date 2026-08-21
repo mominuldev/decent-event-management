@@ -2,9 +2,10 @@ import axios from 'axios';
 import { api, toApiError } from '@/lib/api';
 import type { PaginatedResponse } from '@/lib/pagination';
 import { unwrap } from '@/lib/pagination';
+import type { SortParams } from '@/lib/sorting';
 import type { Attendee, ParticipantType, UpdateAttendeePayload } from './types';
 
-export interface AttendeeFilters {
+export interface AttendeeFilters extends SortParams {
     search?: string;
     participant_type?: ParticipantType | '';
     ssc_batch_year?: number | '';
@@ -18,6 +19,8 @@ export async function fetchAttendees(filters: AttendeeFilters): Promise<Paginate
             search: filters.search || undefined,
             participant_type: filters.participant_type || undefined,
             ssc_batch_year: filters.ssc_batch_year || undefined,
+            sort: filters.sort,
+            direction: filters.direction,
             page: filters.page,
             per_page: filters.per_page,
         },
@@ -40,6 +43,9 @@ export type ExportFormat = 'xlsx' | 'pdf';
  *    filters" refusal would surface as an unreadable `[object Blob]`.
  *  - **The filename comes from the server** via Content-Disposition, so the
  *    timestamp in it matches when the file was actually generated.
+ *
+ * The current sort goes along with the filters: the operator sorted the screen
+ * to decide what to export, so the rows must come out in that same order.
  */
 export async function exportAttendees(filters: AttendeeFilters, format: ExportFormat): Promise<void> {
     try {
@@ -49,6 +55,8 @@ export async function exportAttendees(filters: AttendeeFilters, format: ExportFo
                 search: filters.search || undefined,
                 participant_type: filters.participant_type || undefined,
                 ssc_batch_year: filters.ssc_batch_year || undefined,
+                sort: filters.sort,
+                direction: filters.direction,
             },
             responseType: 'blob',
         });

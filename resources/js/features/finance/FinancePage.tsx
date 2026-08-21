@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Ban, CheckCircle2, RotateCcw } from 'lucide-react';
@@ -9,6 +9,8 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { useToast } from '@/components/Toast';
 import { cn, money } from '@/lib/cn';
 import { totalOf } from '@/lib/pagination';
+import { shortDate } from '@/lib/format';
+import { useTableSorting } from '@/lib/sorting';
 import * as financeApi from './api';
 import { PAYMENT_METHODS, type Payment, type PaymentMethod } from './types';
 
@@ -221,6 +223,7 @@ function PaymentDetail({ ulid, onClose }: { ulid: string; onClose: () => void })
     );
 }
 
+/** Column ids double as the API's `sort` field names — see lib/sorting.ts. */
 const columns: ColumnDef<Payment, unknown>[] = [
     {
         accessorKey: 'payment_number',
@@ -240,12 +243,14 @@ const columns: ColumnDef<Payment, unknown>[] = [
     {
         accessorKey: 'amount_paid_paisa',
         header: 'Paid',
+        sortDescFirst: true,
         cell: (ctx) => <span className="tnum">{money(ctx.row.original.amount_paid_paisa)}</span>,
     },
     {
         accessorKey: 'created_at',
         header: 'Created',
-        cell: (ctx) => new Date(ctx.row.original.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        sortDescFirst: true,
+        cell: (ctx) => <span className="tnum text-text-muted">{shortDate(ctx.row.original.created_at)}</span>,
     },
 ];
 
@@ -261,14 +266,18 @@ export default function FinancePage() {
 
     const effectiveStatus = tab === 'queue' ? 'awaiting_verification' : status;
 
+    const resetPage = useCallback(() => setPageIndex(0), []);
+    const { sorting, setSorting, sortParams } = useTableSorting(undefined, resetPage);
+
     const { data, isLoading, isError, refetch } = useQuery({
-        queryKey: ['payments', tab, effectiveStatus, method, dateFrom, dateTo, pageIndex],
+        queryKey: ['payments', tab, effectiveStatus, method, dateFrom, dateTo, sortParams, pageIndex],
         queryFn: () =>
             financeApi.fetchPayments({
                 status: effectiveStatus,
                 method,
                 date_from: dateFrom,
                 date_to: dateTo,
+                ...sortParams,
                 page: pageIndex + 1,
                 per_page: pageSize,
             }),
@@ -343,6 +352,8 @@ export default function FinancePage() {
                     pageSize={pageSize}
                     totalRows={data ? totalOf(data) : 0}
                     onPageChange={setPageIndex}
+                    sorting={sorting}
+                    onSortingChange={setSorting}
                 />
             </Card>
 

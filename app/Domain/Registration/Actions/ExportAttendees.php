@@ -40,7 +40,7 @@ class ExportAttendees
     ) {}
 
     /**
-     * @param  array<string, mixed>  $filters  search / participant_type / ssc_batch_year
+     * @param  array<string, mixed>  $filters  search / participant_type / ssc_batch_year / sort / direction
      * @param  'xlsx'|'pdf'  $format
      *
      * @throws ExportTooLargeException
@@ -143,6 +143,28 @@ class ExportAttendees
     }
 
     /**
+     * The effective sort, resolved the same way the query resolves it, so the
+     * log never claims an order the file was not actually written in.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<string, string>
+     */
+    private function describeSort(array $filters): array
+    {
+        $field = $filters['sort'] ?? null;
+        $direction = $filters['direction'] ?? null;
+
+        return [
+            'field' => is_string($field) && array_key_exists($field, AttendeeListFilters::SORTABLE)
+                ? $field
+                : AttendeeListFilters::DEFAULT_SORT,
+            'direction' => is_string($direction) && in_array(strtolower($direction), ['asc', 'desc'], true)
+                ? strtolower($direction)
+                : AttendeeListFilters::DEFAULT_DIRECTION,
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>  $filters
      */
     private function log(
@@ -165,6 +187,9 @@ class ExportAttendees
                 'format' => $format,
                 'row_count' => $rowCount,
                 'filters' => $this->describeFilters($filters),
+                // Recorded so the audit trail describes the file that left
+                // the system exactly, not merely which rows were in it.
+                'sort' => $this->describeSort($filters),
             ],
             'ip_address' => $ipAddress,
             'request_id' => substr($requestId ?? (string) Str::ulid(), 0, 26),
