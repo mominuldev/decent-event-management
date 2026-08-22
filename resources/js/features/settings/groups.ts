@@ -1,4 +1,4 @@
-import { Bell, CalendarDays, CreditCard, Palette, ScanLine, Settings2, UserPlus, type LucideIcon } from 'lucide-react';
+import { Bell, CalendarDays, CreditCard, MessageSquare, Palette, ScanLine, Settings2, UserPlus, type LucideIcon } from 'lucide-react';
 import { titleCase } from '@/lib/format';
 
 interface GroupMeta {
@@ -39,6 +39,12 @@ const GROUP_META: Record<string, GroupMeta> = {
         description: 'Per-channel kill switches. Turning one off stops sends already queued, not just new ones.',
         Icon: Bell,
     },
+    sms: {
+        label: 'SMS gateway',
+        description:
+            'REVE Systems credentials, and the account’s prepaid balance. Keys are stored encrypted and cannot be read back once saved.',
+        Icon: MessageSquare,
+    },
     branding: {
         label: 'Branding',
         description: 'Logos, colours and copy shown across the public site.',
@@ -47,7 +53,7 @@ const GROUP_META: Record<string, GroupMeta> = {
 };
 
 /** Sections render in this order; anything unlisted follows, alphabetically. */
-const GROUP_ORDER = ['event', 'registration', 'payment', 'checkin', 'notification', 'branding'];
+const GROUP_ORDER = ['event', 'registration', 'payment', 'checkin', 'notification', 'sms', 'branding'];
 
 export function groupMeta(group: string): GroupMeta {
     return GROUP_META[group] ?? { label: titleCase(group), description: '', Icon: Settings2 };

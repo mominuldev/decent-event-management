@@ -22,6 +22,12 @@ export function fromDatetimeLocal(local: string): string {
 
 /** How the value reads when the row is not being edited. */
 export function displayValue(setting: EventSetting): string {
+    // A secret has no value client-side by design — the server sends only
+    // whether one is stored, and its last four characters.
+    if (setting.is_secret) {
+        return setting.masked_value ?? 'Not set';
+    }
+
     const v = setting.typed_value;
     if (v === null || v === '') return '—';
 
@@ -53,6 +59,11 @@ export function displayValue(setting: EventSetting): string {
 
 /** Seeds the editor when a row enters edit mode. */
 export function toDraft(setting: EventSetting): string {
+    // Always blank: there is nothing to prefill a secret's editor with, and a
+    // field showing bullets that are not the real value would be saved back
+    // verbatim the moment someone edited around them.
+    if (setting.is_secret) return '';
+
     const v = setting.typed_value;
     if (v === null) return '';
 
@@ -73,6 +84,11 @@ export function toDraft(setting: EventSetting): string {
  */
 export function validateDraft(setting: EventSetting, draft: string): string | null {
     const trimmed = draft.trim();
+
+    // Empty is meaningful for a secret: it clears the stored credential.
+    if (setting.is_secret) {
+        return trimmed.length > 500 ? 'This is longer than a credential should be.' : null;
+    }
 
     if (trimmed === '' && setting.type !== 'string') {
         return 'This setting needs a value.';
@@ -100,6 +116,8 @@ export function validateDraft(setting: EventSetting, draft: string): string | nu
 
 /** The value sent to `PATCH /admin/settings/{key}`. */
 export function fromDraft(setting: EventSetting, draft: string): unknown {
+    if (setting.is_secret) return draft.trim();
+
     switch (setting.type) {
         case 'int':
         case 'money':

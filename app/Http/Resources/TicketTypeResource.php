@@ -27,6 +27,7 @@ class TicketTypeResource extends JsonResource
             'base_price_paisa' => $this->base_price_paisa,
             'additional_adult_price_paisa' => $this->additional_adult_price_paisa,
             'additional_child_price_paisa' => $this->additional_child_price_paisa,
+            'current_student_price_paisa' => $this->current_student_price_paisa,
             'currency' => $this->currency,
             'base_admits' => $this->base_admits,
             'max_admits' => $this->max_admits,

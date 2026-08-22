@@ -53,4 +53,45 @@ class SmsSegmentCalculator
 
         return max(1, (int) ceil($length / $perSegment));
     }
+
+    /**
+     * Placeholder width used when estimating an unrendered template.
+     * Twelve characters is about what a ticket number, a date or a short
+     * name comes out at — deliberately not zero, because a template that
+     * fits only while its variables are empty is not a template that fits.
+     */
+    private const int PLACEHOLDER_WIDTH = 12;
+
+    /**
+     * A template body with its `{{placeholders}}` replaced, ready to be
+     * measured.
+     *
+     * Measuring the raw body is wrong in a way that is easy to miss and
+     * expensive to get wrong: **`{` and `}` are not in the GSM-7 alphabet**,
+     * so any template containing a placeholder at all reports as Unicode at
+     * 70 characters per segment, when the message it actually sends may be
+     * plain ASCII at 160. The seeded ticket confirmation measured three
+     * segments raw and one rendered — a 3x error, in the direction that
+     * makes a fine message look unaffordable.
+     *
+     * Values the caller knows are substituted; anything left over becomes a
+     * representative-width token, since `{{event_name}}` is usually shorter
+     * than what it renders to and would flatter the estimate.
+     *
+     * @param  array<string, mixed>  $sample
+     */
+    public static function renderForEstimate(string $body, array $sample = []): string
+    {
+        foreach ($sample as $key => $value) {
+            if (is_scalar($value)) {
+                $body = str_replace('{{'.$key.'}}', (string) $value, $body);
+            }
+        }
+
+        return (string) preg_replace(
+            '/\{\{[A-Za-z0-9_.]+\}\}/',
+            str_repeat('x', self::PLACEHOLDER_WIDTH),
+            $body,
+        );
+    }
 }

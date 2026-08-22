@@ -27,6 +27,7 @@ class QueuePaymentFailedNotification
             attendee: $attendee,
             payload: [
                 'full_name' => $attendee->full_name,
+                'full_name_bn' => $attendee->banglaName(),
                 'payment_number' => $payment->payment_number,
                 'amount_bdt' => number_format($payment->amount_due_paisa / 100, 2),
                 'registration_ulid' => $payment->registration?->ulid,

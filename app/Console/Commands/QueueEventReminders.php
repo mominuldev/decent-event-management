@@ -65,6 +65,7 @@ class QueueEventReminders extends Command
                         attendee: $attendee,
                         payload: [
                             'full_name' => $attendee->full_name,
+                            'full_name_bn' => $attendee->banglaName(),
                             'event_name' => $session->name,
                             'event_venue' => $session->venue,
                             'event_starts_at' => $session->starts_at->toDayDateTimeString(),

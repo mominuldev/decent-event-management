@@ -3,12 +3,26 @@ import { X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Button, Label, Textarea } from '@/components/ui';
 
-/** Base overlay + panel. Esc and backdrop click both close. */
+/**
+ * Base overlay + panel. Esc and backdrop click both close.
+ *
+ * `onClose` is the single exit for all three routes out (Esc, backdrop, the X),
+ * so a caller holding unsaved work can guard every one of them by guarding
+ * that one callback — there is no fourth way to dismiss the panel.
+ *
+ * The panel is height-capped and scrolls its own body: a tall dialog otherwise
+ * grows past the viewport, and because the overlay is `place-items-center` the
+ * overflow goes off *both* ends, putting the submit button somewhere the
+ * operator cannot reach or scroll to. `header` and `footer` sit outside that
+ * scroll area so the identity of the record and the way to act on it stay put.
+ */
 export function Dialog({
     open,
     onClose,
     title,
     description,
+    header,
+    footer,
     children,
     className,
 }: {
@@ -16,6 +30,10 @@ export function Dialog({
     onClose: () => void;
     title: string;
     description?: string;
+    /** Replaces the default title block. `title` is still the accessible name. */
+    header?: ReactNode;
+    /** Pinned below the scrolling body — actions, not content. */
+    footer?: ReactNode;
     children?: ReactNode;
     className?: string;
 }) {
@@ -38,15 +56,17 @@ export function Dialog({
                 aria-modal="true"
                 aria-label={title}
                 className={cn(
-                    'relative w-full max-w-md rounded-2xl border border-border bg-surface p-5 shadow-[var(--shadow-pop)]',
+                    'relative flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow-pop)]',
                     className,
                 )}
             >
-                <div className="flex items-start justify-between gap-3">
-                    <div>
-                        <h2 className="text-[16px] font-semibold text-text">{title}</h2>
-                        {description && <p className="mt-1 text-[13px] text-text-muted">{description}</p>}
-                    </div>
+                <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
+                    {header ?? (
+                        <div>
+                            <h2 className="text-[16px] font-semibold text-text">{title}</h2>
+                            {description && <p className="mt-1 text-[13px] text-text-muted">{description}</p>}
+                        </div>
+                    )}
                     <button
                         aria-label="Close"
                         onClick={onClose}
@@ -55,7 +75,8 @@ export function Dialog({
                         <X size={16} />
                     </button>
                 </div>
-                <div className="mt-4">{children}</div>
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-4">{children}</div>
+                {footer && <div className="shrink-0 border-t border-border bg-surface px-5 py-3.5">{footer}</div>}
             </div>
         </div>
     );

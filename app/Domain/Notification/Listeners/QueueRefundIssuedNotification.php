@@ -32,6 +32,7 @@ class QueueRefundIssuedNotification
             attendee: $attendee,
             payload: [
                 'full_name' => $attendee->full_name,
+                'full_name_bn' => $attendee->banglaName(),
                 'refund_number' => $refund->refund_number,
                 'amount_bdt' => number_format($refund->amount_paisa / 100, 2),
             ],

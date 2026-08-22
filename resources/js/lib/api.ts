@@ -63,3 +63,40 @@ export function toApiError(e: unknown): ApiError {
     }
     return { message: 'Network error. Please try again.' };
 }
+
+/**
+ * An API failure that still carries its per-field messages.
+ *
+ * The convention is that `errors` becomes field-level text and `message`
+ * becomes the toast, but `throw new Error(toApiError(e).message)` — the shape
+ * most of the feature api.ts files use — discards `errors` on the way out, so
+ * a 422 can only ever surface as one vague banner. That matters most where the
+ * server has written a specific message worth reading: editing an attendee
+ * onto a mobile number another attendee already holds answers "This mobile
+ * number already belongs to another attendee", and the operator needs to see
+ * it against the mobile field, not as a toast that could mean anything.
+ *
+ * Subclasses Error, so an existing `onError: (e: Error) => push(e.message)`
+ * keeps working unchanged and can opt into the detail when it wants it.
+ */
+export class ApiRequestError extends Error {
+    readonly code?: string;
+
+    readonly errors?: Record<string, string[]>;
+
+    readonly requestId?: string;
+
+    constructor(source: unknown) {
+        const api = toApiError(source);
+        super(api.message);
+        this.name = 'ApiRequestError';
+        this.code = api.code;
+        this.errors = api.errors;
+        this.requestId = api.request_id;
+    }
+
+    /** The first message for a field, if the server named one. */
+    for(field: string): string | undefined {
+        return this.errors?.[field]?.[0];
+    }
+}

@@ -69,12 +69,175 @@ function StatusTimeline({ status }: { status: RegistrationStatus }) {
     );
 }
 
+/** "2 adults, 1 child, 1 infant (free)" — infants included, because they
+ *  occupy an admit at the gate even though they cost nothing. */
+function partySummary(r: Registration): string {
+    const parts = [`${r.adults_count} adult${r.adults_count === 1 ? '' : 's'}`];
+
+    if (r.children_count > 0) {
+        parts.push(`${r.children_count} child${r.children_count === 1 ? '' : 'ren'}`);
+    }
+    if (r.infants_count > 0) {
+        parts.push(`${r.infants_count} infant${r.infants_count === 1 ? '' : 's'} (free)`);
+    }
+
+    return parts.join(', ');
+}
+
+interface PriceLine {
+    label: string;
+    detail?: string;
+    amountPaisa: number;
+    free?: boolean;
+}
+
+interface PriceBreakdown {
+    lines: PriceLine[];
+    /** Whether the lines add up to the stored subtotal. */
+    reconciles: boolean;
+}
+
+/**
+ * Attributes a registration's stored total to the ticket type's price
+ * tiers — a mirror of CreateRegistration's formula, including
+ * TicketType::basePriceFor(), which bills a current student their own rate.
+ *
+ * This is an *explanation* of a total, never a recomputation of it: the
+ * stored `subtotal_paisa` is what was charged, and a ticket type's prices
+ * can legitimately have moved since (the post-sale price lock only applies
+ * once a tier has sold). So the caller renders the stored figure as the
+ * total and these lines beside it, and `reconciles` says whether the two
+ * agree — a disagreement is surfaced rather than papered over, because the
+ * alternative is a breakdown that quietly explains the wrong number.
+ *
+ * Returns null when the row did not carry prices, so a half-built
+ * breakdown never renders.
+ */
+function priceBreakdown(r: Registration): PriceBreakdown | null {
+    const type = r.ticket_type;
+
+    if (
+        !type ||
+        type.base_price_paisa === undefined ||
+        type.additional_adult_price_paisa === undefined ||
+        type.additional_child_price_paisa === undefined
+    ) {
+        return null;
+    }
+
+    const isStudent = r.attendee?.participant_type === 'current_student';
+    const studentRate = type.current_student_price_paisa;
+    // Compared against null/undefined rather than checked for truthiness:
+    // 0 is a real price (a free student ticket), not an absent rule.
+    const onStudentRate = isStudent && studentRate !== null && studentRate !== undefined;
+    const basePaisa = onStudentRate ? (studentRate as number) : type.base_price_paisa;
+
+    const baseAdmits = type.base_admits ?? 1;
+    const extraAdults = Math.max(0, r.adults_count - baseAdmits);
+
+    const lines: PriceLine[] = [
+        {
+            label: 'Registrant',
+            detail: onStudentRate ? 'Current student rate' : 'Standard rate',
+            amountPaisa: basePaisa,
+        },
+    ];
+
+    if (extraAdults > 0) {
+        lines.push({
+            label: `${extraAdults} extra adult${extraAdults === 1 ? '' : 's'}`,
+            detail: `${money(type.additional_adult_price_paisa)} each`,
+            amountPaisa: extraAdults * type.additional_adult_price_paisa,
+        });
+    }
+
+    if (r.children_count > 0) {
+        lines.push({
+            label: `${r.children_count} child${r.children_count === 1 ? '' : 'ren'}`,
+            detail: `${money(type.additional_child_price_paisa)} each`,
+            amountPaisa: r.children_count * type.additional_child_price_paisa,
+        });
+    }
+
+    // Priced at zero but listed, so the breakdown accounts for every head
+    // the gate will admit rather than appearing to have lost one.
+    if (r.infants_count > 0) {
+        lines.push({
+            label: `${r.infants_count} infant${r.infants_count === 1 ? '' : 's'}`,
+            detail: 'Under the free age',
+            amountPaisa: 0,
+            free: true,
+        });
+    }
+
+    const sum = lines.reduce((total, line) => total + line.amountPaisa, 0);
+
+    return { lines, reconciles: sum === r.subtotal_paisa };
+}
+
+/**
+ * What was charged, and why. The stored `subtotal_paisa`/`total_paisa` are
+ * the money — the itemised lines only explain them, and say so out loud
+ * when they no longer add up (a ticket type repriced after this
+ * registration was taken).
+ */
+function PriceBreakdownBlock({ registration }: { registration: Registration }) {
+    const breakdown = priceBreakdown(registration);
+
+    return (
+        <div>
+            <div className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-text-faint">Price</div>
+            <div className="rounded-lg border border-border">
+                {breakdown?.lines.map((line, i) => (
+                    <div
+                        key={`${line.label}-${i}`}
+                        className="flex items-baseline justify-between gap-3 border-b border-border px-3 py-1.5 text-[13px]"
+                    >
+                        <span className="min-w-0">
+                            <span className="text-text">{line.label}</span>
+                            {line.detail && <span className="ml-1.5 text-[12px] text-text-faint">{line.detail}</span>}
+                        </span>
+                        {line.free ? (
+                            <Badge tone="success">Free</Badge>
+                        ) : (
+                            <span className="tnum shrink-0 text-text">{money(line.amountPaisa)}</span>
+                        )}
+                    </div>
+                ))}
+
+                {registration.discount_paisa > 0 && (
+                    <div className="flex items-baseline justify-between gap-3 border-b border-border px-3 py-1.5 text-[13px]">
+                        <span className="text-text">
+                            Discount
+                            {registration.discount_code && (
+                                <span className="ml-1.5 text-[12px] text-text-faint">{registration.discount_code}</span>
+                            )}
+                        </span>
+                        <span className="tnum shrink-0 text-text">−{money(registration.discount_paisa)}</span>
+                    </div>
+                )}
+
+                <div className="flex items-baseline justify-between gap-3 px-3 py-1.5 text-[13px]">
+                    <span className="font-semibold text-text">Total</span>
+                    <span className="tnum shrink-0 font-semibold text-text">{money(registration.total_paisa)}</span>
+                </div>
+            </div>
+
+            {breakdown && !breakdown.reconciles && (
+                <p className="mt-1.5 text-[12px] text-warning-fg">
+                    These lines no longer add up to the amount charged — the ticket type has been repriced since this
+                    registration was taken. {money(registration.total_paisa)} is what applies.
+                </p>
+            )}
+        </div>
+    );
+}
+
 function RegistrationDetail({ ulid, onClose }: { ulid: string; onClose: () => void }) {
     const { can } = useAuth();
     const { push } = useToast();
     const queryClient = useQueryClient();
     const [status, setStatus] = useState<RegistrationStatus | ''>('');
-    const [comments, setComments] = useState('');
     const [specialNotes, setSpecialNotes] = useState('');
     const [touched, setTouched] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
@@ -87,7 +250,6 @@ function RegistrationDetail({ ulid, onClose }: { ulid: string; onClose: () => vo
     useEffect(() => {
         if (data && !touched) {
             setStatus(data.status);
-            setComments(data.comments ?? '');
             setSpecialNotes(data.special_notes ?? '');
             setTouched(true);
         }
@@ -122,76 +284,12 @@ function RegistrationDetail({ ulid, onClose }: { ulid: string; onClose: () => vo
             onClose={onClose}
             title={data?.registration_number ?? 'Registration'}
             description={data?.attendee?.full_name}
-            className="max-w-xl"
-        >
-            {isLoading || !data ? (
-                <div className="space-y-3">
-                    {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
-                </div>
-            ) : (
-                <div className="space-y-5">
-                    <StatusTimeline status={data.status} />
-
-                    <div className="grid grid-cols-2 gap-3 text-[13px]">
-                        <div>
-                            <div className="text-text-faint">Ticket type</div>
-                            <div className="font-medium text-text">{data.ticket_type?.name ?? '—'}</div>
-                        </div>
-                        <div>
-                            <div className="text-text-faint">Total</div>
-                            <div className="tnum font-medium text-text">{money(data.total_paisa)}</div>
-                        </div>
-                        <div>
-                            <div className="text-text-faint">Party</div>
-                            <div className="font-medium text-text">{data.adults_count} adult(s), {data.children_count} child(ren)</div>
-                        </div>
-                        <div>
-                            <div className="text-text-faint">Submitted</div>
-                            <div className="font-medium text-text">{data.submitted_at ? new Date(data.submitted_at).toLocaleDateString() : '—'}</div>
-                        </div>
-                    </div>
-
-                    {data.guests && data.guests.length > 0 && (
-                        <div>
-                            <div className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-text-faint">Guests</div>
-                            <div className="space-y-1">
-                                {data.guests.map((g) => (
-                                    <div key={g.ulid} className="flex items-center justify-between rounded-lg border border-border px-3 py-1.5 text-[13px]">
-                                        <span className="text-text">{g.full_name}</span>
-                                        <span className="text-text-faint">{g.relation ?? g.age_group ?? '—'}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    <div>
-                        <Label htmlFor="reg_status">Status</Label>
-                        <Select
-                            id="reg_status"
-                            value={status}
-                            disabled={!canEdit}
-                            onChange={(e) => setStatus(e.target.value as RegistrationStatus)}
-                        >
-                            {!EDITABLE_STATUSES.includes(data.status) && (
-                                <option value={data.status}>{titleCase(data.status)} (system-set)</option>
-                            )}
-                            {EDITABLE_STATUSES.map((s) => (
-                                <option key={s} value={s}>{titleCase(s)}</option>
-                            ))}
-                        </Select>
-                    </div>
-
-                    <div>
-                        <Label htmlFor="reg_comments">Comments</Label>
-                        <Textarea id="reg_comments" rows={2} disabled={!canEdit} value={comments} onChange={(e) => setComments(e.target.value)} />
-                    </div>
-                    <div>
-                        <Label htmlFor="reg_notes">Special notes</Label>
-                        <Textarea id="reg_notes" rows={2} disabled={!canEdit} value={specialNotes} onChange={(e) => setSpecialNotes(e.target.value)} />
-                    </div>
-
-                    <div className="flex items-center justify-between border-t border-border pt-4">
+            className="max-w-2xl"
+            /* Pinned, so Delete/Save stay reachable without scrolling past a
+               large party — and out of the body, which is what scrolls. */
+            footer={
+                data && (
+                    <div className="flex items-center justify-between gap-3">
                         {canDelete ? (
                             <Button variant="ghost" size="sm" className="text-critical-fg" onClick={() => setConfirmDelete(true)}>
                                 <Trash2 size={15} /> Delete
@@ -206,7 +304,6 @@ function RegistrationDetail({ ulid, onClose }: { ulid: string; onClose: () => vo
                                     onClick={() =>
                                         void updateMutation.mutateAsync({
                                             status: status || undefined,
-                                            comments: comments || null,
                                             special_notes: specialNotes || null,
                                         })
                                     }
@@ -215,6 +312,88 @@ function RegistrationDetail({ ulid, onClose }: { ulid: string; onClose: () => vo
                                 </Button>
                             )}
                         </div>
+                    </div>
+                )
+            }
+        >
+            {isLoading || !data ? (
+                <div className="space-y-3">
+                    {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    <StatusTimeline status={data.status} />
+
+                    {/* One row on desktop rather than two stacked pairs. */}
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 text-[13px] sm:grid-cols-4">
+                        <div>
+                            <div className="text-text-faint">Ticket type</div>
+                            <div className="font-medium text-text">{data.ticket_type?.name ?? '—'}</div>
+                        </div>
+                        <div>
+                            <div className="text-text-faint">Participant type</div>
+                            <div className="font-medium text-text">
+                                {data.attendee?.participant_type ? titleCase(data.attendee.participant_type) : '—'}
+                            </div>
+                        </div>
+                        <div>
+                            <div className="text-text-faint">Party</div>
+                            <div className="font-medium text-text">{partySummary(data)}</div>
+                        </div>
+                        <div>
+                            <div className="text-text-faint">Submitted</div>
+                            <div className="font-medium text-text">{data.submitted_at ? new Date(data.submitted_at).toLocaleDateString() : '—'}</div>
+                        </div>
+                    </div>
+
+                    {/* Price on the left, Status top-right where the eye lands
+                        on the one control that acts on the record. Guests fill
+                        the rest of the right column — both it and the price
+                        grow with the party, so keeping them in one row means the
+                        block is as tall as the longer of the two, not the sum. */}
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <PriceBreakdownBlock registration={data} />
+
+                        <div className="space-y-4">
+                            <div>
+                                <Label htmlFor="reg_status">Status</Label>
+                                <Select
+                                    id="reg_status"
+                                    value={status}
+                                    disabled={!canEdit}
+                                    onChange={(e) => setStatus(e.target.value as RegistrationStatus)}
+                                >
+                                    {!EDITABLE_STATUSES.includes(data.status) && (
+                                        <option value={data.status}>{titleCase(data.status)} (system-set)</option>
+                                    )}
+                                    {EDITABLE_STATUSES.map((s) => (
+                                        <option key={s} value={s}>{titleCase(s)}</option>
+                                    ))}
+                                </Select>
+                            </div>
+
+                            {data.guests && data.guests.length > 0 && (
+                                <div>
+                                    <div className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-text-faint">Guests</div>
+                                    <div className="rounded-lg border border-border">
+                                        {data.guests.map((g) => (
+                                            <div
+                                                key={g.ulid}
+                                                className="flex items-baseline justify-between gap-3 border-b border-border px-3 py-1.5 text-[13px] last:border-0"
+                                            >
+                                                <span className="min-w-0 truncate text-text">{g.full_name}</span>
+                                                <span className="shrink-0 text-[12px] text-text-faint">{g.relation ?? g.age_group ?? '—'}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div>
+                        <Label htmlFor="reg_notes">Special notes</Label>
+                        <Textarea id="reg_notes" rows={2} disabled={!canEdit} value={specialNotes} onChange={(e) => setSpecialNotes(e.target.value)} />
                     </div>
                 </div>
             )}

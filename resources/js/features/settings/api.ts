@@ -1,6 +1,6 @@
 import { api, toApiError } from '@/lib/api';
 import { unwrap } from '@/lib/pagination';
-import type { EventSetting, SettingsByGroup } from './types';
+import type { EventSetting, SettingsByGroup, SmsBalance } from './types';
 
 export async function fetchSettings(): Promise<SettingsByGroup> {
     const { data } = await api.get('/admin/settings');
@@ -17,4 +17,15 @@ export async function updateSetting(key: string, value: unknown): Promise<EventS
         // than the generic "The given data was invalid." envelope message.
         throw new Error(error.errors?.value?.[0] ?? error.message);
     }
+}
+
+/**
+ * The gateway's prepaid balance. Not a setting — it is asked of REVE live —
+ * but it belongs beside the credentials that authenticate the call, since a
+ * balance that fails to load is usually a credential problem rather than an
+ * empty account.
+ */
+export async function fetchSmsBalance(): Promise<SmsBalance> {
+    const { data } = await api.get('/admin/notifications/sms-balance');
+    return data as SmsBalance;
 }

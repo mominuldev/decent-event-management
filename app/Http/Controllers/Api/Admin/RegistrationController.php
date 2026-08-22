@@ -116,7 +116,6 @@ class RegistrationController extends Controller
                                         new OAT\Property(property: 'total_paisa', type: 'integer'),
                                         new OAT\Property(property: 'currency', type: 'string'),
                                         new OAT\Property(property: 'discount_code', type: 'string', nullable: true),
-                                        new OAT\Property(property: 'comments', type: 'string', nullable: true),
                                         new OAT\Property(property: 'special_notes', type: 'string', nullable: true),
                                         new OAT\Property(property: 'source', type: 'string'),
                                         new OAT\Property(property: 'submitted_at', type: 'string', format: 'date-time', nullable: true),
@@ -217,7 +216,6 @@ class RegistrationController extends Controller
                                     new OAT\Property(property: 'total_paisa', type: 'integer'),
                                     new OAT\Property(property: 'currency', type: 'string'),
                                     new OAT\Property(property: 'discount_code', type: 'string', nullable: true),
-                                    new OAT\Property(property: 'comments', type: 'string', nullable: true),
                                     new OAT\Property(property: 'special_notes', type: 'string', nullable: true),
                                     new OAT\Property(property: 'source', type: 'string'),
                                     new OAT\Property(property: 'submitted_at', type: 'string', format: 'date-time', nullable: true),
@@ -257,7 +255,7 @@ class RegistrationController extends Controller
 
     #[OAT\Patch(
         path: '/admin/registrations/{registration}',
-        summary: 'Update a registration (status, comments, notes)',
+        summary: 'Update a registration (status, special notes)',
         tags: ['Registrations'],
         security: [['bearerAuth' => []]],
         parameters: [
@@ -281,7 +279,6 @@ class RegistrationController extends Controller
                             enum: ['draft', 'pending_payment', 'pending_approval', 'approved', 'rejected', 'cancelled'],
                             description: 'New registration status, applied via the state machine'
                         ),
-                        new OAT\Property(property: 'comments', type: 'string', nullable: true, maxLength: 1000),
                         new OAT\Property(property: 'special_notes', type: 'string', nullable: true, maxLength: 1000),
                     ]
                 )
@@ -301,7 +298,6 @@ class RegistrationController extends Controller
                                     new OAT\Property(property: 'ulid', type: 'string'),
                                     new OAT\Property(property: 'registration_number', type: 'string'),
                                     new OAT\Property(property: 'status', type: 'string'),
-                                    new OAT\Property(property: 'comments', type: 'string', nullable: true),
                                     new OAT\Property(property: 'special_notes', type: 'string', nullable: true),
                                 ],
                                 type: 'object'

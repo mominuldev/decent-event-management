@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { cloneElement, isValidElement, useEffect, useState } from 'react';
 import type { ButtonHTMLAttributes, ComponentPropsWithRef, ReactNode, SelectHTMLAttributes } from 'react';
 import { cn } from '@/lib/cn';
 
@@ -184,6 +184,107 @@ export function Label({ children, htmlFor }: { children: ReactNode; htmlFor?: st
         <label htmlFor={htmlFor} className="mb-1.5 block text-[12.5px] font-semibold text-text">
             {children}
         </label>
+    );
+}
+
+/* ---- Field -------------------------------------------------------------------- */
+/**
+ * Label, control, and the one line underneath that is either a hint or an
+ * error — never both at once, because a field showing "Max 150 characters"
+ * next to "This name is too long" makes the reader work out which one is
+ * telling them what to do.
+ *
+ * The error wins when present, and it is wired to the control through
+ * `aria-describedby`, so a screen reader reaches it without hunting.
+ */
+export function Field({
+    id,
+    label,
+    hint,
+    error,
+    optional,
+    className,
+    children,
+}: {
+    id: string;
+    label: string;
+    hint?: string;
+    error?: string;
+    /** Marks the field as skippable. Required is the default and goes unmarked. */
+    optional?: boolean;
+    className?: string;
+    children: ReactNode;
+}) {
+    const message = error ?? hint;
+    const messageId = `${id}-message`;
+
+    // Cloned rather than asking all eleven call sites to repeat an
+    // aria-describedby that must match a string this component owns.
+    const control =
+        isValidElement<{ 'aria-describedby'?: string }>(children) && message
+            ? cloneElement(children, { 'aria-describedby': messageId })
+            : children;
+
+    return (
+        <div className={className}>
+            <label htmlFor={id} className="mb-1.5 flex items-baseline gap-2 text-[12.5px] font-semibold text-text">
+                {label}
+                {optional && <span className="font-normal text-text-faint">Optional</span>}
+            </label>
+            {control}
+            {message && (
+                <p
+                    id={messageId}
+                    // Announced when a save comes back rejected, since the
+                    // message appears without the reader having moved focus.
+                    aria-live={error ? 'polite' : undefined}
+                    className={cn('mt-1.5 text-[12px]', error ? 'font-medium text-critical-fg' : 'text-text-faint')}
+                >
+                    {message}
+                </p>
+            )}
+        </div>
+    );
+}
+
+/* ---- FormSection -------------------------------------------------------------- */
+/**
+ * A titled group of fields. The grouping is the navigation: a form of a dozen
+ * controls in one undifferentiated grid gives the reader nothing to scan by,
+ * and no way to tell which fields belong to the same idea.
+ */
+export function FormSection({
+    title,
+    description,
+    children,
+}: {
+    title: string;
+    description?: string;
+    children: ReactNode;
+}) {
+    return (
+        <section className="space-y-3">
+            <div>
+                <h3 className="text-[12px] font-semibold uppercase tracking-wider text-text-faint">{title}</h3>
+                {description && <p className="mt-0.5 text-[12.5px] text-text-muted">{description}</p>}
+            </div>
+            {children}
+        </section>
+    );
+}
+
+/* ---- DetailRow ---------------------------------------------------------------- */
+/** A read-only label/value pair. Renders an em dash rather than nothing, so a blank field still reads as "we don't know" instead of a layout gap. */
+export function DetailRow({ label, value }: { label: string; value: ReactNode }) {
+    const empty = value === null || value === undefined || value === '' || value === false;
+
+    return (
+        <div className="flex items-baseline justify-between gap-4 py-1.5">
+            <dt className="shrink-0 text-[12.5px] text-text-muted">{label}</dt>
+            <dd className={cn('min-w-0 truncate text-right text-[13px]', empty ? 'text-text-faint' : 'text-text')}>
+                {empty ? '—' : value}
+            </dd>
+        </div>
     );
 }
 

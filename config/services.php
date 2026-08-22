@@ -110,4 +110,84 @@ return [
         'revalidate_secret' => env('CONTENT_REVALIDATE_SECRET'),
     ],
 
+    // REVE Systems SMS gateway (smpp.revesms.com) — the Bangladesh SMS
+    // vendor. Credentials are per-account and issued by REVE, so this stays
+    // on FakeSmsDriver until `api_key`/`secret_key` are set; see
+    // NotificationChannelResolver.
+    //
+    // ⚠️ **The host is per-account, and getting it wrong is silent.** REVE
+    // licenses its platform to resellers who each run their own instance —
+    // `smpp.revesms.com`, `smpp.ajuratech.com`, the `smsvaults.work`
+    // white-labels, and others. Credentials are only valid on the instance
+    // that issued them, and pointing at the wrong one answers **HTTP 200
+    // with a completely empty body** rather than an auth error, which reads
+    // as a parser fault instead of a misconfiguration. Set this to whatever
+    // host you log in to. There is no useful default, so the one here is
+    // only a placeholder.
+    //
+    // Every instance speaks the same `/sendtext`, `/getstatus`,
+    // `/getmultistatus`, `/send` API on the same ports, so moving between
+    // them is a URL change and nothing more:
+    //
+    //   https://<host>:7790   TLS
+    //   http://<host>:7788    cleartext — never in production, the message
+    //                         body and both keys travel in the clear
+    //   http://api<host>      the cPanel-style host, no port
+    //
+    // Note the bare origin (`https://<host>` with no port) is the *billing
+    // portal*, not the API — it answers 302 to a login page.
+    //
+    // `sender_id` is REVE's `callerID` — the approved masking/sender name on
+    // the account. An unapproved one is rejected by the gateway, not
+    // silently replaced, so this has no safe default.
+    'revesms' => [
+        'base_url' => env('REVESMS_BASE_URL', 'https://smpp.ajuratech.com:7790'),
+        'api_key' => env('REVESMS_API_KEY'),
+        'secret_key' => env('REVESMS_SECRET_KEY'),
+        'sender_id' => env('REVESMS_SENDER_ID'),
+
+        // How the two keys are carried: `body` (in the request body/query),
+        // `path` (`/sendtext/{apikey}/{secretkey}`), or `basic` (HTTP Basic,
+        // username=apikey password=secretkey). All three are in the vendor's
+        // Postman collection and all three were confirmed working against a
+        // live deployment, so the account decides rather than this code.
+        'auth_style' => env('REVESMS_AUTH_STYLE', 'body'),
+
+        // `post` sends JSON, `form` sends x-www-form-urlencoded, `get` puts
+        // everything in the query string. POST is the default deliberately:
+        // a GET puts the message body — a real person's name, a ticket
+        // number — into every access log and proxy between here and the
+        // gateway. Reach for `form` if something in front of the gateway
+        // will not forward a JSON body.
+        'method' => env('REVESMS_METHOD', 'post'),
+
+        'timeout' => (int) env('REVESMS_TIMEOUT', 15),
+
+        // What one segment costs, for the delivery-cost report. REVE bills
+        // per segment against a prepaid balance and does not return a price
+        // on the send response, so this is a local figure that has to match
+        // the contracted rate — it is reporting, not billing.
+        'cost_paisa_per_segment' => (int) env('REVESMS_COST_PAISA_PER_SEGMENT', 50),
+
+        // Client id for the balance page (`smsClientBalance.jsp?client=...`).
+        // Separate from `api_key`; REVE issues it with the account.
+        'client_id' => env('REVESMS_CLIENT_ID'),
+
+        // Shared secret for the DLR push REVE makes *to us* at
+        // `POST /webhooks/sms/dlr`. The vendor authenticates that callback
+        // with the same apikey/secretkey pair, so these default to the
+        // sending credentials; override only if REVE issues a distinct pair
+        // for the callback direction.
+        'dlr_api_key' => env('REVESMS_DLR_API_KEY'),
+        'dlr_secret_key' => env('REVESMS_DLR_SECRET_KEY'),
+
+        // Source-IP allowlist for that callback, on top of the key check.
+        // Named to match `EnsureIpnFromAllowlistedIp`'s convention
+        // (`services.{gateway}.ipn_ip_allowlist`) so the same middleware
+        // serves both this and the payment IPNs; same deliberate
+        // no-op-when-empty, for the same reason — a guessed range silently
+        // drops every real receipt.
+        'ipn_ip_allowlist' => array_filter(array_map('trim', explode(',', (string) env('REVESMS_DLR_IP_ALLOWLIST', '')))),
+    ],
+
 ];

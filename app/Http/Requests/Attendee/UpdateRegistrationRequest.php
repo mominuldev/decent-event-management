@@ -27,7 +27,6 @@ class UpdateRegistrationRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'comments' => ['nullable', 'string', 'max:1000'],
             'special_notes' => ['nullable', 'string', 'max:1000'],
             'guests' => ['nullable', 'array'],
             'guests.*.full_name' => ['required', 'string', 'max:200'],

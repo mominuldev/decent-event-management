@@ -51,7 +51,6 @@ class Registration extends Model
         'total_paisa',
         'currency',
         'discount_code',
-        'comments',
         'special_notes',
         'source',
         'created_by_user_id',

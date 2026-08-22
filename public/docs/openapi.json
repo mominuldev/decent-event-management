@@ -4373,6 +4373,152 @@
                         "bearerAuth": []
                     }
                 ]
+            },
+            "post": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Create a notification template",
+                "description": "Adds a template for a (key, channel, locale, version) that does not have one yet. Editing the identity of an existing template is not offered — it would silently retarget every notification that uses it — so a different message is a different row.",
+                "operationId": "399e1a60ab6582eeb7c4b918150655fc",
+                "responses": {
+                    "201": {
+                        "description": "Template created"
+                    },
+                    "403": {
+                        "description": "Missing notification.manage_templates permission"
+                    },
+                    "422": {
+                        "description": "Validation failed, or that key/channel/language already exists"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/notifications/sms-balance": {
+            "get": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Live prepaid balance on the SMS gateway account",
+                "description": "Asks REVE for the account balance and reports it alongside the low-balance threshold and the recharge portal URL, both configurable in Settings. `estimated_segments` divides the balance by the configured per-segment cost — it is an estimate from a local figure, not something the gateway reports, so it is only as right as `sms.cost_paisa_per_segment`. **There is no top-up endpoint**: REVE exposes send, status and balance only, so recharging happens on their billing portal and this endpoint is how the new balance becomes visible afterwards. Answers `200` with `configured: false` when no credentials are set, and `502` when the gateway itself cannot be reached — an unreachable gateway is not the same as an empty account, and rendering it as a zero balance would send someone to top up a wallet that is already full.",
+                "operationId": "4be2f0054c731c896d1a45fcee897e0e",
+                "responses": {
+                    "200": {
+                        "description": "Balance, or configured=false when no credentials are set",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "configured": {
+                                            "type": "boolean"
+                                        },
+                                        "balance": {
+                                            "description": "Account balance in BDT as the gateway reports it; null when it returns no parseable figure",
+                                            "type": "number",
+                                            "nullable": true
+                                        },
+                                        "estimated_segments": {
+                                            "description": "Balance divided by the configured per-segment cost",
+                                            "type": "integer",
+                                            "nullable": true
+                                        },
+                                        "low_balance_threshold_paisa": {
+                                            "type": "integer",
+                                            "nullable": true
+                                        },
+                                        "is_low": {
+                                            "type": "boolean"
+                                        },
+                                        "recharge_url": {
+                                            "type": "string",
+                                            "nullable": true
+                                        },
+                                        "checked_at": {
+                                            "type": "string",
+                                            "format": "date-time"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Missing notification.view_costs permission"
+                    },
+                    "502": {
+                        "description": "The SMS gateway could not be reached"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/notifications/templates/{template}": {
+            "patch": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Edit a notification template",
+                "description": "Changes the wording, the subject, or whether the template is active. For an SMS template the stored segment estimate is recalculated on save — the boundary is invisible while typing (160 GSM-7 characters is one segment, 161 is two, and one emoji or a plain `|` drops the whole message to 70 per segment), and it is billed per segment per recipient.",
+                "operationId": "977f45314771d38bc93e3cce9036c48b",
+                "parameters": [
+                    {
+                        "name": "template",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Template updated"
+                    },
+                    "403": {
+                        "description": "Missing notification.manage_templates permission"
+                    },
+                    "404": {
+                        "description": "No such template"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/notifications/templates/preview": {
+            "post": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Cost and encoding of a draft message, before it is saved",
+                "description": "Returns what the given body would cost as an SMS: its encoding, segment count, and the total across a recipient count. This exists because the cost of an SMS is invisible in an editor and the cliffs are sharp — a single emoji, or a plain `|`, moves a message from 160 characters per segment to 70. Placeholders are substituted with a sample value first, since `{{event_name}}` is shorter than what it renders to and the estimate would flatter the real message otherwise.",
+                "operationId": "322ff25150331db46ae323072997e1af",
+                "responses": {
+                    "200": {
+                        "description": "Encoding, segments and cost"
+                    },
+                    "403": {
+                        "description": "Missing notification.manage_templates permission"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
             }
         },
         "/admin/payments": {
@@ -5398,10 +5544,6 @@
                                                         "type": "string",
                                                         "nullable": true
                                                     },
-                                                    "comments": {
-                                                        "type": "string",
-                                                        "nullable": true
-                                                    },
                                                     "special_notes": {
                                                         "type": "string",
                                                         "nullable": true
@@ -5534,10 +5676,6 @@
                                                     "type": "string",
                                                     "nullable": true
                                                 },
-                                                "comments": {
-                                                    "type": "string",
-                                                    "nullable": true
-                                                },
                                                 "special_notes": {
                                                     "type": "string",
                                                     "nullable": true
@@ -5664,7 +5802,7 @@
                 "tags": [
                     "Registrations"
                 ],
-                "summary": "Update a registration (status, comments, notes)",
+                "summary": "Update a registration (status, special notes)",
                 "operationId": "dff4fb52870902dbede75fa42d560300",
                 "parameters": [
                     {
@@ -5695,11 +5833,6 @@
                                             "cancelled"
                                         ]
                                     },
-                                    "comments": {
-                                        "type": "string",
-                                        "nullable": true,
-                                        "maxLength": 1000
-                                    },
                                     "special_notes": {
                                         "type": "string",
                                         "nullable": true,
@@ -5728,10 +5861,6 @@
                                                 },
                                                 "status": {
                                                     "type": "string"
-                                                },
-                                                "comments": {
-                                                    "type": "string",
-                                                    "nullable": true
                                                 },
                                                 "special_notes": {
                                                     "type": "string",
@@ -6683,6 +6812,11 @@
                                                         "description": "Amount in paisa",
                                                         "type": "integer"
                                                     },
+                                                    "current_student_price_paisa": {
+                                                        "description": "Amount in paisa, or null when this type has no student rate.",
+                                                        "type": "integer",
+                                                        "nullable": true
+                                                    },
                                                     "currency": {
                                                         "type": "string"
                                                     },
@@ -6817,6 +6951,11 @@
                                             "additional_child_price_paisa"
                                         ],
                                         "type": "integer"
+                                    },
+                                    "current_student_price_paisa": {
+                                        "description": "Amount in paisa. What a current student pays for their own seat; null means they pay base_price_paisa.",
+                                        "type": "integer",
+                                        "nullable": true
                                     },
                                     "currency": {
                                         "description": "ISO 4217 currency code, e.g. BDT",
@@ -6985,6 +7124,11 @@
                                         "additional_child_price_paisa": {
                                             "description": "Amount in paisa",
                                             "type": "integer"
+                                        },
+                                        "current_student_price_paisa": {
+                                            "description": "Amount in paisa, or null when this type has no student rate.",
+                                            "type": "integer",
+                                            "nullable": true
                                         },
                                         "currency": {
                                             "type": "string"
@@ -7167,6 +7311,11 @@
                                     "additional_child_price_paisa": {
                                         "description": "Amount in paisa. Locked after sales start.",
                                         "type": "integer"
+                                    },
+                                    "current_student_price_paisa": {
+                                        "description": "Amount in paisa. Locked after sales start.",
+                                        "type": "integer",
+                                        "nullable": true
                                     },
                                     "currency": {
                                         "type": "string",
@@ -8001,7 +8150,7 @@
                     "Authentication"
                 ],
                 "summary": "Request a login link for an attendee, sent by SMS to their registered mobile number",
-                "operationId": "3eb33bc5f0d7f77db19ce8f678c27387",
+                "operationId": "8993bd4918d18eaefaa6ec1f8245562a",
                 "requestBody": {
                     "required": true,
                     "content": {
@@ -8022,16 +8171,12 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "Same response whether or not the number is registered, to avoid leaking enumeration signal. In local/testing environments only, the response also includes `debug_token`.",
+                        "description": "Same response whether or not the number is registered, to avoid leaking enumeration signal. The link itself is only ever delivered by SMS — it is never in this response, in any environment.",
                         "content": {
                             "application/json": {
                                 "schema": {
                                     "properties": {
                                         "message": {
-                                            "type": "string"
-                                        },
-                                        "debug_token": {
-                                            "description": "Plaintext login token, only present in local/testing environments",
                                             "type": "string"
                                         }
                                     },
@@ -8132,6 +8277,98 @@
                                 }
                             }
                         }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/attendee/auth/login": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Sign in with mobile number and password",
+                "description": "The ordinary sign-in path, and the one that costs nothing: an attendee who chose a password at checkout never needs an SMS to reach their own registration. Answers the same `401` whether the number is unknown, has no password yet, or the password is wrong — telling them apart would turn this into a way to discover which mobile numbers hold accounts, and `has_password` on a 401 would be exactly that signal. An attendee with no password (created before this existed, added by an admin, or loaded by an import) uses `request-code` instead.",
+                "operationId": "f1897326640f978a96013793b6b84ed8",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "mobile",
+                                    "password"
+                                ],
+                                "properties": {
+                                    "mobile": {
+                                        "type": "string"
+                                    },
+                                    "password": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Signed in"
+                    },
+                    "401": {
+                        "description": "Those details do not match an account"
+                    },
+                    "429": {
+                        "description": "Too many attempts"
+                    }
+                }
+            }
+        },
+        "/attendee/me/password": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Set or change the signed-in attendee's password",
+                "description": "Setting one for the first time (after signing in with an SMS code) needs no current password, because there is none. Changing an existing one requires it — a bearer token can outlive the moment it was issued, and a borrowed phone must not be able to lock its owner out.",
+                "operationId": "915b1d4e1d1fe8b7b2dca0559356f77d",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "password",
+                                    "password_confirmation"
+                                ],
+                                "properties": {
+                                    "current_password": {
+                                        "description": "Required only when one is already set",
+                                        "type": "string"
+                                    },
+                                    "password": {
+                                        "type": "string"
+                                    },
+                                    "password_confirmation": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Password saved"
+                    },
+                    "422": {
+                        "description": "Validation failed, or the current password is wrong"
                     }
                 },
                 "security": [
@@ -8597,7 +8834,7 @@
                 "tags": [
                     "Attendee Self-Service"
                 ],
-                "summary": "Update comments, special notes, and guest list on an owned registration",
+                "summary": "Update special notes and the guest list on an owned registration",
                 "description": "Only allowed while the registration is still `draft` or `pending_payment` and belongs to the authenticated attendee — enforced by UpdateRegistrationRequest::authorize().",
                 "operationId": "99b7c7358d396abd7c066a1449043863",
                 "parameters": [
@@ -8617,10 +8854,6 @@
                         "application/json": {
                             "schema": {
                                 "properties": {
-                                    "comments": {
-                                        "type": "string",
-                                        "nullable": true
-                                    },
                                     "special_notes": {
                                         "type": "string",
                                         "nullable": true
@@ -8682,10 +8915,6 @@
                                         },
                                         "status": {
                                             "type": "string"
-                                        },
-                                        "comments": {
-                                            "type": "string",
-                                            "nullable": true
                                         },
                                         "special_notes": {
                                             "type": "string",
@@ -8979,6 +9208,266 @@
                         "bearerAuth": []
                     }
                 ]
+            }
+        },
+        "/public/attendees": {
+            "get": {
+                "tags": [
+                    "Public"
+                ],
+                "summary": "Public directory of attendees whose registration has succeeded",
+                "description": "Lists only registrations in `paid` or `confirmed` status — an unpaid, cancelled, refunded or expired registration never appears. Contact details, guest names and money are deliberately not exposed; the badge photo is published as a signed thumbnail URL.",
+                "operationId": "7876117b3c667ba5cbd6222b4f35a133",
+                "parameters": [
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "description": "Free text over name, occupation, designation, organization, district, class, and batch year",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "participant_type",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "current_student",
+                                "former_student",
+                                "teacher",
+                                "staff",
+                                "guardian",
+                                "guest",
+                                "sponsor",
+                                "other"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "batch_year",
+                        "in": "query",
+                        "description": "Exact SSC batch year",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "batch_from",
+                        "in": "query",
+                        "description": "Inclusive lower bound on batch year — a decade filter sends a range, not a decade name",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "batch_to",
+                        "in": "query",
+                        "description": "Inclusive upper bound on batch year",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "has_guests",
+                        "in": "query",
+                        "description": "Restrict to registrations that brought family, or to lone registrants",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "yes",
+                                "no"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "in": "query",
+                        "description": "Unknown values fall back to the default.",
+                        "schema": {
+                            "type": "string",
+                            "default": "batch_asc",
+                            "enum": [
+                                "batch_asc",
+                                "batch_desc",
+                                "name_asc",
+                                "recent"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "Cards per page, capped at 48",
+                        "schema": {
+                            "type": "integer",
+                            "default": 12
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 1
+                        }
+                    },
+                    {
+                        "name": "If-None-Match",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated directory page, plus whole-directory counters and the batch years worth offering as filters",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "ulid": {
+                                                        "type": "string"
+                                                    },
+                                                    "full_name": {
+                                                        "type": "string"
+                                                    },
+                                                    "full_name_bn": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "participant_type": {
+                                                        "type": "string"
+                                                    },
+                                                    "ssc_batch_year": {
+                                                        "type": "integer",
+                                                        "nullable": true
+                                                    },
+                                                    "current_class": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "occupation": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "designation": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "organization": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "address_district": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "country": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "is_verified": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "profile_photo_url": {
+                                                        "description": "Signed URL to the 128px thumbnail of the badge photo, or null when the attendee never uploaded one",
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "avatar_variant": {
+                                                        "description": "Which placeholder to draw when there is no photo. A derived hint, not the private `gender` column — anything not plainly male or female is `neutral`.",
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "male",
+                                                            "female",
+                                                            "neutral"
+                                                        ]
+                                                    },
+                                                    "participation_type": {
+                                                        "type": "string"
+                                                    },
+                                                    "adults_count": {
+                                                        "type": "integer"
+                                                    },
+                                                    "children_count": {
+                                                        "type": "integer"
+                                                    },
+                                                    "infants_count": {
+                                                        "type": "integer"
+                                                    },
+                                                    "guests_count": {
+                                                        "type": "integer"
+                                                    },
+                                                    "ticket_type_name": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "ticket_type_name_bn": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "registered_at": {
+                                                        "type": "string",
+                                                        "format": "date-time"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        },
+                                        "links": {
+                                            "type": "object"
+                                        },
+                                        "meta": {
+                                            "properties": {
+                                                "stats": {
+                                                    "description": "Counters over the whole directory, unaffected by the filters on this request",
+                                                    "properties": {
+                                                        "total_registered": {
+                                                            "type": "integer"
+                                                        },
+                                                        "total_alumni": {
+                                                            "type": "integer"
+                                                        },
+                                                        "total_students": {
+                                                            "type": "integer"
+                                                        },
+                                                        "total_teachers_staff": {
+                                                            "type": "integer"
+                                                        },
+                                                        "total_guests": {
+                                                            "type": "integer"
+                                                        },
+                                                        "total_batches": {
+                                                            "type": "integer"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "available_batches": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "integer"
+                                                    }
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "304": {
+                        "description": "Not modified"
+                    }
+                }
             }
         },
         "/public/content/faqs": {
@@ -10202,10 +10691,6 @@
                                             "XXXL"
                                         ]
                                     },
-                                    "comments": {
-                                        "type": "string",
-                                        "maxLength": 1000
-                                    },
                                     "special_notes": {
                                         "type": "string",
                                         "maxLength": 1000
@@ -10264,9 +10749,6 @@
                                                     "type": "string"
                                                 },
                                                 "discount_code": {
-                                                    "type": "string"
-                                                },
-                                                "comments": {
                                                     "type": "string"
                                                 },
                                                 "special_notes": {
@@ -10391,9 +10873,6 @@
                                                     "type": "string"
                                                 },
                                                 "discount_code": {
-                                                    "type": "string"
-                                                },
-                                                "comments": {
                                                     "type": "string"
                                                 },
                                                 "special_notes": {
@@ -10669,6 +11148,10 @@
                                                     },
                                                     "additional_child_price_paisa": {
                                                         "type": "integer"
+                                                    },
+                                                    "current_student_price_paisa": {
+                                                        "type": "integer",
+                                                        "nullable": true
                                                     },
                                                     "currency": {
                                                         "type": "string"
@@ -11312,6 +11795,64 @@
                 }
             }
         },
+        "/webhooks/sms/dlr": {
+            "post": {
+                "tags": [
+                    "Webhooks"
+                ],
+                "summary": "REVE Systems SMS delivery receipt (DLR) callback",
+                "description": "Delivery receipt pushed by the REVE SMS gateway for a message this system sent. Mirrors the vendor's own `POST /submitstatus` shape (`apikey`, `secretkey`, `messageid`, `text`) and is accepted by `GET` as well, since REVE's published collection shows both verbs. `messageid` is matched against `notifications.provider_message_id`; `text` is an SMPP v3.4 `message_state` value (`DELIVRD`, `UNDELIV`, `REJECTD`, `EXPIRED`, `ACCEPTD`, …) mapped by `ReveSmsDeliveryState`, which settles the outbox row to `delivered` or `bounced` and leaves a still-in-flight state (`ACCEPTD`, `ENROUTE`) as a timeline entry only. Authenticated solely by the configured `apikey`/`secretkey` pair — a wrong pair is `401`, and the endpoint is refused outright when no credentials are configured rather than accepting an unauthenticated caller. An **unknown** `messageid` answers `200` with the identical body a known one does: a `404` would be an oracle for enumerating live message ids, and REVE would read any error as a failed callback and retry it indefinitely. The callback is never trusted for anything but a delivery status — `sms:poll-dlr` asks the gateway directly and is what runs when no push is configured on the REVE account at all.",
+                "operationId": "39de505f12e546253338d494213c66dd",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "apikey",
+                                    "secretkey",
+                                    "messageid"
+                                ],
+                                "properties": {
+                                    "apikey": {
+                                        "description": "REVE account API key",
+                                        "type": "string"
+                                    },
+                                    "secretkey": {
+                                        "description": "REVE account secret key",
+                                        "type": "string"
+                                    },
+                                    "messageid": {
+                                        "description": "Gateway message id, matched against notifications.provider_message_id",
+                                        "type": "string"
+                                    },
+                                    "text": {
+                                        "description": "SMPP message_state, e.g. DELIVRD / UNDELIV / REJECTD / ACCEPTD",
+                                        "type": "string"
+                                    },
+                                    "donedate": {
+                                        "description": "When the carrier reported the state; falls back to now() if absent or unparseable",
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Receipt acknowledged (whether or not the message id is known here)"
+                    },
+                    "401": {
+                        "description": "Missing or wrong apikey/secretkey, or no DLR credentials configured"
+                    },
+                    "422": {
+                        "description": "No messageid in the payload"
+                    }
+                }
+            }
+        },
         "/webhooks/rocket": {
             "post": {
                 "tags": [
@@ -11552,11 +12093,11 @@
             "description": "Authenticated attendee profile, registration, and ticket endpoints"
         },
         {
-            "name": "Content"
-        },
-        {
             "name": "Public",
             "description": "Unauthenticated browse and registration endpoints"
+        },
+        {
+            "name": "Content"
         },
         {
             "name": "Scanner",

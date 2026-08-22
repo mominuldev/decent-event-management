@@ -3,11 +3,20 @@
 namespace Database\Seeders;
 
 use App\Domain\Notification\Models\NotificationTemplate;
+use App\Domain\Notification\Support\SmsSegmentCalculator;
 use Illuminate\Database\Seeder;
 
 /**
  * Bilingual (EN/BN) draft copy for every (template_key, channel) pair in
- * the channel matrix (docs/01 §1.6) — flagged as draft, for the client
+ * the channel matrix (docs/01 §1.6). Which of the two a notification is
+ * actually written in is `config/notifications.php`'s decision, not this
+ * seeder's — Bangla by default. Both rows must stay complete: a missing
+ * one falls back to the other locale mid-send, which is worse than a
+ * translation nobody has polished yet.
+ *
+ * The bodies carry no gate details (ticket number, admits, venue, date):
+ * the email shell renders those from the ticket itself, so an editor
+ * cannot drop them and they are never stale relative to the record — flagged as draft, for the client
  * to refine, same caveat as {@see EventSettingSeeder}'s local-dev
  * defaults. WhatsApp rows carry `whatsapp_template_status =
  * pending_approval` since Meta approval is an unchecked external
@@ -27,6 +36,17 @@ class NotificationTemplateSeeder extends Seeder
                         [
                             'subject' => $content['subject'] ?? null,
                             'body' => $content['body'],
+                            // Measured the same way the admin editor
+                            // measures it, so a seeded template and an
+                            // edited one never disagree about what a send
+                            // costs. Rendered first: `{` and `}` are not
+                            // GSM-7, so a raw body with placeholders
+                            // over-counts by up to 3x.
+                            'estimated_segments' => $channel === 'sms'
+                                ? SmsSegmentCalculator::segmentCount(
+                                    SmsSegmentCalculator::renderForEstimate($content['body']),
+                                )
+                                : null,
                             'whatsapp_template_name' => $channel === 'whatsapp' ? $key : null,
                             'whatsapp_template_status' => $channel === 'whatsapp' ? 'pending_approval' : null,
                             'variables' => $definition['variables'],
@@ -44,6 +64,29 @@ class NotificationTemplateSeeder extends Seeder
     private function templates(): array
     {
         return [
+            [
+                // The attendee sign-in code.
+                //
+                // Sent only when somebody has no password yet, or has
+                // forgotten it — an attendee who chose a password at
+                // checkout never triggers this at all, which is the point of
+                // the whole design. A six-digit code rather than a link: it
+                // keeps the reader in the tab they started in, it is the
+                // sign-in every Bangladeshi phone already understands, and
+                // it fits one SMS segment where the link did not.
+                //
+                // No brand-name prefix and no marketing: the shorter this
+                // is, the fewer segments it bills, and an OTP is read in a
+                // notification preview rather than opened.
+                'key' => 'attendee.login_link',
+                'variables' => ['code', 'minutes'],
+                'channels' => [
+                    'sms' => [
+                        'en' => ['body' => 'Centennial sign-in code: {{code}} (valid {{minutes}} min). Never share it.'],
+                        'bn' => ['body' => 'শতবর্ষ সাইন-ইন কোড: {{code}} ({{minutes}} মিনিট)। কাউকে দেবেন না।'],
+                    ],
+                ],
+            ],
             [
                 // Staff-facing, unlike every other template here — docs/06
                 // §6.5 requires a key rotation to notify all Event Managers.
@@ -67,29 +110,29 @@ class NotificationTemplateSeeder extends Seeder
             ],
             [
                 'key' => 'registration_received',
-                'variables' => ['full_name', 'registration_number', 'registration_ulid'],
+                'variables' => ['full_name', 'full_name_bn', 'registration_number', 'registration_ulid'],
                 'channels' => [
                     'email' => [
                         'en' => ['subject' => 'We received your registration', 'body' => '<p>Dear {{full_name}},</p><p>Thank you for registering. Your registration number is <strong>{{registration_number}}</strong>. Reference: {{registration_ulid}}.</p>'],
-                        'bn' => ['subject' => 'আপনার নিবন্ধন পেয়েছি', 'body' => '<p>প্রিয় {{full_name}},</p><p>আপনার নিবন্ধনের জন্য ধন্যবাদ। আপনার নিবন্ধন নম্বর <strong>{{registration_number}}</strong>। রেফারেন্স: {{registration_ulid}}।</p>'],
+                        'bn' => ['subject' => 'আপনার নিবন্ধন পেয়েছি', 'body' => '<p>প্রিয় {{full_name_bn}},</p><p>আপনার নিবন্ধনের জন্য ধন্যবাদ। আপনার নিবন্ধন নম্বর <strong>{{registration_number}}</strong>। রেফারেন্স: {{registration_ulid}}।</p>'],
                     ],
                     'sms' => [
                         'en' => ['body' => 'Dear {{full_name}}, your registration {{registration_number}} was received. Complete payment to confirm your seat.'],
-                        'bn' => ['body' => 'প্রিয় {{full_name}}, আপনার নিবন্ধন {{registration_number}} পেয়েছি। আসন নিশ্চিত করতে পেমেন্ট সম্পন্ন করুন।'],
+                        'bn' => ['body' => 'প্রিয় {{full_name_bn}}, আপনার নিবন্ধন {{registration_number}} পেয়েছি। আসন নিশ্চিত করতে পেমেন্ট সম্পন্ন করুন।'],
                     ],
                     'whatsapp' => [
                         'en' => ['body' => 'Dear {{full_name}}, your registration {{registration_number}} was received. Complete payment to confirm your seat.'],
-                        'bn' => ['body' => 'প্রিয় {{full_name}}, আপনার নিবন্ধন {{registration_number}} পেয়েছি। আসন নিশ্চিত করতে পেমেন্ট সম্পন্ন করুন।'],
+                        'bn' => ['body' => 'প্রিয় {{full_name_bn}}, আপনার নিবন্ধন {{registration_number}} পেয়েছি। আসন নিশ্চিত করতে পেমেন্ট সম্পন্ন করুন।'],
                     ],
                 ],
             ],
             [
                 'key' => 'payment_succeeded',
-                'variables' => ['full_name', 'payment_number', 'amount_bdt', 'method', 'gateway_transaction_id'],
+                'variables' => ['full_name', 'full_name_bn', 'payment_number', 'amount_bdt', 'method', 'gateway_transaction_id'],
                 'channels' => [
                     'email' => [
                         'en' => ['subject' => 'Payment received — BDT {{amount_bdt}}', 'body' => '<p>Dear {{full_name}},</p><p>We received your payment of <strong>BDT {{amount_bdt}}</strong> via {{method}} (payment {{payment_number}}, transaction {{gateway_transaction_id}}). Your ticket is on its way.</p>'],
-                        'bn' => ['subject' => 'পেমেন্ট পেয়েছি — {{amount_bdt}} টাকা', 'body' => '<p>প্রিয় {{full_name}},</p><p>আমরা {{method}}-এর মাধ্যমে <strong>{{amount_bdt}} টাকা</strong> পেমেন্ট পেয়েছি (পেমেন্ট {{payment_number}}, লেনদেন {{gateway_transaction_id}})। আপনার টিকিট শীঘ্রই আসছে।</p>'],
+                        'bn' => ['subject' => 'পেমেন্ট পেয়েছি — {{amount_bdt}} টাকা', 'body' => '<p>প্রিয় {{full_name_bn}},</p><p>আমরা {{method}}-এর মাধ্যমে <strong>{{amount_bdt}} টাকা</strong> পেমেন্ট পেয়েছি (পেমেন্ট {{payment_number}}, লেনদেন {{gateway_transaction_id}})। আপনার টিকিট শীঘ্রই আসছে।</p>'],
                     ],
                     'sms' => [
                         'en' => ['body' => 'Payment of BDT {{amount_bdt}} received ({{payment_number}}). Your ticket is being issued.'],
@@ -103,11 +146,11 @@ class NotificationTemplateSeeder extends Seeder
             ],
             [
                 'key' => 'payment_manual_verified',
-                'variables' => ['full_name', 'payment_number', 'amount_bdt'],
+                'variables' => ['full_name', 'full_name_bn', 'payment_number', 'amount_bdt'],
                 'channels' => [
                     'email' => [
                         'en' => ['subject' => 'Your manual payment was verified', 'body' => '<p>Dear {{full_name}},</p><p>Your manual payment of <strong>BDT {{amount_bdt}}</strong> ({{payment_number}}) has been verified by our team. Your ticket is being issued.</p>'],
-                        'bn' => ['subject' => 'আপনার ম্যানুয়াল পেমেন্ট যাচাই হয়েছে', 'body' => '<p>প্রিয় {{full_name}},</p><p>আপনার <strong>{{amount_bdt}} টাকা</strong> ({{payment_number}}) ম্যানুয়াল পেমেন্ট যাচাই করা হয়েছে। আপনার টিকিট ইস্যু করা হচ্ছে।</p>'],
+                        'bn' => ['subject' => 'আপনার ম্যানুয়াল পেমেন্ট যাচাই হয়েছে', 'body' => '<p>প্রিয় {{full_name_bn}},</p><p>আপনার <strong>{{amount_bdt}} টাকা</strong> ({{payment_number}}) ম্যানুয়াল পেমেন্ট যাচাই করা হয়েছে। আপনার টিকিট ইস্যু করা হচ্ছে।</p>'],
                     ],
                     'sms' => [
                         'en' => ['body' => 'Your manual payment of BDT {{amount_bdt}} ({{payment_number}}) was verified. Ticket is being issued.'],
@@ -121,11 +164,11 @@ class NotificationTemplateSeeder extends Seeder
             ],
             [
                 'key' => 'payment_failed',
-                'variables' => ['full_name', 'payment_number', 'amount_bdt', 'registration_ulid'],
+                'variables' => ['full_name', 'full_name_bn', 'payment_number', 'amount_bdt', 'registration_ulid'],
                 'channels' => [
                     'email' => [
                         'en' => ['subject' => 'Payment unsuccessful', 'body' => '<p>Dear {{full_name}},</p><p>Your payment of BDT {{amount_bdt}} ({{payment_number}}) was not successful. Please retry: registration {{registration_ulid}}.</p>'],
-                        'bn' => ['subject' => 'পেমেন্ট ব্যর্থ হয়েছে', 'body' => '<p>প্রিয় {{full_name}},</p><p>আপনার {{amount_bdt}} টাকা ({{payment_number}}) পেমেন্ট সফল হয়নি। অনুগ্রহ করে আবার চেষ্টা করুন: নিবন্ধন {{registration_ulid}}।</p>'],
+                        'bn' => ['subject' => 'পেমেন্ট ব্যর্থ হয়েছে', 'body' => '<p>প্রিয় {{full_name_bn}},</p><p>আপনার {{amount_bdt}} টাকা ({{payment_number}}) পেমেন্ট সফল হয়নি। অনুগ্রহ করে আবার চেষ্টা করুন: নিবন্ধন {{registration_ulid}}।</p>'],
                     ],
                     'sms' => [
                         'en' => ['body' => 'Payment of BDT {{amount_bdt}} failed. Retry using registration {{registration_ulid}}.'],
@@ -135,15 +178,34 @@ class NotificationTemplateSeeder extends Seeder
             ],
             [
                 'key' => 'ticket_delivered',
-                'variables' => ['full_name', 'ticket_number', 'admits_total'],
+                'variables' => ['full_name', 'full_name_bn', 'ticket_number', 'admits_total', 'customer_name', 'ticket_id', 'event_name', 'event_date', 'event_time', 'venue'],
                 'channels' => [
                     'email' => [
-                        'en' => ['subject' => 'Your ticket is ready — {{ticket_number}}', 'body' => '<p>Dear {{full_name}},</p><p>Your ticket <strong>{{ticket_number}}</strong> (admits {{admits_total}}) is ready. Present the QR code at the gate.</p>'],
-                        'bn' => ['subject' => 'আপনার টিকিট প্রস্তুত — {{ticket_number}}', 'body' => '<p>প্রিয় {{full_name}},</p><p>আপনার টিকিট <strong>{{ticket_number}}</strong> (প্রবেশাধিকার {{admits_total}} জন) প্রস্তুত। গেটে QR কোড দেখান।</p>'],
+                        // Body copy only — the ticket number, admit count,
+                        // session, venue and the QR itself are rendered by the
+                        // email shell (resources/views/emails/notification.blade.php)
+                        // from the ticket, not interpolated here. An editor
+                        // rewriting this copy cannot remove the code the
+                        // holder is admitted with.
+                        'en' => ['subject' => 'Your ticket is ready — {{ticket_number}}', 'body' => '<p>Dear {{full_name}},</p><p>Your ticket is confirmed. The code below is your admission pass — show it at the gate from your phone, or print this email and bring it with you.</p><p>Everything you need is in this message. We look forward to seeing you.</p>'],
+                        'bn' => ['subject' => 'আপনার টিকিট প্রস্তুত — {{ticket_number}}', 'body' => '<p>প্রিয় {{full_name_bn}},</p><p>আপনার টিকিট নিশ্চিত হয়েছে। নিচের কোডটিই আপনার প্রবেশপত্র — গেটে ফোন থেকে দেখান, অথবা এই ইমেইলটি প্রিন্ট করে সঙ্গে আনুন।</p><p>প্রয়োজনীয় সব তথ্য এই বার্তাতেই রয়েছে। আপনাকে দেখার অপেক্ষায় রইলাম।</p>'],
                     ],
+                    // The only SMS a ticket purchase sends — booking and
+                    // payment confirmations are email-only, so this one
+                    // carries what all three used to.
+                    //
+                    // Written to fit **one segment**, and it is close to the
+                    // line: 144 of the 160 GSM-7 characters at the seeded
+                    // event name and venue. Two things tip it into a second
+                    // segment and double the bill on every ticket — a longer
+                    // `event.name_en`/`event.venue_en`, and any character
+                    // outside GSM-7. Emoji are the obvious ones; the
+                    // surprise is that a plain `|` is not GSM-7 either, nor
+                    // are { } [ ] ~ ^ \ €. The templates screen shows the
+                    // live segment count for exactly this reason.
                     'sms' => [
-                        'en' => ['body' => 'Ticket {{ticket_number}} is ready, admits {{admits_total}}. View it in your account.'],
-                        'bn' => ['body' => 'টিকিট {{ticket_number}} প্রস্তুত, প্রবেশাধিকার {{admits_total}} জন। আপনার অ্যাকাউন্টে দেখুন।'],
+                        'en' => ['body' => "Ticket confirmed - {{event_name}}\nID: {{ticket_id}}\n{{event_date}}, {{event_time}}, {{venue}}\nQR ticket sent to your email. Keep it for entry."],
+                        'bn' => ['body' => "টিকিট নিশ্চিত - {{event_name}}\nID: {{ticket_id}}\n{{event_date}}, {{event_time}}, {{venue}}\nQR টিকিট ইমেইলে পাঠানো হয়েছে। প্রবেশের জন্য রাখুন।"],
                     ],
                     'whatsapp' => [
                         'en' => ['body' => 'Ticket {{ticket_number}} is ready, admits {{admits_total}}. View it in your account.'],
@@ -153,11 +215,11 @@ class NotificationTemplateSeeder extends Seeder
             ],
             [
                 'key' => 'refund_issued',
-                'variables' => ['full_name', 'refund_number', 'amount_bdt'],
+                'variables' => ['full_name', 'full_name_bn', 'refund_number', 'amount_bdt'],
                 'channels' => [
                     'email' => [
                         'en' => ['subject' => 'Your refund has been issued', 'body' => '<p>Dear {{full_name}},</p><p>A refund of <strong>BDT {{amount_bdt}}</strong> ({{refund_number}}) has been issued to your original payment method.</p>'],
-                        'bn' => ['subject' => 'আপনার রিফান্ড ইস্যু করা হয়েছে', 'body' => '<p>প্রিয় {{full_name}},</p><p><strong>{{amount_bdt}} টাকা</strong> ({{refund_number}}) রিফান্ড আপনার মূল পেমেন্ট পদ্ধতিতে ইস্যু করা হয়েছে।</p>'],
+                        'bn' => ['subject' => 'আপনার রিফান্ড ইস্যু করা হয়েছে', 'body' => '<p>প্রিয় {{full_name_bn}},</p><p><strong>{{amount_bdt}} টাকা</strong> ({{refund_number}}) রিফান্ড আপনার মূল পেমেন্ট পদ্ধতিতে ইস্যু করা হয়েছে।</p>'],
                     ],
                     'sms' => [
                         'en' => ['body' => 'Refund of BDT {{amount_bdt}} ({{refund_number}}) issued to your original payment method.'],
@@ -185,11 +247,11 @@ class NotificationTemplateSeeder extends Seeder
         foreach ($windows as $key => $when) {
             $templates[] = [
                 'key' => $key,
-                'variables' => ['full_name', 'event_name', 'event_venue', 'event_starts_at'],
+                'variables' => ['full_name', 'full_name_bn', 'event_name', 'event_venue', 'event_starts_at'],
                 'channels' => [
                     'email' => [
                         'en' => ['subject' => "Reminder: {{event_name}} is in {$when['en']}", 'body' => "<p>Dear {{full_name}},</p><p>{{event_name}} is coming up in {$when['en']} at {{event_venue}} on {{event_starts_at}}. We look forward to seeing you.</p>"],
-                        'bn' => ['subject' => "স্মরণিকা: {{event_name}} {$when['bn']} পরে", 'body' => "<p>প্রিয় {{full_name}},</p><p>{{event_name}} {$when['bn']} পরে {{event_venue}}-এ {{event_starts_at}} তারিখে অনুষ্ঠিত হবে। আপনাকে দেখার অপেক্ষায় রইলাম।</p>"],
+                        'bn' => ['subject' => "স্মরণিকা: {{event_name}} {$when['bn']} পরে", 'body' => "<p>প্রিয় {{full_name_bn}},</p><p>{{event_name}} {$when['bn']} পরে {{event_venue}}-এ {{event_starts_at}} তারিখে অনুষ্ঠিত হবে। আপনাকে দেখার অপেক্ষায় রইলাম।</p>"],
                     ],
                     'sms' => [
                         'en' => ['body' => "Reminder: {{event_name}} is in {$when['en']} at {{event_venue}}, {{event_starts_at}}."],

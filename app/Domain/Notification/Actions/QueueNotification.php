@@ -21,6 +21,7 @@ class QueueNotification
     /**
      * @param  array<int, string>  $channels  e.g. ['email', 'sms', 'whatsapp']
      * @param  array<string, mixed>  $payload  interpolated into the template as `{{key}}`
+     * @param  string|null  $locale  overrides the per-channel default in `config/notifications.php`
      */
     public function execute(
         Model $notifiable,
@@ -28,7 +29,7 @@ class QueueNotification
         array $channels,
         Attendee $attendee,
         array $payload = [],
-        string $locale = 'en',
+        ?string $locale = null,
     ): void {
         foreach ($channels as $channel) {
             $recipient = $this->recipientFor($channel, $attendee);
@@ -37,12 +38,7 @@ class QueueNotification
                 continue;
             }
 
-            $template = NotificationTemplate::query()
-                ->where('key', $templateKey)
-                ->where('channel', $channel)
-                ->where('locale', $locale)
-                ->where('is_active', true)
-                ->first();
+            $template = $this->template($templateKey, $channel, $locale ?? $this->localeFor($channel));
 
             if ($template === null) {
                 continue;
@@ -60,7 +56,10 @@ class QueueNotification
                 'attendee_id' => $attendee->id,
                 'template_key' => $templateKey,
                 'channel' => $channel,
-                'locale' => $locale,
+                // The locale actually rendered, which may be the fallback
+                // rather than the one asked for — a resend must reproduce
+                // this message, not go looking for a row that is not there.
+                'locale' => $template->locale,
                 'recipient' => $recipient,
                 'subject' => $this->interpolate($template->subject, $payload),
                 'body_rendered' => $this->interpolate($template->body, $payload),
@@ -96,15 +95,10 @@ class QueueNotification
         string $channel,
         string $recipient,
         array $payload = [],
-        string $locale = 'en',
+        ?string $locale = null,
         ?string $dedupeSuffix = null,
     ): void {
-        $template = NotificationTemplate::query()
-            ->where('key', $templateKey)
-            ->where('channel', $channel)
-            ->where('locale', $locale)
-            ->where('is_active', true)
-            ->first();
+        $template = $this->template($templateKey, $channel, $locale ?? $this->localeFor($channel));
 
         if ($template === null) {
             return;
@@ -133,7 +127,7 @@ class QueueNotification
             'attendee_id' => null,
             'template_key' => $templateKey,
             'channel' => $channel,
-            'locale' => $locale,
+            'locale' => $template->locale,
             'recipient' => $recipient,
             'subject' => $this->interpolate($template->subject, $payload),
             'body_rendered' => $this->interpolate($template->body, $payload),
@@ -144,6 +138,39 @@ class QueueNotification
         ]);
 
         SendNotificationJob::dispatch($notification->id)->afterCommit();
+    }
+
+    /**
+     * The language this channel writes in, per `config/notifications.php`.
+     */
+    private function localeFor(string $channel): string
+    {
+        return (string) (config("notifications.locales.{$channel}") ?? config('notifications.locales.default', 'en'));
+    }
+
+    /**
+     * A missing translation writes no outbox row at all, which would take a
+     * whole class of notification silently off the air — so the fallback
+     * locale is tried before giving up on the message entirely.
+     */
+    private function template(string $templateKey, string $channel, string $locale): ?NotificationTemplate
+    {
+        $locales = array_unique([$locale, (string) config('notifications.fallback_locale', 'en')]);
+
+        foreach ($locales as $candidate) {
+            $template = NotificationTemplate::query()
+                ->where('key', $templateKey)
+                ->where('channel', $channel)
+                ->where('locale', $candidate)
+                ->where('is_active', true)
+                ->first();
+
+            if ($template !== null) {
+                return $template;
+            }
+        }
+
+        return null;
     }
 
     private function recipientFor(string $channel, Attendee $attendee): ?string

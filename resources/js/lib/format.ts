@@ -13,6 +13,14 @@ export function shortDate(value: string | null | undefined): string {
     return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+/** Day, month and year — for a date the reader needs to place exactly, like a birth date. */
+export function fullDate(value: string | null | undefined): string {
+    if (!value) return '—';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '—';
+    return parsed.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
 export function titleCase(key: string): string {
     return key
         .replace(/_/g, ' ')

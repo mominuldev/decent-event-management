@@ -3,12 +3,17 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Domain\Notification\Actions\ResendNotification;
+use App\Domain\Notification\Actions\SaveNotificationTemplate;
 use App\Domain\Notification\Actions\SetChannelKillSwitch;
+use App\Domain\Notification\Gateways\ReveSmsClient;
 use App\Domain\Notification\Models\Notification;
 use App\Domain\Notification\Models\NotificationTemplate;
+use App\Domain\Notification\Support\SmsGatewayConfig;
+use App\Domain\Notification\Support\SmsSegmentCalculator;
 use App\Domain\Shared\Models\EventSetting;
 use App\Domain\Shared\Models\User;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\SaveNotificationTemplateRequest;
 use App\Http\Requests\Admin\UpdateNotificationKillSwitchRequest;
 use App\Http\Resources\NotificationResource;
 use App\Http\Resources\NotificationTemplateResource;
@@ -19,6 +24,7 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 use OpenApi\Attributes as OAT;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 /**
  * The admin delivery-log/dashboard endpoints for the outbox (docs/01
@@ -278,5 +284,214 @@ class NotificationController extends Controller
         }
 
         return NotificationTemplateResource::collection($query->get());
+    }
+
+    #[OAT\Get(
+        path: '/admin/notifications/sms-balance',
+        summary: 'Live prepaid balance on the SMS gateway account',
+        description: 'Asks REVE for the account balance and reports it alongside the low-balance threshold and '
+            .'the recharge portal URL, both configurable in Settings. '
+            .'`estimated_segments` divides the balance by the configured per-segment cost — it is an estimate '
+            .'from a local figure, not something the gateway reports, so it is only as right as '
+            .'`sms.cost_paisa_per_segment`. '
+            .'**There is no top-up endpoint**: REVE exposes send, status and balance only, so recharging happens '
+            .'on their billing portal and this endpoint is how the new balance becomes visible afterwards. '
+            .'Answers `200` with `configured: false` when no credentials are set, and `502` when the gateway '
+            .'itself cannot be reached — an unreachable gateway is not the same as an empty account, and '
+            .'rendering it as a zero balance would send someone to top up a wallet that is already full.',
+        security: [['bearerAuth' => []]],
+        tags: ['Notifications'],
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Balance, or configured=false when no credentials are set',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(properties: [
+                        new OAT\Property(property: 'configured', type: 'boolean'),
+                        new OAT\Property(property: 'balance', description: 'Account balance in BDT as the gateway reports it; null when it returns no parseable figure', type: 'number', nullable: true),
+                        new OAT\Property(property: 'estimated_segments', description: 'Balance divided by the configured per-segment cost', type: 'integer', nullable: true),
+                        new OAT\Property(property: 'low_balance_threshold_paisa', type: 'integer', nullable: true),
+                        new OAT\Property(property: 'is_low', type: 'boolean'),
+                        new OAT\Property(property: 'recharge_url', type: 'string', nullable: true),
+                        new OAT\Property(property: 'checked_at', type: 'string', format: 'date-time'),
+                    ], type: 'object'),
+                ),
+            ),
+            new OAT\Response(response: 403, description: 'Missing notification.view_costs permission'),
+            new OAT\Response(response: 502, description: 'The SMS gateway could not be reached'),
+        ],
+    )]
+    public function smsBalance(Request $request, ReveSmsClient $client): JsonResponse
+    {
+        abort_unless((bool) $request->user()?->can('notification.view_costs'), Response::HTTP_FORBIDDEN);
+
+        $settings = app(SmsGatewayConfig::class);
+        $threshold = $this->intSetting('sms.low_balance_threshold_paisa');
+        $rechargeUrl = $this->stringSetting('sms.recharge_url');
+
+        $missing = ReveSmsClient::missingCredentials();
+
+        if ($missing !== []) {
+            return response()->json([
+                'configured' => false,
+                // Named, not just "not configured": all three are required,
+                // two are invisible once saved, and without this the operator
+                // has no way to tell which field is empty.
+                'missing' => $missing,
+                'balance' => null,
+                'balance_available' => false,
+                'estimated_segments' => null,
+                'low_balance_threshold_paisa' => $threshold,
+                'is_low' => false,
+                'recharge_url' => $rechargeUrl,
+                'checked_at' => now()->toIso8601String(),
+            ]);
+        }
+
+        try {
+            $result = $client->balance();
+        } catch (Throwable $e) {
+            // Deliberately not a zero balance: "we could not ask" and "the
+            // account is empty" lead an operator to opposite actions.
+            return response()->json([
+                'code' => 'sms_gateway_unreachable',
+                'message' => 'The SMS gateway did not answer: '.$e->getMessage(),
+            ], Response::HTTP_BAD_GATEWAY);
+        }
+
+        $balance = $result['balance'];
+        $costPerSegment = max(1, (int) $settings->get('cost_paisa_per_segment', '50'));
+        $balancePaisa = $balance !== null ? (int) round($balance * 100) : null;
+
+        return response()->json([
+            'configured' => true,
+            'missing' => [],
+            'balance' => $balance,
+            // Not every REVE deployment exposes /api/v2/balance — the one
+            // this was verified against answers `{"Status":"ERROR"}` for any
+            // credentials at all. That is "this account cannot report a
+            // balance", which is a different thing from a balance of zero
+            // and must not render as one.
+            'balance_available' => $balance !== null,
+            'estimated_segments' => $balancePaisa !== null ? intdiv($balancePaisa, $costPerSegment) : null,
+            'low_balance_threshold_paisa' => $threshold,
+            'is_low' => $balancePaisa !== null && $threshold !== null && $balancePaisa < $threshold,
+            'recharge_url' => $rechargeUrl,
+            'checked_at' => now()->toIso8601String(),
+        ]);
+    }
+
+    private function intSetting(string $key): ?int
+    {
+        $setting = EventSetting::query()->where('key', $key)->first();
+
+        return $setting === null || $setting->value === null ? null : (int) $setting->value;
+    }
+
+    private function stringSetting(string $key): ?string
+    {
+        $value = EventSetting::query()->where('key', $key)->first()?->value;
+
+        return $value === null || $value === '' ? null : $value;
+    }
+
+    #[OAT\Post(
+        path: '/admin/notifications/templates',
+        summary: 'Create a notification template',
+        description: 'Adds a template for a (key, channel, locale, version) that does not have one yet. '
+            .'Editing the identity of an existing template is not offered — it would silently retarget every '
+            .'notification that uses it — so a different message is a different row.',
+        security: [['bearerAuth' => []]],
+        tags: ['Notifications'],
+        responses: [
+            new OAT\Response(response: 201, description: 'Template created'),
+            new OAT\Response(response: 403, description: 'Missing notification.manage_templates permission'),
+            new OAT\Response(response: 422, description: 'Validation failed, or that key/channel/language already exists'),
+        ],
+    )]
+    public function storeTemplate(SaveNotificationTemplateRequest $request, SaveNotificationTemplate $action): JsonResponse
+    {
+        $template = $action->execute(null, $request->validated(), $request->user(), $request->header('X-Request-Id'));
+
+        return response()->json(
+            ['data' => new NotificationTemplateResource($template)],
+            Response::HTTP_CREATED,
+        );
+    }
+
+    #[OAT\Patch(
+        path: '/admin/notifications/templates/{template}',
+        summary: 'Edit a notification template',
+        description: 'Changes the wording, the subject, or whether the template is active. '
+            .'For an SMS template the stored segment estimate is recalculated on save — the boundary is '
+            .'invisible while typing (160 GSM-7 characters is one segment, 161 is two, and one emoji or a '
+            .'plain `|` drops the whole message to 70 per segment), and it is billed per segment per recipient.',
+        security: [['bearerAuth' => []]],
+        tags: ['Notifications'],
+        parameters: [new OAT\Parameter(name: 'template', in: 'path', required: true, schema: new OAT\Schema(type: 'string'))],
+        responses: [
+            new OAT\Response(response: 200, description: 'Template updated'),
+            new OAT\Response(response: 403, description: 'Missing notification.manage_templates permission'),
+            new OAT\Response(response: 404, description: 'No such template'),
+        ],
+    )]
+    public function updateTemplate(
+        SaveNotificationTemplateRequest $request,
+        NotificationTemplate $template,
+        SaveNotificationTemplate $action,
+    ): NotificationTemplateResource {
+        return new NotificationTemplateResource(
+            $action->execute($template, $request->validated(), $request->user(), $request->header('X-Request-Id')),
+        );
+    }
+
+    #[OAT\Post(
+        path: '/admin/notifications/templates/preview',
+        summary: 'Cost and encoding of a draft message, before it is saved',
+        description: 'Returns what the given body would cost as an SMS: its encoding, segment count, and the '
+            .'total across a recipient count. This exists because the cost of an SMS is invisible in an editor '
+            .'and the cliffs are sharp — a single emoji, or a plain `|`, moves a message from 160 characters per '
+            .'segment to 70. Placeholders are substituted with a sample value first, since `{{event_name}}` is '
+            .'shorter than what it renders to and the estimate would flatter the real message otherwise.',
+        security: [['bearerAuth' => []]],
+        tags: ['Notifications'],
+        responses: [
+            new OAT\Response(response: 200, description: 'Encoding, segments and cost'),
+            new OAT\Response(response: 403, description: 'Missing notification.manage_templates permission'),
+        ],
+    )]
+    public function previewTemplate(Request $request): JsonResponse
+    {
+        abort_unless((bool) $request->user()?->can('notification.manage_templates'), Response::HTTP_FORBIDDEN);
+
+        $validated = $request->validate([
+            'body' => ['required', 'string', 'max:5000'],
+            'sample' => ['nullable', 'array'],
+            'recipients' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+        ]);
+
+        /** @var array<string, mixed> $sample */
+        $sample = $validated['sample'] ?? [];
+
+        // The same helper the save path uses, deliberately: a number in the
+        // editor that disagreed with the number in the list would be worse
+        // than showing none.
+        $body = SmsSegmentCalculator::renderForEstimate((string) $validated['body'], $sample);
+
+        $segments = SmsSegmentCalculator::segmentCount($body);
+        $costPerSegment = max(0, (int) app(SmsGatewayConfig::class)->get('cost_paisa_per_segment', '0'));
+        $recipients = (int) ($validated['recipients'] ?? 1);
+
+        return response()->json([
+            'rendered' => $body,
+            'characters' => mb_strlen($body),
+            'encoding' => SmsSegmentCalculator::isGsm7($body) ? 'GSM-7' : 'Unicode',
+            'characters_per_segment' => SmsSegmentCalculator::isGsm7($body) ? 160 : 70,
+            'segments' => $segments,
+            'cost_paisa_each' => $segments * $costPerSegment,
+            'cost_paisa_total' => $segments * $costPerSegment * $recipients,
+            'recipients' => $recipients,
+        ]);
     }
 }

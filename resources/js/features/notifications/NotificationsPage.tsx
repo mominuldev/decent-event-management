@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { RefreshCw } from 'lucide-react';
+import { Pencil, Plus, RefreshCw } from 'lucide-react';
 import { Badge, Button, Card, CardHeader, Input, Label, Select, Skeleton, type Tone } from '@/components/ui';
 import { Dialog, ConfirmDialog } from '@/components/Dialog';
 import { DataTable } from '@/components/DataTable';
@@ -10,6 +10,7 @@ import { useToast } from '@/components/Toast';
 import { cn } from '@/lib/cn';
 import { totalOf } from '@/lib/pagination';
 import * as notificationsApi from './api';
+import TemplateEditor from './TemplateEditor';
 import type { CostRow, KillSwitches, NotificationChannel, NotificationRecord, NotificationTemplateSummary } from './types';
 
 function titleCase(s: string) {
@@ -366,7 +367,13 @@ const whatsappStatusTone: Record<string, Tone> = {
 };
 
 function TemplatesTab() {
+    const { can } = useAuth();
+    const canManage = can('notification.manage_templates');
     const [key, setKey] = useState('');
+    // `null` means the editor is closed; a template means edit; `'new'`
+    // means create. Three states in one, because "edit nothing" and "create"
+    // are genuinely different and a boolean cannot say which.
+    const [editing, setEditing] = useState<NotificationTemplateSummary | 'new' | null>(null);
     const { data, isLoading, isError, refetch } = useQuery({
         queryKey: ['notification-templates', key],
         queryFn: () => notificationsApi.fetchNotificationTemplates(key || undefined),
@@ -376,8 +383,15 @@ function TemplatesTab() {
         <Card>
             <CardHeader
                 title="Templates"
-                subtitle="Active version and WhatsApp approval status per (template, channel, locale)"
-                action={<Button variant="outline" size="sm" onClick={() => void refetch()}><RefreshCw size={14} /> Refresh</Button>}
+                subtitle="The exact wording sent to attendees. SMS is billed per segment, so the cost of each is shown."
+                action={
+                    <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => void refetch()}><RefreshCw size={14} /> Refresh</Button>
+                        {canManage && (
+                            <Button size="sm" onClick={() => setEditing('new')}><Plus size={14} /> New template</Button>
+                        )}
+                    </div>
+                }
             />
             <div className="px-5 pb-4 pt-2">
                 <div className="w-64">
@@ -395,9 +409,11 @@ function TemplatesTab() {
                                 <th className="px-3 py-2.5 font-semibold">Key</th>
                                 <th className="px-3 py-2.5 font-semibold">Channel</th>
                                 <th className="px-3 py-2.5 font-semibold">Locale</th>
-                                <th className="px-3 py-2.5 font-semibold">Version</th>
+                                <th className="px-3 py-2.5 font-semibold">Message</th>
+                                <th className="px-3 py-2.5 font-semibold">Cost</th>
                                 <th className="px-3 py-2.5 font-semibold">Active</th>
                                 <th className="px-3 py-2.5 font-semibold">WhatsApp approval</th>
+                                <th className="px-3 py-2.5" />
                             </tr>
                         </thead>
                         <tbody>
@@ -406,12 +422,28 @@ function TemplatesTab() {
                                     <td className="px-3 py-2.5">{t.key}</td>
                                     <td className="px-3 py-2.5">{titleCase(t.channel)}</td>
                                     <td className="px-3 py-2.5 uppercase">{t.locale}</td>
-                                    <td className="px-3 py-2.5 tnum">{t.version}</td>
+                                    <td className="max-w-[22rem] px-3 py-2.5">
+                                        <span className="block truncate text-text-muted" title={t.body}>{t.body}</span>
+                                    </td>
+                                    <td className="px-3 py-2.5 tnum">
+                                        {t.estimated_segments === null
+                                            ? <span className="text-text-faint">—</span>
+                                            : <Badge tone={t.estimated_segments > 1 ? 'warning' : 'neutral'} size="sm">
+                                                {t.estimated_segments} seg
+                                            </Badge>}
+                                    </td>
                                     <td className="px-3 py-2.5"><Badge tone={t.is_active ? 'success' : 'neutral'} size="sm">{t.is_active ? 'Active' : 'Inactive'}</Badge></td>
                                     <td className="px-3 py-2.5">
                                         {t.channel === 'whatsapp'
                                             ? <Badge tone={whatsappStatusTone[t.whatsapp_template_status ?? ''] ?? 'neutral'} size="sm">{titleCase(t.whatsapp_template_status ?? 'unknown')}</Badge>
                                             : <span className="text-text-faint">—</span>}
+                                    </td>
+                                    <td className="px-3 py-2.5 text-right">
+                                        {canManage && (
+                                            <Button variant="ghost" size="sm" onClick={() => setEditing(t)}>
+                                                <Pencil size={14} /> Edit
+                                            </Button>
+                                        )}
                                     </td>
                                 </tr>
                             ))}
@@ -420,6 +452,20 @@ function TemplatesTab() {
                 )}
                 {data && data.length === 0 && <p className="px-3 py-6 text-center text-[13px] text-text-muted">No templates match this filter.</p>}
             </div>
+
+            <Dialog
+                open={editing !== null}
+                onClose={() => setEditing(null)}
+                title={editing === 'new' ? 'New template' : 'Edit template'}
+                className="max-w-2xl"
+            >
+                {editing !== null && (
+                    <TemplateEditor
+                        template={editing === 'new' ? null : editing}
+                        onClose={() => setEditing(null)}
+                    />
+                )}
+            </Dialog>
         </Card>
     );
 }

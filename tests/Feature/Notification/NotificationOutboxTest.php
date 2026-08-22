@@ -27,20 +27,126 @@ class NotificationOutboxTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function activeTemplate(string $key, string $channel = 'email'): NotificationTemplate
+    private function activeTemplate(string $key, string $channel = 'email', string $locale = 'en'): NotificationTemplate
     {
         return NotificationTemplate::factory()->create([
             'key' => $key,
             'channel' => $channel,
-            'locale' => 'en',
+            'locale' => $locale,
             'version' => 1,
-            'subject' => 'Subject {{full_name}}',
-            'body' => 'Body {{full_name}}',
+            'subject' => $locale.' subject {{full_name}}',
+            'body' => $locale.' body {{full_name}}',
             'is_active' => true,
         ]);
     }
 
-    public function test_registration_created_queues_a_notification_per_active_channel(): void
+    public function test_a_bangla_message_greets_the_reader_by_their_bangla_name(): void
+    {
+        config(['notifications.locales.default' => 'bn']);
+
+        NotificationTemplate::factory()->create([
+            'key' => 'registration_received', 'channel' => 'email', 'locale' => 'bn', 'version' => 1,
+            'subject' => 'x', 'body' => 'প্রিয় {{full_name_bn}}', 'is_active' => true,
+        ]);
+
+        $attendee = Attendee::factory()->create([
+            'full_name' => 'Rahim Uddin',
+            'full_name_bn' => 'রহিম উদ্দিন',
+            'email' => 'rahim@example.com',
+        ]);
+
+        RegistrationCreated::dispatch(Registration::factory()->for($attendee)->create());
+
+        $this->assertSame('প্রিয় রহিম উদ্দিন', Notification::firstOrFail()->body_rendered);
+    }
+
+    public function test_a_reader_with_no_bangla_name_is_greeted_in_latin_rather_than_not_at_all(): void
+    {
+        config(['notifications.locales.default' => 'bn']);
+
+        NotificationTemplate::factory()->create([
+            'key' => 'registration_received', 'channel' => 'email', 'locale' => 'bn', 'version' => 1,
+            'subject' => 'x', 'body' => 'প্রিয় {{full_name_bn}}', 'is_active' => true,
+        ]);
+
+        // Rows created before the public form required a Bangla name, and
+        // anything an admin or an import creates today, may not have one.
+        $attendee = Attendee::factory()->create([
+            'full_name' => 'Rahim Uddin',
+            'full_name_bn' => null,
+            'email' => 'rahim@example.com',
+        ]);
+
+        RegistrationCreated::dispatch(Registration::factory()->for($attendee)->create());
+
+        $this->assertSame('প্রিয় Rahim Uddin', Notification::firstOrFail()->body_rendered);
+    }
+
+    public function test_a_notification_is_written_in_the_language_the_config_names(): void
+    {
+        config(['notifications.locales.default' => 'bn']);
+
+        $this->activeTemplate('registration_received', 'email', 'en');
+        $this->activeTemplate('registration_received', 'email', 'bn');
+
+        RegistrationCreated::dispatch(Registration::factory()->for(
+            Attendee::factory()->create(['email' => 'jane@example.com'])
+        )->create());
+
+        $notification = Notification::where('template_key', 'registration_received')->firstOrFail();
+
+        $this->assertSame('bn', $notification->locale);
+        $this->assertStringStartsWith('bn body', (string) $notification->body_rendered);
+    }
+
+    public function test_a_channel_may_be_written_in_a_different_language_from_the_default(): void
+    {
+        // Bangla SMS costs two to three times the segments of GSM-7, so the
+        // per-channel override in config/notifications.php is a real lever.
+        //
+        // Driven off `payment_failed` rather than `registration_received`:
+        // booking no longer sends SMS at all (see the test below), and this
+        // needs an event that still puts a row on both channels.
+        config(['notifications.locales.default' => 'bn', 'notifications.locales.sms' => 'en']);
+
+        foreach (['email', 'sms'] as $channel) {
+            $this->activeTemplate('payment_failed', $channel, 'en');
+            $this->activeTemplate('payment_failed', $channel, 'bn');
+        }
+
+        $attendee = Attendee::factory()->create(['email' => 'jane@example.com', 'mobile' => '8801711111111']);
+        $registration = Registration::factory()->for($attendee)->create();
+
+        PaymentFailed::dispatch(
+            Payment::factory()->for($registration)->for($attendee)->create(),
+        );
+
+        $this->assertSame('bn', Notification::where('channel', 'email')->firstOrFail()->locale);
+        $this->assertSame('en', Notification::where('channel', 'sms')->firstOrFail()->locale);
+    }
+
+    public function test_a_missing_translation_falls_back_instead_of_dropping_the_message(): void
+    {
+        // No row at all is the failure mode this guards: an untranslated
+        // (key, channel) pair would otherwise take that notification off the
+        // air silently, with nothing in the delivery log to show for it.
+        config(['notifications.locales.default' => 'bn', 'notifications.fallback_locale' => 'en']);
+
+        $this->activeTemplate('registration_received', 'email', 'en');
+
+        RegistrationCreated::dispatch(Registration::factory()->for(
+            Attendee::factory()->create(['email' => 'jane@example.com'])
+        )->create());
+
+        $notification = Notification::where('template_key', 'registration_received')->firstOrFail();
+
+        // The row records what was actually rendered, so a resend reproduces
+        // this message rather than hunting for the missing translation.
+        $this->assertSame('en', $notification->locale);
+        $this->assertStringStartsWith('en body', (string) $notification->body_rendered);
+    }
+
+    public function test_booking_notifies_by_email_and_whatsapp_but_never_by_sms(): void
     {
         foreach (['email', 'sms', 'whatsapp'] as $channel) {
             $this->activeTemplate('registration_received', $channel);
@@ -51,11 +157,19 @@ class NotificationOutboxTest extends TestCase
 
         RegistrationCreated::dispatch($registration);
 
-        $this->assertSame(3, Notification::where('template_key', 'registration_received')->count());
+        // Two, not three, and an active SMS template is deliberately present
+        // to prove the channel list is what excludes it rather than a
+        // missing row. A ticket purchase sends exactly one SMS — the ticket
+        // confirmation — where it used to send three; booking and payment
+        // are email-only now, which is two thirds of the SMS bill per sale.
+        $this->assertSame(
+            ['email', 'whatsapp'],
+            Notification::where('template_key', 'registration_received')->orderBy('channel')->pluck('channel')->all(),
+        );
 
         $emailNotification = Notification::where('template_key', 'registration_received')->where('channel', 'email')->firstOrFail();
-        $this->assertSame('Subject Jane Doe', $emailNotification->subject);
-        $this->assertSame('Body Jane Doe', $emailNotification->body_rendered);
+        $this->assertSame('en subject Jane Doe', $emailNotification->subject);
+        $this->assertSame('en body Jane Doe', $emailNotification->body_rendered);
         $this->assertSame('jane@example.com', $emailNotification->recipient);
         $this->assertSame('registration', $emailNotification->notifiable_type);
         $this->assertSame($registration->id, $emailNotification->notifiable_id);

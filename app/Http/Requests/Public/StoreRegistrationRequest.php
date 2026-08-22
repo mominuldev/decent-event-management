@@ -5,6 +5,7 @@ namespace App\Http\Requests\Public;
 use App\Domain\Payment\Gateways\PaymentGatewayResolver;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 
 class StoreRegistrationRequest extends FormRequest
 {
@@ -31,6 +32,17 @@ class StoreRegistrationRequest extends FormRequest
             // — legitimately have neither.
             'father_name' => ['required', 'string', 'max:150'],
             'mobile' => ['required', 'string', 'max:20'],
+
+            // The sign-in password, chosen at checkout so an attendee never
+            // needs an SMS to reach their own registration. `nullable`
+            // rather than `required`: this endpoint is also how an admin
+            // tool or an import creates a registration, and a returning
+            // registrant already has one — see
+            // `CreateRegistration::setInitialPassword()`, which is what
+            // decides whether the value is used at all. Confirmation is
+            // checked here rather than only in the browser so a non-browser
+            // client cannot set a password its user mistyped.
+            'password' => ['nullable', 'string', Password::min(8), 'confirmed'],
             'email' => ['nullable', 'email', 'max:254'],
             'gender' => ['required', 'string', Rule::in(['male', 'female'])],
             'date_of_birth' => ['nullable', 'date'],
@@ -58,7 +70,6 @@ class StoreRegistrationRequest extends FormRequest
             'guests.*.tshirt_size' => ['required_if:guests.*.tshirt_required,true', 'nullable', 'string', Rule::in(['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'])],
             'tshirt_required' => ['nullable', 'boolean'],
             'tshirt_size' => ['required_if:tshirt_required,true', 'nullable', 'string', Rule::in(['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'])],
-            'comments' => ['nullable', 'string', 'max:1000'],
             'special_notes' => ['nullable', 'string', 'max:1000'],
             // Was never validated *and* never in the rules at all, so
             // `validated()` stripped it and every registration silently fell

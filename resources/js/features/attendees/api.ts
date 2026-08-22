@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { api, toApiError } from '@/lib/api';
+import { ApiRequestError, api, toApiError } from '@/lib/api';
 import type { PaginatedResponse } from '@/lib/pagination';
 import { unwrap } from '@/lib/pagination';
 import type { SortParams } from '@/lib/sorting';
@@ -106,12 +106,18 @@ export async function fetchAttendee(ulid: string): Promise<Attendee> {
     return unwrap<Attendee>(data);
 }
 
+/**
+ * Throws ApiRequestError rather than a bare Error so the caller keeps the
+ * per-field messages. Both unique constraints on an attendee — mobile and
+ * email — fail here with a message naming the specific conflict, and that
+ * text is only useful next to the field that caused it.
+ */
 export async function updateAttendee(ulid: string, payload: UpdateAttendeePayload): Promise<Attendee> {
     try {
         const { data } = await api.patch(`/admin/attendees/${ulid}`, payload);
         return unwrap<Attendee>(data);
     } catch (e) {
-        throw new Error(toApiError(e).message);
+        throw new ApiRequestError(e);
     }
 }
 
@@ -119,6 +125,6 @@ export async function deleteAttendee(ulid: string): Promise<void> {
     try {
         await api.delete(`/admin/attendees/${ulid}`);
     } catch (e) {
-        throw new Error(toApiError(e).message);
+        throw new ApiRequestError(e);
     }
 }

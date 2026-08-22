@@ -28,6 +28,7 @@ class TicketType extends Model
         'base_price_paisa',
         'additional_adult_price_paisa',
         'additional_child_price_paisa',
+        'current_student_price_paisa',
         'currency',
         'base_admits',
         'max_admits',
@@ -75,6 +76,33 @@ class TicketType extends Model
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);
+    }
+
+    /**
+     * What the registrant's own seat costs, given who they are.
+     *
+     * The single definition of which of this type's price columns applies
+     * to a buyer — `CreateRegistration` asks this rather than reading
+     * `base_price_paisa` directly, so an admin-created or imported
+     * registration cannot quietly bill a different rate than the public
+     * checkout does.
+     *
+     * Only the registrant's seat moves. Family they bring is priced at
+     * `additional_adult_price_paisa`/`additional_child_price_paisa`
+     * whoever the registrant is: the student discount follows the student,
+     * not their whole party.
+     *
+     * A NULL `current_student_price_paisa` means this type has no student
+     * rate, so everyone pays the base price. Zero is a real price — a free
+     * student ticket — and is deliberately *not* treated as "unset".
+     */
+    public function basePriceFor(?string $participantType): int
+    {
+        if ($participantType === 'current_student' && $this->current_student_price_paisa !== null) {
+            return (int) $this->current_student_price_paisa;
+        }
+
+        return (int) $this->base_price_paisa;
     }
 
     /**

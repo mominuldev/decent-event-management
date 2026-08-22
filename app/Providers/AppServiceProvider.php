@@ -13,6 +13,7 @@ use App\Domain\Notification\Listeners\QueuePaymentSucceededNotification;
 use App\Domain\Notification\Listeners\QueueRefundIssuedNotification;
 use App\Domain\Notification\Listeners\QueueRegistrationReceivedNotification;
 use App\Domain\Notification\Listeners\QueueTicketDeliveredNotification;
+use App\Domain\Notification\Support\SmsGatewayConfig;
 use App\Domain\Payment\Events\ManualPaymentVerified;
 use App\Domain\Payment\Events\PaymentFailed;
 use App\Domain\Payment\Events\PaymentSucceeded;
@@ -48,6 +49,12 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(PaymentGatewayResolver::class);
         $this->app->singleton(NotificationChannelResolver::class);
+
+        // Singleton so one request or queue job reads the `sms` settings
+        // group once rather than on every credential lookup; the settings
+        // controller flushes it on write, so an edit applies to the next
+        // send with no cache TTL in between.
+        $this->app->singleton(SmsGatewayConfig::class);
 
         // Ticketing asks "is the scanner fleet ready for a key rotation?"
         // through an interface it owns; CheckIn answers it. The module
@@ -119,6 +126,33 @@ class AppServiceProvider extends ServiceProvider
         // costs nothing but bandwidth; docs/06 §6.7 allows 300/min for admin
         // traffic anyway.
         RateLimiter::for('media', fn ($request) => Limit::perMinute(300)->by($request->user()?->id ?: $request->ip()));
+
+        // Every request on this route spends money — it sends an SMS — so
+        // this limiter is a cost control first and an abuse control second
+        // (docs/06 §6.7 says exactly that). It was previously on the shared
+        // `api` bucket at 60/min, which let one IP spend roughly 2,000 BDT
+        // an hour of prepaid SMS balance.
+        //
+        // Two buckets, because they stop different things: per mobile stops
+        // someone burning one victim's balance and filling their inbox; per
+        // IP stops a script walking a list of numbers, which the per-mobile
+        // limit alone would happily allow.
+        RateLimiter::for('sms-code', fn ($request) => [
+            Limit::perHour(3)->by('mobile:'.$request->input('mobile')),
+            Limit::perHour(20)->by('ip:'.$request->ip()),
+        ]);
+
+        // Password attempts. Cheap for us and expensive for a guesser: the
+        // per-mobile limit is what bounds an attack on one account, and the
+        // per-IP limit bounds spraying one common password across many.
+        // Ten, not five, and the gap is deliberate: `verify()` burns a code
+        // after five wrong guesses and says so clearly, which is a far
+        // better answer to a mistyped digit than a bare 429. The limiter is
+        // here to stop a script, not to punish someone squinting at an SMS.
+        RateLimiter::for('attendee-login', fn ($request) => [
+            Limit::perMinute(10)->by('mobile:'.$request->input('mobile')),
+            Limit::perMinute(30)->by('ip:'.$request->ip()),
+        ]);
     }
 
     /**

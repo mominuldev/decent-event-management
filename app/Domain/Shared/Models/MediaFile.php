@@ -4,6 +4,7 @@ namespace App\Domain\Shared\Models;
 
 use App\Domain\Shared\Services\GenerateMediaThumbnail;
 use App\Domain\Shared\Support\HasUlid;
+use Carbon\CarbonImmutable;
 use Database\Factories\MediaFileFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -104,5 +105,38 @@ class MediaFile extends Model
     public function temporarySignedUrl(int $minutes = 15): string
     {
         return URL::temporarySignedRoute('api.v1.media.show', now()->addMinutes($minutes), ['mediaFile' => $this->ulid]);
+    }
+
+    /**
+     * The same short-TTL signed URL, but stable for everyone inside the same
+     * window — for a response that is itself cached.
+     *
+     * {@see temporarySignedUrl()} stamps `now() + $minutes`, so it mints a
+     * different URL every second. That is harmless on a one-off download, and
+     * breaks a cached list outright: the URL is part of the body, so the body
+     * changes on every request, the ETag never matches, and both the 304 fast
+     * path and any shared cache in front of it stop working — while a CDN
+     * that *did* hold a copy would keep serving URLs already partway through
+     * their life. Rounding the expiry to a window boundary makes the body
+     * byte-identical for every caller in that window instead.
+     *
+     * The cost is that the URL outlives its nominal TTL by up to one window,
+     * since it expires one whole window past the boundary rather than exactly
+     * `$minutes` from now — the guarantee is "at least $minutes of life", not
+     * "exactly". Use this only where the response is cached; prefer
+     * `temporarySignedUrl()` for a link minted for one named person.
+     */
+    public function cacheableSignedUrl(int $minutes = 15): string
+    {
+        $window = max(1, $minutes) * 60;
+
+        // Floor to the current window, then hand out the boundary *after*
+        // next, so a URL minted in the last second of a window still carries
+        // a full window of life rather than expiring immediately.
+        $expiresAt = CarbonImmutable::createFromTimestamp(
+            (intdiv(now()->getTimestamp(), $window) + 2) * $window
+        );
+
+        return URL::temporarySignedRoute('api.v1.media.show', $expiresAt, ['mediaFile' => $this->ulid]);
     }
 }

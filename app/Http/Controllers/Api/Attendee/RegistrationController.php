@@ -82,7 +82,7 @@ class RegistrationController extends Controller
 
     #[OAT\Patch(
         path: '/attendee/registrations/{registration}',
-        summary: 'Update comments, special notes, and guest list on an owned registration',
+        summary: 'Update special notes and the guest list on an owned registration',
         description: 'Only allowed while the registration is still `draft` or `pending_payment` and belongs to the authenticated attendee — enforced by UpdateRegistrationRequest::authorize().',
         security: [['bearerAuth' => []]],
         tags: ['Attendee Self-Service'],
@@ -101,7 +101,6 @@ class RegistrationController extends Controller
                 mediaType: 'application/json',
                 schema: new OAT\Schema(
                     properties: [
-                        new OAT\Property(property: 'comments', type: 'string', nullable: true),
                         new OAT\Property(property: 'special_notes', type: 'string', nullable: true),
                         new OAT\Property(
                             property: 'guests',
@@ -132,7 +131,6 @@ class RegistrationController extends Controller
                         properties: [
                             new OAT\Property(property: 'ulid', type: 'string'),
                             new OAT\Property(property: 'status', type: 'string'),
-                            new OAT\Property(property: 'comments', type: 'string', nullable: true),
                             new OAT\Property(property: 'special_notes', type: 'string', nullable: true),
                         ]
                     )
@@ -144,7 +142,7 @@ class RegistrationController extends Controller
     )]
     public function update(UpdateRegistrationRequest $request, Registration $registration): RegistrationResource
     {
-        $registration->update($request->only(['comments', 'special_notes']));
+        $registration->update($request->only(['special_notes']));
 
         if ($request->has('guests')) {
             DB::transaction(function () use ($registration, $request): void {

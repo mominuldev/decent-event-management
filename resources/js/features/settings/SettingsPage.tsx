@@ -7,6 +7,7 @@ import { cn } from '@/lib/cn';
 import * as settingsApi from './api';
 import { groupMeta, sortGroups } from './groups';
 import SettingRow from './SettingRow';
+import SmsBalanceCard from './SmsBalanceCard';
 import type { EventSetting, SettingsByGroup } from './types';
 
 function matches(setting: EventSetting, query: string): boolean {
@@ -18,7 +19,7 @@ function matches(setting: EventSetting, query: string): boolean {
         .every((term) => haystack.includes(term));
 }
 
-function GroupCard({ group, settings, canEdit }: { group: string; settings: EventSetting[]; canEdit: boolean }) {
+function GroupCard({ group, settings, canEdit, searching }: { group: string; settings: EventSetting[]; canEdit: boolean; searching: boolean }) {
     const { label, description, Icon } = groupMeta(group);
 
     return (
@@ -33,6 +34,10 @@ function GroupCard({ group, settings, canEdit }: { group: string; settings: Even
                 </div>
             </div>
             <div>
+                {/* The balance belongs with the credentials that fetch it, and
+                    only when the whole group is on screen — during a search the
+                    card would sit above whichever one row matched. */}
+                {group === 'sms' && !searching && <SmsBalanceCard />}
                 {settings.map((s) => (
                     <SettingRow key={s.key} setting={s} canEdit={canEdit} />
                 ))}
@@ -209,6 +214,7 @@ export default function SettingsPage() {
                                 group={group}
                                 settings={filtered[group] ?? []}
                                 canEdit={canEdit}
+                                searching={searching}
                             />
                         ))}
                     </div>

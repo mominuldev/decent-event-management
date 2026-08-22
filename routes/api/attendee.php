@@ -1,9 +1,12 @@
 <?php
 
+use App\Http\Controllers\Api\Attendee\AuthController;
 use App\Http\Controllers\Api\Attendee\ProfileController;
 use App\Http\Controllers\Api\Attendee\RegistrationController;
 use App\Http\Controllers\Api\Attendee\TicketController;
 use Illuminate\Support\Facades\Route;
+
+Route::post('auth/password', [AuthController::class, 'setPassword'])->name('auth.password');
 
 Route::get('me', [ProfileController::class, 'show'])->name('me.show');
 Route::patch('me', [ProfileController::class, 'update'])->name('me.update');

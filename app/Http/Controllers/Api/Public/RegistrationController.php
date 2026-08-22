@@ -107,7 +107,6 @@ class RegistrationController extends Controller
                             enum: ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'],
                             description: 'Required when tshirt_required is true'
                         ),
-                        new OAT\Property(property: 'comments', type: 'string', maxLength: 1000),
                         new OAT\Property(property: 'special_notes', type: 'string', maxLength: 1000),
                         new OAT\Property(
                             property: 'idempotency_key',
@@ -143,7 +142,6 @@ class RegistrationController extends Controller
                                     new OAT\Property(property: 'total_paisa', type: 'integer'),
                                     new OAT\Property(property: 'currency', type: 'string'),
                                     new OAT\Property(property: 'discount_code', type: 'string'),
-                                    new OAT\Property(property: 'comments', type: 'string'),
                                     new OAT\Property(property: 'special_notes', type: 'string'),
                                     new OAT\Property(property: 'source', type: 'string'),
                                     new OAT\Property(property: 'submitted_at', type: 'string', format: 'date-time'),
@@ -226,7 +224,6 @@ class RegistrationController extends Controller
                                     new OAT\Property(property: 'total_paisa', type: 'integer'),
                                     new OAT\Property(property: 'currency', type: 'string'),
                                     new OAT\Property(property: 'discount_code', type: 'string'),
-                                    new OAT\Property(property: 'comments', type: 'string'),
                                     new OAT\Property(property: 'special_notes', type: 'string'),
                                     new OAT\Property(property: 'source', type: 'string'),
                                     new OAT\Property(property: 'submitted_at', type: 'string', format: 'date-time'),

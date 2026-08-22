@@ -19,7 +19,6 @@ class UpdateRegistrationRequest extends FormRequest
     {
         return [
             'status' => ['sometimes', 'string', Rule::in(['draft', 'pending_payment', 'pending_approval', 'approved', 'rejected', 'cancelled'])],
-            'comments' => ['nullable', 'string', 'max:1000'],
             'special_notes' => ['nullable', 'string', 'max:1000'],
         ];
     }

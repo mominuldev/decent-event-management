@@ -290,6 +290,120 @@ class CentennialTicketFlowTest extends TestCase
             ->assertJsonFragment(['code' => 'CEN', 'child_free_under_age' => 2]);
     }
 
+    /**
+     * The third price tier: a current student pays the ticket type's own
+     * student rate for their seat, not the base price everyone else pays.
+     */
+    public function test_a_current_student_pays_the_student_rate(): void
+    {
+        $this->seedCentennialTypes();
+
+        $registration = $this->register($this->payload($this->centennialType(), [
+            'participant_type' => 'current_student',
+        ]));
+
+        $this->assertSame(50000, $registration->total_paisa);
+    }
+
+    /**
+     * The discount follows the student, not their whole party — every head
+     * they bring is billed at the standard extra rates.
+     *
+     * Family pricing sharing a code path with the base seat is exactly how
+     * a "student family rate" would appear by accident, so this pins the
+     * arithmetic rather than just the base line: ৳500 + ৳2,000 + ৳2,000.
+     */
+    public function test_a_current_students_family_pays_the_standard_member_rates(): void
+    {
+        $this->seedCentennialTypes();
+
+        $registration = $this->register($this->payload($this->centennialType(), [
+            'participant_type' => 'current_student',
+            'participation_type' => 'family',
+            'adults_count' => 2,
+            'children_count' => 1,
+            'guests' => [
+                ['full_name' => 'Nusrat Jahan', 'relation' => 'sibling', 'age_group' => 'adult', 'gender' => 'female', 'tshirt_required' => false],
+                ['full_name' => 'Arif Uddin', 'relation' => 'sibling', 'age_group' => 'child', 'age' => 9, 'gender' => 'male', 'tshirt_required' => false],
+            ],
+        ]));
+
+        $this->assertSame(50000 + 200000 + 200000, $registration->total_paisa);
+    }
+
+    /**
+     * Nobody but a current student sees the student rate — the same ticket
+     * type still bills every other participant type the base price.
+     */
+    public function test_the_student_rate_does_not_leak_to_other_participant_types(): void
+    {
+        $this->seedCentennialTypes();
+
+        $registration = $this->register($this->payload($this->centennialType(), [
+            'participant_type' => 'teacher',
+            'ssc_batch_year' => null,
+        ]));
+
+        $this->assertSame(250000, $registration->total_paisa);
+    }
+
+    /**
+     * Every ticket type that predates this column has no student rate, so
+     * its pricing must be byte-identical to before — a student pays base.
+     */
+    public function test_a_ticket_type_without_a_student_rate_bills_a_student_the_base_price(): void
+    {
+        $ticketType = TicketType::factory()->create([
+            'base_price_paisa' => 100000,
+            'current_student_price_paisa' => null,
+            'base_admits' => 1,
+            'max_admits' => 4,
+            'is_active' => true,
+            'is_public' => true,
+            'sale_starts_at' => now()->subDay(),
+        ]);
+
+        $registration = $this->register($this->payload($ticketType, [
+            'participant_type' => 'current_student',
+        ]));
+
+        $this->assertSame(100000, $registration->total_paisa);
+    }
+
+    /**
+     * Zero is a real price — a free student ticket — and must not be
+     * mistaken for "this type has no student rate", which is what a
+     * truthiness check on the column would do.
+     */
+    public function test_a_zero_student_rate_is_a_free_ticket_not_an_absent_rule(): void
+    {
+        $ticketType = TicketType::factory()->create([
+            'base_price_paisa' => 100000,
+            'current_student_price_paisa' => 0,
+            'base_admits' => 1,
+            'max_admits' => 4,
+            'is_active' => true,
+            'is_public' => true,
+            'sale_starts_at' => now()->subDay(),
+        ]);
+
+        $registration = $this->register($this->payload($ticketType, [
+            'participant_type' => 'current_student',
+        ]));
+
+        $this->assertSame(0, $registration->total_paisa);
+    }
+
+    public function test_ticket_type_api_publishes_the_student_rate(): void
+    {
+        $this->seedCentennialTypes();
+
+        $response = $this->getJson(route('api.v1.public.ticket-types.index'));
+
+        $response->assertStatus(200)
+            ->assertJsonFragment(['code' => 'CEN', 'current_student_price_paisa' => 50000]);
+    }
+
     public function test_every_allowed_participant_type_may_buy_the_one_ticket(): void
     {
         $this->seedCentennialTypes();
@@ -311,7 +425,11 @@ class CentennialTicketFlowTest extends TestCase
                 'ssc_batch_year' => $needsBatch ? 2004 : null,
             ]));
 
-            $this->assertSame(250000, $registration->total_paisa, "{$type} should pay the base seat");
+            // A current student is the one type with its own rate; the
+            // rest all pay the base seat.
+            $expected = $type === 'current_student' ? 50000 : 250000;
+
+            $this->assertSame($expected, $registration->total_paisa, "{$type} should pay its own tier");
         }
     }
 

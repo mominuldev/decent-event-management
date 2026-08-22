@@ -62,6 +62,8 @@ class CreateRegistration
                     'tshirt_size' => $data['tshirt_size'] ?? $attendee->tshirt_size,
                     'current_class' => $data['current_class'] ?? $attendee->current_class,
                 ]);
+
+                $this->setInitialPassword($attendee, $data['password'] ?? null);
             } else {
                 /** @var Attendee $attendee */
                 $attendee = Attendee::create([
@@ -82,6 +84,8 @@ class CreateRegistration
                     'tshirt_required' => $data['tshirt_required'] ?? false,
                     'tshirt_size' => $data['tshirt_size'] ?? null,
                 ]);
+
+                $this->setInitialPassword($attendee, $data['password'] ?? null);
             }
 
             $baseAdmits = $ticketType->base_admits ?? 1;
@@ -99,7 +103,12 @@ class CreateRegistration
 
             $extraAdults = max(0, $adultsCount - $baseAdmits);
 
-            $basePrice = (int) $ticketType->base_price_paisa;
+            // The registrant's own seat is the only line that varies by who
+            // they are — a current student pays the ticket type's student
+            // rate where it has one. Family they bring is priced at the
+            // standard extra rates regardless, so the discount follows the
+            // student rather than their whole party.
+            $basePrice = $ticketType->basePriceFor((string) $data['participant_type']);
             $additionalAdultPrice = (int) $ticketType->additional_adult_price_paisa;
             $additionalChildPrice = (int) $ticketType->additional_child_price_paisa;
 
@@ -130,7 +139,6 @@ class CreateRegistration
                 'total_paisa' => $totalPrice,
                 'currency' => $ticketType->currency ?? 'BDT',
                 'source' => 'web_public',
-                'comments' => $data['comments'] ?? null,
                 'special_notes' => $data['special_notes'] ?? null,
             ]);
 
@@ -287,5 +295,39 @@ class CreateRegistration
         $value = EventSetting::where('key', 'payment.intent_ttl_minutes')->value('value');
 
         return $value !== null ? max(1, (int) $value) : 30;
+    }
+
+    /**
+     * Sets the sign-in password chosen during checkout — but **only when
+     * the attendee does not already have one.**
+     *
+     * That condition is the whole security of this feature, not a nicety.
+     * `POST /public/registrations` is unauthenticated and resolves a
+     * *returning* registrant by mobile number, so a path that overwrote an
+     * existing password would be a complete account takeover: register with
+     * somebody else's mobile, set a password, and their account is yours.
+     * A returning registrant keeps the password they already had, and the
+     * one in this request is discarded in silence — there is nothing useful
+     * to tell an anonymous caller about whether that number already has an
+     * account, and saying so would leak exactly the enumeration signal the
+     * sign-in flow is careful not to.
+     *
+     * Someone who has genuinely forgotten it uses the reset flow, which
+     * proves possession of the phone first.
+     */
+    private function setInitialPassword(Attendee $attendee, ?string $password): void
+    {
+        if ($password === null || $password === '' || $attendee->hasPassword()) {
+            return;
+        }
+
+        // `password` is cast `hashed`, so this never stores plaintext. It is
+        // outside `$fillable` deliberately — a credential must not be
+        // settable by mass assignment from any array that happens to carry
+        // the key.
+        $attendee->forceFill([
+            'password' => $password,
+            'password_set_at' => now(),
+        ])->save();
     }
 }

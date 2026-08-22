@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Domain\Notification\Support\SmsGatewayConfig;
 use App\Domain\Shared\Models\ActivityLog;
 use App\Domain\Shared\Models\EventSetting;
 use App\Http\Controllers\Controller;
@@ -132,12 +133,19 @@ class SettingController extends Controller
         /** @var EventSetting $setting */
         $setting = EventSetting::where('key', $key)->firstOrFail();
 
-        $oldData = $setting->toArray();
+        $oldData = $this->loggable($setting);
 
         $setting->update([
             'value' => $setting->castForStorage($request->input('value')),
             'updated_by_user_id' => $request->user()?->id,
         ]);
+
+        // The gateway credentials are memoised for the life of this
+        // process; without this the very next send would still use the old
+        // key and the operator would reasonably conclude the save failed.
+        if (SmsGatewayConfig::overridesGateway($key)) {
+            app(SmsGatewayConfig::class)->flush();
+        }
 
         $requestId = substr((string) ($request->header('X-Request-Id') ?? Str::ulid()), 0, 26);
 
@@ -149,11 +157,35 @@ class SettingController extends Controller
             'causer_id' => $request->user()?->id,
             'subject_type' => $setting->getMorphClass(),
             'subject_id' => $setting->id,
-            'properties' => ['old' => $oldData, 'new' => $setting->toArray()],
+            'properties' => ['old' => $oldData, 'new' => $this->loggable($setting)],
             'ip_address' => $request->ip(),
             'request_id' => $requestId,
         ]);
 
         return new EventSettingResource($setting->refresh()->load('updatedBy'));
+    }
+
+    /**
+     * The row as the audit trail should record it.
+     *
+     * `activity_logs` is append-only and has no redaction path, so a
+     * credential written into it is there for good — and the log is read
+     * from the admin console. For an encrypted row this records only
+     * whether a value was present, never the value or its ciphertext:
+     * knowing *that* the SMS secret key changed, by whom and from where is
+     * the entire point of the audit entry, and the value itself adds
+     * nothing to it but exposure.
+     *
+     * @return array<string, mixed>
+     */
+    private function loggable(EventSetting $setting): array
+    {
+        $data = $setting->toArray();
+
+        if ($setting->isSecret()) {
+            $data['value'] = $setting->hasValue() ? '[redacted]' : null;
+        }
+
+        return $data;
     }
 }

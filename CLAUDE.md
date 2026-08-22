@@ -38,7 +38,7 @@ Phase 6's remaining engineering closed 2026-08-21 (see the close-out section bel
 
 Phase 4A landed the expiry sweeper, the reconciliation job, and a real `SslCommerzClient` (see below) — `bkash`/`nagad`/`rocket` still resolve to `FakeGateway` pending their merchant applications (Phase 4B).
 
-Vendor-blocked pieces of Phase 5 (engineering is done; only a vendor pick or Meta approval is missing — see [§Phase 5](#-phase-5-emailsmswhatsapp--buildable-now-slice-closed-2026-08-04)): real `SmsDriver`/`WhatsAppDriver` (no Bangladesh SMS vendor named, no approved WhatsApp templates — both unchecked in External Dependencies below); DLR/delivery-webhook endpoints (the payload/signature shape is vendor-specific and unknown without one).
+Vendor-blocked pieces of Phase 5 — **the SMS half is no longer among them.** A vendor was named (REVE Systems) and the real `SmsDriver`, its DLR ingestion and its delivery-receipt poller all landed 2026-08-22; see [§SMS is real](#-sms-is-real-reve-systems--2026-08-22). What remains blocked is WhatsApp only: a real `WhatsAppDriver` (Meta has not approved the templates — unchecked in External Dependencies below) and a WhatsApp delivery-status webhook, whose payload and signature shape are Meta-specific and unknown until the templates exist.
 
 **Security constraint, resolved 2026-08-04:** QR admission used to be unauthenticated — `ProcessCheckIn.php:176` hardcoded `signature_valid => true` and verified nothing. `ProcessCheckIn` now parses and verifies the Ed25519 signature (and payload expiry) via `QrSigner` before a ticket ever reaches `AdmissionPolicy`, matching the AdmissionPolicy docblock's own forward-reference to this. A ticket PDF may now be generated and delivered — see [§Phase 6](#-phase-6-qr--pdf-tickets--buildable-now-slice-closed-2026-08-04) for what "buildable-now" still leaves out (physical testing, live rotation rehearsal).
 
@@ -55,7 +55,7 @@ Vendor-blocked pieces of Phase 5 (engineering is done; only a vendor pick or Met
 - CI pipeline (Pint, PHPStan level 8, tests, `composer audit`)
 - OpenAPI attributes on all documented endpoints; spec generates cleanly (104 paths)
 - State machine (`HasStateMachine`) integrated across all models
-- Real `MailDriver` (Phase 5) and real `SslCommerzClient` (Phase 4A) plus fake drivers for the vendor-blocked pieces: `FakeGateway` (still resolved for `bkash`/`nagad`/`rocket`), `FakeSmsDriver`, `FakeWhatsAppDriver`
+- Real `MailDriver` (Phase 5), real `SslCommerzClient` (Phase 4A) and real `SmsDriver`/`ReveSmsClient` (2026-08-22, REVE Systems — falls back to `FakeSmsDriver` when no credentials are configured), plus fake drivers for what is still vendor-blocked: `FakeGateway` (still resolved for `bkash`/`nagad`/`rocket`) and `FakeWhatsAppDriver`
 - Atomic reservation (`tryReserve`/`confirmSale`/`releaseReservation`) and atomic admission (`tryAdmit`) — verified under concurrency
 - A gateway-verified payment issues a ticket (D1) and idempotency is enforced on registration creation and payment initiation (D4)
 - The notification outbox is real: 6 domain events write outbox rows via `Notification\Actions\QueueNotification`, `app/Jobs/SendNotificationJob` drains them with the ADR-07 backoff schedule, per-channel kill switches are enforced at send-time (Phase 5)
@@ -270,6 +270,8 @@ The public site's `/tickets#register` page (repo `centennial-celebration`, sibli
 | each extra child | `additional_child_price_paisa` — ৳2,000 |
 | child under 2 | free, **still admitted** |
 
+A third tier was added 2026-08-21 — a current student pays `current_student_price_paisa` for their own seat, not `base_price_paisa`. See [§A third price tier](#-a-third-price-tier-what-a-current-student-pays--2026-08-21).
+
 **The real schema gap this exposed.** A child under 2 attends free but still walks through the gate. `children_count` was read by two things at once — pricing in `CreateRegistration`, and `admits_total` in `IssueTicket` (`adults + children`) — so excluding a free infant to get the price right would have under-counted the admits and the gate would have turned the infant away. Migration `2026_08_14_100000_*` adds `registrations.infants_count` (never priced, always admitted; `admits_total = adults + children + infants`) and `ticket_types.child_free_under_age` (`NULL` on every pre-existing type, so their pricing is byte-identical).
 
 **Infants are counted server-side from the guests' own ages**, never from a client-supplied count — otherwise a caller could mint free admits by declaring a party of infants. Contract: `children_count` is *every* child attending, infants included; `CreateRegistration::countFreeInfants()` splits it and stores `children_count` as the billable half. A child guest sent without an age is billed, not waved through.
@@ -479,6 +481,412 @@ Full suite **478 passing / 2 skipped** (the two benchmark harnesses, skipped unl
 
 **Found while verifying, not fixed — it is your `.env`, not the repo's:** the development `.env` carries **two** `QR_SIGNING_PRIVATE_KEY` / `QR_SIGNING_KEY_ID` pairs (lines 70–71 and 78–79). Dotenv silently takes the last, so editing the first appears to do nothing — worth collapsing to one before anyone debugs a signing problem against the wrong key.
 
+### ✅ A third price tier: what a current student pays — 2026-08-21
+
+`ticket_types` gained **`current_student_price_paisa`**, so the centennial ticket now carries three rates instead of two, all editable in the admin console:
+
+| | |
+|---|---|
+| everyone else | `base_price_paisa` — ৳2,500 |
+| a current student | `current_student_price_paisa` — ৳500 |
+| each extra adult / child | `additional_adult_price_paisa` / `additional_child_price_paisa` — ৳2,000 |
+| child under 2 | free, still admitted |
+
+Prices already came from the backend — the public `/tickets` page has read `/public/ticket-types` rather than a constants file since 2026-08-14. What did not exist was a student rate on the row the centennial page sells: `current_student` is in `CENTENNIAL_AUDIENCE`, so a student was billed the full ৳2,500. The standalone `STU` type that does carry a student price is a different row the public page never offers.
+
+- **The discount covers the registrant's own seat only.** Family a student brings is charged the standard extra-adult/child rates, so the discount follows the student rather than their whole party. `test_a_current_students_family_pays_the_standard_member_rates` pins the arithmetic rather than just the base line, because family pricing sharing a code path with the base seat is exactly how a "student family rate" would appear by accident.
+- **`TicketType::basePriceFor(?string $participantType)` is the single definition** of which price column applies to a buyer. `CreateRegistration` asks it instead of reading `base_price_paisa`, so an admin-created or imported registration cannot quietly bill a different rate than the public checkout does.
+- **NULL means "no student rate", 0 means "free student ticket"** — the column is nullable rather than defaulting to 0, and every check compares against `null` rather than testing truthiness. Every ticket type that predates this is NULL, so their pricing is byte-identical. Same discipline as `child_free_under_age`.
+- **It joins the post-sale price lock.** `TicketTypeController::update()`'s `$restrictedKeys` gained it alongside the other three — leaving it out would have left one editable money column on a tier that has already sold.
+- **⚠️ The seeded ৳500 is a starting value, not a client decision.** It is carried over from the standalone `STU` type, the only current-student price this system has ever had. Set the real figure in the admin console (Tickets → Centennial Ticket → Current student price) or in `TicketTypeSeeder` before first seeding a production database. Note that `TicketTypeSeeder` uses `updateOrCreate`, so a re-seed overwrites an admin-chosen price — pre-existing behaviour for all four price columns, not new here.
+- Admin SPA: a Current student price control in the ticket-type dialog (blank = no student rate, disabled once the tier has sold), and the list's Price column shows the student rate under the base price so the table and the dialog cannot disagree.
+- 8 tests (6 in `CentennialTicketFlowTest`, 2 in `AdminCrudTest`) covering the student rate, the standard family rates on top of it, no leakage to other participant types, a NULL type billing base, a zero rate being free rather than absent, the public API publishing it, and both admin paths. `test_every_allowed_participant_type_may_buy_the_one_ticket` was updated to expect each type's own tier rather than one flat figure — it is now a tier assertion, not a weakened one. Full suite **503 passing / 2 skipped**, Pint and PHPStan level 8 clean, SPA `typecheck` + `build` clean. OpenAPI regenerated (still 112 paths — a request/response shape change to documented endpoints).
+
+**The admin registration modal was updated to match**, since a total is now the output of three tiers rather than one:
+
+- **Participant type is shown** — it is the input that decides which base rate applied, and the modal previously never named it.
+- **A Price block itemises the total**: the registrant's line labelled with the tier that applied (`Current student rate` / `Standard rate`), the extra adults and children at their per-head rates, any infants at zero, the discount, and the stored total.
+- **The stored `subtotal_paisa`/`total_paisa` stay the money; the lines only explain them.** A ticket type can legitimately be repriced after a registration was taken (the post-sale lock only applies once a tier has sold), so `priceBreakdown()` reports whether its lines still add up and the modal says so in as many words when they do not, rather than confidently explaining the wrong number. It returns null — and the itemisation simply does not render — when the row carried no prices, so a half-built breakdown is impossible.
+- **Fixed in passing — the Party line had been under-reporting since 2026-08-14.** It read `{adults} adult(s), {children} child(ren)` and omitted `infants_count` entirely, so a party of four with one infant showed as three people while `admits_total` was four. `RegistrationResource` has published `infants_count` since that date; the SPA's hand-written `Registration` type simply never declared it — exactly the drift this file's SPA conventions warn about. The same widening exposed `attendee.participant_type` and the nested ticket type's price columns, all of which the resources were already returning and the SPA was discarding.
+- **The layout was rebuilt shorter to absorb the new block**, since a Price block on top of the existing content pushed the dialog past the viewport on a large party. The action row moved into the Dialog's `footer` prop — pinned, out of the scrolling body — matching the attendee dialog, which has used that facility since it was built; previously Delete/Save sat inside the body, so a registration with several guests hid its own Save button below the scroll. The dialog widened to `max-w-2xl` (again matching the attendee dialog) to buy the horizontal room that pays for the height: the four facts sit in one row on desktop instead of two stacked pairs; Price takes the left column with Status top-right (the one control that acts on the record, where the eye lands) and Guests beneath it, so the row is as tall as the longer column rather than the sum of three stacked blocks; and Comments/Special notes pair up. Row rhythm dropped to `py-1.5` across both lists so they line up beside each other. **Not verified in a browser** (no browser driver here), so treat the proportions as unchecked; `typecheck` and `build` are clean.
+- **Verified against the running app**: a current student with one extra adult, one child and one infant returns `participant_type: current_student`, a 2/1/1 party split and `subtotal_paisa` 450000, with the tier lines (৳500 + ৳2,000 + ৳2,000 + free) summing to exactly that. Not checked in a browser — no browser driver in this environment — so the layout itself is unverified beyond `typecheck` and `build`. Dev database and the minted token were cleaned up afterwards.
+
+**Shipped in `centennial-celebration` the same day**, since the public page is the consumer:
+
+- `basePriceFor(ticket, participantType)` in `features/ticket-system/pricing.ts` mirrors the server helper; `quoteRegistration()` takes `primaryParticipantType` and prices the registrant's line with it. The returned `basePaisa` is now the *effective* base, so the summary panel's header and its first line item cannot disagree.
+- **Copy that had gone wrong was fixed, not just extended.** `TicketPricingRules`'s first card read "৳2,500 flat, whoever you are — alumnus, current student, teacher, staff or guardian", which the student rate makes false; it now names the student rate separately, and falls back to the flat wording when the ticket has none. `TicketCard` carries a "৳500 for current students" line under the headline price. Both bilingual.
+- **Verified against the running backend**, not only tests: a current student alone → ৳500; a former student alone → ৳2,500; a current student plus one adult and one 9-year-old → ৳4,500. The dev database was restored to its prior state afterwards.
+
+**Found while doing this, not fixed:** `src/lib/utils/priceEstimate.ts` in `centennial-celebration` is dead code — nothing imports `estimateRegistration`/`estimateRegistrationTotalPaisa` since the six-step `RegistrationWizard` was deleted on 2026-08-14. It is now a *second* pricing formula that does not know about the student rate, so anyone who reaches for it will get the wrong total. Delete it, or point it at `pricing.ts`.
+
+### ✅ One free-text field on a registration, not two — 2026-08-21
+
+`registrations.comments` is gone. `special_notes` is the only free-text field a registration carries, at every layer.
+
+**They were never two things.** Both columns were `text NULL`, both validated `max:1000`, and every layer that accepted one accepted the other — public create, attendee self-service update, admin update, `RegistrationResource`, the OpenAPI spec. Nothing in the codebase ever read them differently or branched on which was set, so a note landed in whichever box the form happened to render: the public ticket page wrote to `comments`, the admin console showed both. Staff had to read two boxes to be sure they had not missed a dietary need or an accessibility request, which is the failure this closes.
+
+- **Migration `2026_08_21_120000_*` merges before it drops, and that ordering is the migration.** `comments` is the box the public form has been writing to, so on any environment that has taken a real registration it holds attendee-supplied text — the text somebody actually needs on event day. It is copied into `special_notes` where that is empty and appended after a blank line where both are filled (picking a survivor is a judgement about content a migration cannot read), and only then is the column dropped. `down()` re-adds an empty column: the merge genuinely cannot be undone, since nothing marks where the seam was. Guarded with `Schema::hasColumn` so a partial deploy does not fatal.
+- **Removed from:** `Registration::$fillable`, `CreateRegistration`, `RegistrationResource`, all three FormRequests (public store, attendee update, admin update), `Attendee\RegistrationController`'s `$request->only()` allowlist, every OpenAPI property and two endpoint summaries, `docs/04-erd.md`, and the admin SPA's `Registration`/`UpdateRegistrationPayload` types. Special notes now takes the full row in the registration modal, since it is the only free-text control left.
+- **An old client sending `comments` is ignored, not broken.** It is absent from every rule, so `validated()` strips it — a cached build of the public site keeps working and simply does not record that field. `test_a_legacy_comments_key_is_ignored_rather_than_erroring` pins that it neither 500s on a dropped column nor silently pretends the note was saved.
+- **`centennial-celebration` renamed its field rather than just remapping it.** The draft field, the Zod schema key, the form registration and the review row all moved `comment` → `special_notes`, so the client name matches the column it becomes; the label changed from "Comment"/"মন্তব্য" to "Special notes"/"বিশেষ নোট" (copy keys renamed to match — a key called `comment` rendering "Special notes" is the next person's confusion). The placeholder already described exactly what the field is for and did not change. `addOnsSchema` in `features/registration/schema.ts` — dead since the six-step wizard was deleted 2026-08-14 — lost its `comments` key too, so no dangling reference to the removed field survives anywhere.
+- 5 tests in `tests/Feature/Registration/SpecialNotesTest.php`, including a schema assertion that the column is gone and `special_notes` is not. Neither field had *any* test coverage before this. Full suite **508 passing / 2 skipped**, Pint and PHPStan level 8 clean, both frontends typecheck/lint/build clean. OpenAPI regenerated (still 112 paths — a request/response shape change).
+- **Verified against the running app**: a public registration carrying both `special_notes` and a legacy `comments` key returns 201, stores the note, and the response has no `comments` key at all. Dev database cleaned up afterwards.
+
+### ✅ The public attendees directory is real data — 2026-08-21
+
+The public site's `/attendees` page (repo `centennial-celebration`) shipped rendering `features/attendees/mock-data.ts` — a hand-written array of invented alumni, filtered, sorted and paginated in the browser. It is now backed by this system, through a new public endpoint that did not exist.
+
+**Only a registration that succeeded is listed.** `PublicAttendeeDirectory::VISIBLE_STATUSES` is `['paid', 'confirmed']` and nothing else. This is the load-bearing rule, not a nicety: `POST /public/registrations` is unauthenticated, so anything listed before payment is verified would let a stranger put any name on the public site for free — and would publish people who abandoned checkout as though they were attending. `cancelled`, `refunded` and `expired` fall back out of the directory by the same rule, which is why it is a status list rather than an `is_public` flag somebody has to remember to clear.
+
+**A row is a registration, not an attendee.** The party makeup the cards and counters show (participation type, adults, children, infants, family) belongs to the registration; the person belongs to the attendee behind it. Listing attendees would have meant a subquery for every one of those numbers.
+
+**Shipped here:**
+
+- `GET /api/v1/public/attendees` (`Api\Public\AttendeeDirectoryController`, `throttle:60,1`) — filters `search` / `participant_type` / `batch_year` / `batch_from` / `batch_to` / `has_guests`, sorts `batch_asc|batch_desc|name_asc|recent`, ETagged through the existing `RespondsWithEtag` so a repeat fetch is a 304.
+- `App\Domain\Registration\Support\PublicAttendeeDirectory` — the one definition of who is visible, what may be filtered on, and in what order. It **cannot use `ListSort`**: the query spans two tables and `ListSort` qualifies every column with the queried model's own table. The allowlist discipline is reproduced there (public sort key => a fixed `[column, direction]` pair) rather than loosened in `ListSort`.
+- `App\Http\Resources\Public\PublicAttendeeResource` — the narrowest resource in the codebase, and the one where the allowlist rule matters most, because the audience is everyone on the internet rather than a staff member behind an audited session. Deliberately absent: `mobile`, `email`, `whatsapp_number`, `emergency_contact_*`, `father_name`, `current_address`, `date_of_birth`, `gender`, `blood_group`, `notes`, money, `registration_number`, and **the guest roster** — a registration's family members are named people who never filled a form in, so the card shows how many came, never who. `test_the_card_exposes_only_the_public_allowlist` asserts the key set *exactly*, so a field added to the resource fails the test and makes someone decide.
+- **A decade filter is sent as a `batch_from`/`batch_to` range, not a decade name.** The decade list is presentation (its labels are bilingual), so the server never learns what a "1990s" is and there is one place to edit when the school adds one.
+- **Page size is capped at 48** (`MAX_PER_PAGE`). An uncapped public list endpoint is a free bulk export of the whole 20,000-name roster in one request.
+- **`%`, `_` and `\` are escaped in the search term.** Unescaped, a search for `%` matches every row — turning the search box into a way to page the entire roster while looking like a filtered result. `test_a_wildcard_in_the_search_box_is_a_literal` pins it.
+- **The header counters are computed over the whole directory, not the filtered page**, because that is what they claim to be — typing a name into the search box must not make "37 registered" drop to 1. Two aggregates (`summary()`, `availableBatches()`), not loaded rows, since they run on every filter change.
+- Ordering appends `registrations.id` as a final tiebreaker. A batch year is shared by everyone in it, so ties are the norm here rather than an edge case, and MySQL may otherwise answer successive `LIMIT/OFFSET` pages inconsistently.
+- 17 tests in `tests/Feature/Public/AttendeeDirectoryTest.php`. OpenAPI regenerated — **113 paths** (was 112).
+
+**Shipped in `centennial-celebration`:**
+
+- `features/attendees/mock-data.ts` is **deleted**, and so is `app/api/attendees/route.ts` — a BFF proxy whose only job was serving that array. The client calls the public API directly, the same way the ticket page already reads `/public/ticket-types`.
+- `filterAndSortAttendees()` — the whole client-side filter/sort/paginate engine — is gone. It could not have survived real data: it needed every attendee in the browser to answer one page.
+- `lib/api/client.ts` gained `apiFetchEnvelope()`. `apiFetch()` unwraps `{ data: … }`, which throws away the `meta` a paginated list carries — here that is the page counts *and* the whole-directory counters.
+- `AttendeesClient` is server-driven via TanStack Query: search debounced 300ms (each keystroke is a request otherwise), `keepPreviousData` so the grid dims rather than empties between pages, and real loading and error states with a retry. The batch-year dropdown keeps the full list from `meta` rather than the years on the current page, so it cannot shrink as the reader filters and leave them unable to widen again.
+- The page's server fetch `.catch()`es to an empty directory, so an unreachable API leaves the hero, toolbar and CTA rendering with the client offering its own retry, instead of taking the route down. It is also what lets `next build` prerender the page with no API running.
+- `attendees.loading` and `attendees.error.*` added to `lib/i18n/copy.ts`, bilingual like everything else there.
+
+**Verified against the running stack**, not only tests: 37 confirmed registrations listed while the same database's 10 `pending_payment` and 5 `cancelled` ones are not; a full 48-card page checked field-by-field for every banned key (none); `participant_type=teacher` returning 9 rows all teachers; `batch_from=1990&batch_to=1999` returning only 1993; `search=%` returning 0; `per_page=9999` answering with 48; an `If-None-Match` revalidation answering 304; and the rendered page showing real hero counters (৩৭ / ৯ / ২ / ১৪ / ৩৬ / ৮), a batch dropdown built from the eight years that actually exist, and "১ – ১২ এর মধ্যে ৩৭". Full suite **528 passing / 2 skipped**, Pint and PHPStan level 8 clean, frontend `tsc --noEmit`, ESLint (0 errors) and `next build` clean.
+
+**Still open:**
+
+- **Nobody consented to being listed.** The registration form has no "show me in the public directory" choice, so every paid attendee appears. If that is not what the client wants, it needs an opt-out column on `attendees` and a `where` in `PublicAttendeeDirectory::query()` — the query is deliberately the single place that decision would go.
+- The search runs `LIKE '%term%'` across seven columns, which cannot use an index. Fine at the current volume and at the 12,000-ticket target; if it ever bites, it wants a FULLTEXT index, not a narrower filter.
+- ~~The card renders initials rather than a photo.~~ **Closed the same day** — see below.
+
+#### The card shows one name and a real photo — 2026-08-21
+
+Two changes to what a directory card renders, both requested after the directory went live.
+
+**The Bangla name only.** The card used to stack both names — the locale's name large, the other beneath it. It now shows one: `full_name_bn`, falling back to `full_name` only for the rows that genuinely have none (the public form has required a Bangla name since 2026-08-16, but older and admin-created attendees predate that, and a nameless card is worse than a Latin one). It carries `lang="bn"` so a browser picks a Bengali face even on the English side of the locale toggle. Search still matches both names server-side — what changed is the display, not what is findable.
+
+The initials fallback is derived from the *displayed* name, so it is now Bengali too, and it splits with `Array.from()` rather than `word[0]`: a cluster like `মো` is two code units, and indexing would slice it into a lone combining mark.
+
+**The badge photo is published.** This reverses the earlier decision to omit it, at explicit request — the trade-off is unchanged, it was the client's call to make.
+
+- **The 128px thumbnail, never the ~1024px original** the ticket PDF prints. Twelve full-size renditions per page is several megabytes; the thumbnail measures 1,784 bytes of WebP. `smallest()` falls back to the original for a photo uploaded before thumbnails existed, so a card is never blank waiting on `media:backfill-thumbnails`.
+- **`MediaFile::cacheableSignedUrl()` is new, and it is the load-bearing part.** `temporarySignedUrl()` stamps `now() + 15min`, so it mints a different URL every second — harmless on a one-off download, and fatal to a cached list: the URL is *in the body*, so the body changes every request, the ETag never matches, and both the 304 path and any shared cache in front of this endpoint silently stop working. The new method rounds the expiry to a window boundary, so every caller inside the same window gets a byte-identical body. The cost is that a URL outlives its nominal TTL by up to one window — the guarantee is "at least 15 minutes", not "exactly". Use it only where the response is cached; a link minted for one named person still wants `temporarySignedUrl()`. `test_the_photo_url_is_stable_between_requests_so_the_etag_still_matches` pins this, travelling 30 seconds between the two requests.
+- `attendee.profilePhoto.thumbnail` is eager-loaded, or `smallest()` costs two extra queries per card.
+- The card renders a plain `<img>`, not `next/image` — a signed, short-lived URL is neither a stable remote pattern the optimizer can be configured for nor worth caching a derivative of — with an `onError` fallback, because a page left open outlives its signed URLs and a broken-image icon reads as a fault in the site. (That fallback was initials at first; it is the drawn silhouette as of the next subsection.)
+- **A signed URL handed to an anonymous caller can be copied and re-shared for the life of the signature.** That is inherent in publishing the photos at all, not something a shorter TTL fixes; the way to undo it is to stop returning the field. `GET /api/v1/media/{ulid}` is already unauthenticated (the signature is its only check) and sits on the 300/min `media` limiter, so no route change was needed.
+
+3 more tests (20 in the file). Verified against the running app: the one dev attendee with a photo returns a URL pointing at the *thumbnail* ULID that serves 1,784 bytes of `image/webp` to an anonymous caller; the URL is identical across requests three seconds apart and expires on a clean `13:30:00` boundary; a conditional re-request of a page *containing* a photo still answers 304; and the rendered page shows one Bangla name per card, Bengali initials (`মক`, `নস`, `অচ`) where there is no photo, and an `<img>` where there is.
+
+#### No photo draws a male/female silhouette, not initials — 2026-08-21
+
+A card with no badge photo used to show the attendee's initials; it now draws a gendered placeholder.
+
+**`gender` still is not published.** The card needs to pick an outline, which is not the same thing as needing the personal record. `PublicAttendeeResource` derives **`avatar_variant`** — `male | female | neutral` — and the raw column stays out of the response. That distinction is load-bearing rather than fussy:
+
+- `attendees.gender` is VARCHAR(32) *specifically* so it can hold `prefer_not_to_say`, a value whose entire meaning is "do not publish this". Putting it on an anonymous endpoint would contradict the answer the person gave.
+- Anything not plainly `male` or `female` collapses to `neutral`, so the placeholder is never a guess about somebody.
+- **This is not an edge case.** Only `StoreRegistrationRequest` constrains the column to male/female — the admin and attendee-profile requests do not accept `gender` at all — so seeded, imported and admin-created rows really do land outside it. On the current dev database that is 17 of 37 listed attendees (6 `other` + 11 `prefer_not_to_say`).
+
+`test_the_avatar_hint_never_guesses_a_gender_and_never_leaks_the_column` covers all five inputs and asserts the `gender` key is absent. Note the fixture uses a **list of pairs, not a keyed map**: `null` used as a PHP array key silently becomes `''`, which quietly dropped the null case on the first run.
+
+**The placeholder is inline SVG, not files under `public/images/`.** Twelve cards a page would be twelve extra requests for three distinct pictures; a missing asset would surface as a broken tile on a deploy that otherwise worked; and inline lets the figure inherit the card's own participant-type palette instead of introducing a third colour. Same reasoning the backend already applies to `AttendeeExportPhoto::placeholder()`, which draws its silhouette rather than shipping one.
+
+`AttendeeAvatar` (`components/attendees/`) is now the single place that decides what fills the circle — photo, or silhouette — and owns the `onError` fallback, so a signed URL expiring under an open page degrades to the placeholder rather than a broken-image icon. Hair is drawn *behind* the head sharing its fill, so the overlap merges into one silhouette instead of showing a seam. The initials helper is gone.
+
+**Verified against the running app:** the live directory returns 12 female / 8 male / 17 neutral, matching the database's own 12 / 8 / (6 `other` + 11 `prefer_not_to_say`) exactly, with no `gender` key on any card; the rendered page draws 2 photos and 10 silhouettes across 12 cards. Page 1 happened to contain no male attendee, so one dev row was flipped to `male` to confirm that branch renders and **restored immediately afterwards** — the gender distribution was checked back to its original 17/15/7/12.
+
+Full suite **529 passing / 2 skipped**, Pint and PHPStan level 8 clean, frontend `tsc --noEmit`, ESLint (0 errors) and `next build` clean. OpenAPI regenerated (still 113 paths — a response-shape change).
+
+### ✅ The ticket confirmation email carries the QR, in a designed shell — 2026-08-21
+
+Email was real but plain: `MailDriver` handed `notifications.body_rendered` straight to a bare `Content(htmlString: …)`, so a ticket confirmation arrived as two unstyled paragraphs and the QR — the thing that actually admits the holder — was nowhere in it. Every outbound email now renders inside `resources/views/emails/notification.blade.php`: a dark violet hero, a perforated ticket card (details on the stub, ticket number and QR on the counterfoil), a four-up notes strip, a call to action and a footer. Built to a reference design the client supplied.
+
+**The palette is the public site's own, not an invention.** `centennial-celebration/src/app/globals.css` records a violet/amber design system read off the live Figma file — brand/purple-600 `#7c3aed`, purple-700 `#6d28d9`, purple-100 `#ede9fe`, ink/heading `#3d1d7a` — and the email uses those values verbatim, so a confirmation and the page it was bought on read as one product. Display type is Georgia, which is the site's own named fallback for Playfair (no email client loads a webfont reliably).
+
+**The split is the point: body copy is editable, the chrome is not.** The template body stays what an Event Manager edits in the admin console and `QueueNotification` interpolates; it renders as the hero sub-copy. The masthead, ticket card, QR panel, notes strip and footer are code the editor cannot reach — a mis-saved template must not be able to remove the code somebody is admitted with. The seeded `ticket_delivered` copy was rewritten to stop repeating the facts the shell now renders from the ticket.
+
+- **The QR is an inline CID part, not a link and not a `data:` URI.** Gmail and Outlook both drop `data:` images, and a remote image would need `MediaFile::temporarySignedUrl()`, which expires in 15 minutes — this email is opened months later, at a gate, possibly with no signal. A CID part travels with the message and renders offline. `test_the_qr_code_travels_as_an_inline_image_part` asserts the `<img src>` names the part that actually travelled and that no `src="data:` survives.
+- **Icons travel the same way, as pre-rendered PNGs in `resources/images/email/`.** No mail client renders SVG and an icon font is worse, so the ten Lucide glyphs the admin console already uses were rendered once through headless Chrome and split with GD. `MailPresentation::iconNames()` decides which ones a given message needs and `NotificationMail::icons()` loads only those; the view memoises each `embedData` call, so a glyph used twice (the ticket mark in the masthead and again beside the scan note) still travels once. `test_only_the_icons_the_layout_asks_for_travel_with_the_message` pins both halves — no duplicates, and no `pin.png` when no venue row rendered.
+- **`ProvidesMailPresentation` (Notification) is implemented by `Ticket` (Ticketing)**, so `MailDriver` never imports another module's models — the same dependency inversion as Ticketing's `ScannerFleetStatus` implemented by CheckIn. `MailPresentation` carries the headline, card, QR panel, fact rows, notes and CTA; every field is optional and the shell drops a section at a time, so a payment receipt with no presentation at all renders as a hero and a footer with nothing missing-looking in between (the hero rounds its own bottom corners when no card follows).
+- **Resolution happens at send time, and that closes a real race.** `TicketIssued` queues the email on the `notifications` lane and `GenerateTicketAssetsJob` on `tickets`; they run concurrently, so the stored QR PNG usually does not exist yet when the email drains. `TicketMailPresentation` prefers the stored image and otherwise re-renders from the ticket's signed payload — deterministically the same bytes, for a few ms of CPU. No delay, no QR-less ticket, no dependency on the asset job having won the race.
+- **The counterfoil is guarded separately from the card.** A ticket with no `qr_codes` row still shows its number — that is the reference a holder quotes when they ring about a code that never rendered — and the perforation only appears when there is something on the other side of it.
+- **No PDF attachment, deliberately.** A signed URL cannot be put in an email that outlives it, and attaching a PDF to every confirmation costs deliverability and mailbox quota for a document the QR in the body already replaces. The CTA links to `{FRONTEND_URL}/registrations/{ulid}` — the one public URL the SSLCommerz return legs already prove exists — built server-side, never from a request.
+- **This design is committed to light**, `color-scheme: light` and no `prefers-color-scheme` block, matching the public site's own decision that dark mode must not auto-trigger. It is also a correctness matter: a scanner reads a dark module on a light quiet zone, so a client that inverted the QR would hand the attendee a code that will not scan.
+- New settings the shell reads, all optional: `event.tagline` (footer), `event.venue_address` (under the venue row), and `event.support_email`/`event.support_phone` — **seeded empty on purpose**, because a "contact us at" line with nothing after it is worse than no line, so the help block is omitted until somebody fills them in. **This needs `php artisan db:seed --class=EventSettingSeeder`** to appear in an existing database.
+- `mail:test` gained `--ticket=<ticket_number>`: sends the real confirmation email, QR and all, to any address without pushing another registration through payment.
+- 10 tests in `tests/Feature/Notification/TicketEmailTest.php`, sent through the real mailer on the `array` transport rather than `Mail::fake()` — what matters is the MIME a provider would receive, and a faked mailer never builds one.
+
+**Knowingly not carried over from the reference:** the hero photograph (no event image exists here; the hero is a CSS gradient, and a supplied photo could be embedded the same way the QR is), the card's negative overlap and its die-cut notches (both need `position:absolute`, which Outlook ignores — hero and card butt together instead), "View this email in your browser" (nothing hosts one), the social row (no accounts configured), "Add to Calendar" (needs an `.ics` endpoint that does not exist), and the unsubscribe link (this is transactional mail with no preference centre).
+
+**Not verified:** delivery to a real inbox, and no email client has rendered it — Outlook's Word engine in particular will square the rounded corners and drop the two gradients to their solid `bgcolor` fallbacks, which is why every gradient has one. Rendering was checked by screenshotting the actual mailable output at 600px and inside a real 390px viewport. Note that headless Chrome on macOS clamps its window to ~532px, so a naive `--window-size=390` screenshot silently lays out wider than the shot and looks broken — render inside an iframe to test the breakpoint.
+
+#### Notifications are written in Bangla — 2026-08-21
+
+Every notification this system sends is now Bangla by default, end to end: the template row that is picked, the greeting inside it, and the chrome the email shell renders around it. Bilingual "English · বাংলা" labels are gone from the email — a message is written in one language, the one its reader reads.
+
+- **`config/notifications.php` is the single decision.** `locales.default` (`NOTIFICATION_LOCALE`, `bn`) picks both the `notification_templates` row and the `lang/{locale}/emails.php` file the shell renders from. Any channel may override it — and `sms` is the one worth thinking about before you do: GSM-7 fits 160 characters per segment and Unicode only 70, so Bangla SMS costs roughly two to three times the segments for the same message. `SmsSegmentCalculator` already counts that correctly; the config comment says so at the place someone would change it.
+- **A missing translation no longer silences a whole class of notification.** `QueueNotification` writes *no outbox row at all* when it cannot find a template, so one untranslated (key, channel) pair would have taken that notification off the air with nothing in the delivery log to show for it. It now falls back to `locales.fallback_locale` and — this is the load-bearing half — stores **the locale it actually rendered**, not the one it asked for, so a resend reproduces the message that was sent.
+- **The shell's own words live in `lang/{en,bn}/emails.php`**, never in the view or the presentation. `NotificationMail` calls `$this->locale($bodyLocale)`, so Laravel wraps the whole render in `withLocale` and every `__()` resolves correctly. `MailDriver` sets the locale around `mailPresentation()` too, because the presentation is assembled *before* the mailable renders — without that, a Bangla email arrives with English gate details in the card beside its Bangla body. `test_the_shell_speaks_the_notification_own_language` renders the same ticket both ways and asserts neither language leaks into the other.
+- **Bengali numerals are a second step, and a selective one.** Carbon's `bn` locale translates month names and meridiems but leaves digits Latin, so `App\Domain\Shared\Support\BanglaNumerals` finishes the job — applied to dates, times, admit counts and batch years, and **deliberately not** to the ticket number. An identifier is not a number: it is quoted down a phone, typed into the admin console and matched against a printed page, and `DEC100-CEN-২০০৫-০০০০১` is unusable for all three. Same reasoning the attendee-directory PDF already applies to phone numbers.
+- **The greeting uses the reader's Bangla name.** Every outbox writer now passes `full_name_bn` alongside `full_name` (via the new `Attendee::banglaName()`, which falls back to the Latin name — the public form has required a Bangla name since 2026-08-16, but admin- and import-created rows still do not), and the `bn` template bodies interpolate that one. Greeting somebody by an empty string is the failure that fallback exists to prevent, and there is a test for it. The ticket card's attendee and ticket-type rows resolve the same way, in whichever direction the locale points.
+- `APP_LOCALE` is untouched and stays `en` — the admin console, the API and its error envelopes are unchanged. Only notifications moved.
+- **The seeded English templates stay complete.** They are the fallback, and a half-populated `en` set would surface as a silently-dropped notification rather than as an obvious gap.
+- **No letter-spacing anywhere in the template.** Tracking is a Latin typographic device; Bengali carries its meaning in matras and conjunct clusters, and pushing the glyphs apart reads as broken shaping rather than as emphasis. The small caps labels were sized to be read *with* tracking, so removing it was paid for in size (10.5px → 11.5px, and the ticket-ID label 10px → 11px). `text-transform: uppercase` stays: it is inert in Bengali and preserves the intent if a channel is ever set back to English.
+- **The attendee's own Bangla name is used, not just the ticket's snapshot.** `tickets.holder_name_bn` did not exist until Phase 8, so 35 of 36 tickets in the dev database have none — `TicketMailPresentation::holderName()` now consults the attendee record before giving up and printing the Latin name. The snapshot still wins where it exists: it is what the printed ticket and the gate list say, and an email that disagrees with the paper in someone's hand is worse than one carrying a spelling since corrected. Both directions have a test.
+- 9 more tests (36 in `tests/Feature/Notification/`), covering the configured language, a per-channel override, the fallback path, the Bangla greeting and its Latin fallback, the attendee-name fallback, and snapshot precedence. Full suite **546 passing / 2 skipped**, Pint and PHPStan level 8 clean.
+
+**Worth knowing when reading a rendered email:** `event.venue_address` set to the same text as `event.venue` used to print the venue name twice, which reads as a rendering fault; the presentation now drops a note identical to its value. And where the Latin name still shows through an otherwise Bangla message, check the data before the code — the dev database has rows whose `full_name_bn` literally holds a Latin string (`full_name_bn = 'Mominul Islam'`), which no fallback chain can detect: a name field is free text, and refusing to print a name because it is not in the expected script would be worse than printing it.
+
+### ✅ SMS is real: REVE Systems — 2026-08-22
+
+The `sms` channel sends actual messages. A vendor was named — **REVE Systems** (`smpp.revesms.com`), the SMPP/HTTP gateway whose configuration sheet and two Postman collections the client supplied — which unblocked the one Phase 5 item that was engineering-ready and waiting on a name. WhatsApp is untouched and still blocked on Meta.
+
+**The gateway's whole surface, and what was built against each part:**
+
+| REVE endpoint | Here |
+|---|---|
+| `/sendtext` — one body, `toUser` comma-separated | `ReveSmsClient::sendText()`, behind `SmsDriver` |
+| `/send` — several caller/message groups at once | `ReveSmsClient::send()` |
+| `/getstatus`, `/getmultistatus` | `ReveSmsClient::status()` / `multiStatus()`, driving `sms:poll-dlr` |
+| `/submitstatus` (their DLR push shape) | `POST\|GET /webhooks/sms/dlr` |
+| `/api/v2/balance` | `php artisan sms:test --balance` |
+| `/mo/message` (inbound SMS) | **not built** — see Still open |
+
+**⚠️ The response format was inferred when this landed — that is now closed.** The supplied material specifies each *request* precisely and contains no saved response at all, so the parser was written to accept every plausible shape. It has since been verified against a live deployment and the real format documented; see [§Why no SMS was sending](#-why-no-sms-was-sending-and-the-real-reve-response-format--2026-08-22), which also records the two real defects that verification exposed. The wider tolerance is kept deliberately: the vendor runs many per-reseller deployments and only one has been observed.
+
+**Shipped:**
+
+- `App\Domain\Notification\Gateways\ReveSmsClient` — the only class that knows REVE's wire format. Host, transport (`post` JSON or `get` query) and auth style (keys in the body, or the `/sendtext/{apikey}/{secretkey}` path variant) are all config, because the vendor publishes six interchangeable hosts and the account decides which auth form is enabled. **POST is the default deliberately**: a GET puts the message body — a real person's name, their ticket number — into every proxy access log between here and Dhaka.
+- `App\Domain\Notification\Channels\SmsDriver`, resolved for `sms` in place of `FakeSmsDriver` once credentials exist. **The fallback is deliberate and visible**: a dev checkout and CI have no REVE account, and a resolver that threw would take the whole outbox down including the email half that works — but every row the fake writes carries `provider = fake_sms`, never `revesms`, so simulated delivery cannot be misread as real in the admin delivery log.
+- `App\Domain\Notification\Support\Msisdn` — the number format REVE addresses a handset by. This is **not** in `AttendeeIdentity`, which normalises for storage and explicitly refuses to guess that `01711…` means `+8801711…` because that guess is wrong for an overseas alumnus. Here the guess is necessary (a leading `0` is a national trunk prefix no gateway understands) and cheap to get wrong (one undelivered message, not a corrupted identity row). A number already written internationally passes through untouched, so `+44…` reaches the UK rather than being forced into Bangladesh's country code — `test_a_foreign_number_is_never_rewritten_as_bangladeshi` exists because widening the national-form branch to "anything 10–11 digits" would silently make `+44 7700 900123` into `88044…`.
+- **`ACCEPTD` is not `delivered`, and that distinction is the point of `ReveSmsDeliveryState`.** The wire values are SMPP v3.4 §5.2.28 `message_state` names, which a Bangladeshi carrier passes through end to end. `ACCEPTD` means the carrier took the message and nothing more — reporting it as delivered would claim a handset had a ticket that is still queued behind a switched-off phone. An **unrecognised** receipt stays `pending` rather than being guessed either way: a delivery that did not happen and a failure that did not happen are both worse than "nothing yet", and the raw value is kept on the event row for whoever adds the mapping.
+- **Two ways a receipt arrives, one place it is written.** `Notification\Actions\RecordDeliveryReceipt` is the only code that moves a notification `sent → delivered|bounced`, so the push callback and the poll cannot disagree. Whichever arrives first wins; the other records its timeline entry and performs no transition. It re-reads the row `lockForUpdate()` inside the transaction specifically because a push and a poll landing together would otherwise both see `sent`, both attempt the transition, and the loser would throw `InvalidStateTransitionException` out of a webhook.
+- **`sms:poll-dlr` is not a backstop, it is the primary path today.** Pointing REVE at `POST /webhooks/sms/dlr` is a setting on *their* account console — nothing in this repo can turn it on — so until somebody with that login makes the change, polling is the only way a delivery state is ever learned. Scheduled every five minutes, a no-op with no credentials. It asks only about messages older than `--min-age` (a receipt does not exist the instant a message is accepted) and younger than `--max-age` (a carrier silent for two days is not going to speak, and re-asking forever would grow the sweep without bound across the event).
+- **The DLR callback answers an unknown message id exactly as it answers a known one** — same 200, same body. A 404 would be an oracle for enumerating live message ids, and REVE would read any error as a failed callback and retry it indefinitely. It is refused outright (401) when no credentials are configured, rather than accepting an unauthenticated caller: an open endpoint that rewrites delivery state is worse than one switched off. The stored `raw_payload` has the credentials stripped — that column is rendered in the admin delivery timeline and lands in every database backup.
+- **Cost is computed locally, from the segment count.** REVE bills per segment against a prepaid balance and returns no price on a send, so `REVESMS_COST_PAISA_PER_SEGMENT` must match the contracted rate for the delivery-cost report to mean anything. It is reporting, not billing. Segments come from the existing `SmsSegmentCalculator`, so the Bangla-costs-2–3× rule `config/notifications.php` warns about is now being paid for real: a 80-character Bangla message bills as two segments where the same length in Latin bills as one.
+- **No `->retry()` on the HTTP client, deliberately.** A send is not idempotent at REVE — there is no client-supplied request id to deduplicate on — so a retried request the first attempt had already accepted delivers the message twice and bills for it twice. `SendNotificationJob` owns the retry schedule and retries against a row whose state records whether the last attempt landed.
+- `php artisan sms:test` — one real send (`--bangla` for a Unicode probe), `--status=<id>`, `--balance`. Writes no outbox row and ignores the kill switches: it checks the gateway, not the pipeline above it.
+- 51 tests (`ReveSmsClientTest` 16, `SmsDeliveryTest` 22, `MsisdnTest` 13). Every *request* shape is pinned against the vendor's own material; the response tests exercise all the shapes the parser accepts, which is the honest state of it until a live call narrows them.
+
+**Verified end to end against a real HTTP server**, not only `Http::fake()` — a local stand-in speaking REVE's documented request contract, so the config wiring, the transport and the command were exercised over a real socket: `sms:test "01711-223344"` reached it as `POST /sendtext` with `callerID=DEC100`, `toUser=8801711223344` (normalised from the dashed national form) and the message body; `--status` mapped `DELIVRD` to `delivered`; `--balance` parsed `1420.50`; `--bangla` billed at the Unicode rate; a wrong secret exited non-zero with the gateway's own reason; and `REVESMS_AUTH_STYLE=path REVESMS_METHOD=get` produced `GET /sendtext/{apikey}/{secretkey}` with both keys out of the query string.
+
+**Still open:**
+
+- **No live call to REVE itself.** No account credentials exist in this environment, so the inferred response shapes above are still inferred. This is the first thing to do when the account lands.
+- **MO (inbound SMS) is not built.** `/mo/message` in the vendor collection is how a reply or a keyword to a short code would reach us, but nothing in this system has anywhere to put one — no model, no screen, no consumer — so an endpoint for it would drop messages on the floor while looking like a feature. It needs a decision about what inbound SMS is *for* first.
+- **`REVESMS_DLR_IP_ALLOWLIST` is an intentional no-op until someone supplies REVE's real source ranges**, same as `SSLCOMMERZ_IPN_IP_ALLOWLIST` — a guessed range silently drops every real receipt, which is worse than leaving the key-pair check as the only gate.
+- **Nothing surfaces the prepaid balance in the admin console.** `sms:test --balance` is a console command; a balance that runs out mid-event stops every SMS with nothing on screen to say why. That wants a tile on the notifications dashboard and probably a low-balance alert.
+- **The bulk `/send` endpoint has no caller.** `SendNotificationJob` drains one outbox row at a time, so batching would mean one job owning several rows' state. It is built and tested because an operator-initiated broadcast is the obvious next thing to want, and it is materially cheaper per message at volume.
+
+### ✅ SMS credentials move to the Settings screen, and `is_encrypted` becomes real — 2026-08-22
+
+The REVE API key, secret key and sender ID are set from **Settings → SMS gateway** instead of `.env`, and the account's prepaid balance is shown beside them.
+
+**This required making `is_encrypted` do something.** It has been a column on `event_settings` since the table was created and **nothing implemented it** — no encryption on write, no decryption on read, and `EventSettingResource` returned `value` verbatim. So putting a credential there would have written it in plaintext to the database, every replica, every nightly `db:backup`, *and* the `GET /admin/settings` response. That is precisely what this file's Payments rule forbids ("never in an unencrypted `event_settings` row"). Three things now hold together, and the rule is satisfied rather than bent:
+
+1. **Encrypted at rest.** `castForStorage()` encrypts under `APP_KEY`; `decrypted()` reverses it. A blank value **clears** the row rather than storing an encrypted empty string — otherwise `hasValue()` would report a credential as configured and every send would fail.
+2. **Write-only across the API.** `EventSettingResource` sends `value: null`, `typed_value: null`, plus `is_secret`, `is_set` and `masked_value` — even in the response to the write that just set it. A secret cannot be read back by anyone, Super Admin included; it can only be replaced.
+3. **Redacted from the audit trail.** `SettingController::update()` was dumping `$setting->toArray()` — `value` and all — into `activity_logs.properties`. That table is append-only, has no redaction path and is read from the admin console, so a credential written there is there for good. It now records `[redacted]`/null: *who* changed the SMS secret key, when and from where is the whole point of the entry, and the value adds nothing to it but exposure.
+
+**Masking is deliberately all-or-nothing under 9 characters.** A real REVE secret key is 8 (`9e138d90`); showing its last four would cut what is left to guess from 16⁸ to 16⁴. A 16-character apikey shows `••••••••d338`, which is enough to tell one key from another. Both cases have a test naming the reason.
+
+**`SmsGatewayConfig` is the resolution order, and the database wins.** `event_settings` group `sms` first, then `config/services.php` (so `.env`). The point of a settings screen is changing a sender ID at 9pm without a deploy, so a stored value has to beat the deployed image — but **a blank setting is not an override**, it means "not configured here", so clearing a field falls back to `.env` rather than breaking a deployment that was set up that way. It is a container singleton with a per-instance memo (one query per request or job), flushed by the settings controller on write, so an edit applies to the very next send instead of after a cache TTL nobody can see. It reads nothing when `event_settings` does not exist yet, so a queue worker booting mid-deploy falls back to config instead of fataling.
+
+**`auth_style` and `method` are deliberately not on the screen.** They describe how the account was provisioned, not something an operator tunes, and a wrong value takes SMS off the air entirely. `SmsGatewayConfig::KEY_MAP` is the allowlist of what a setting may override.
+
+**Balance and recharge.** `GET /admin/notifications/sms-balance` (`notification.view_costs`) reports the live balance, an estimated segment count, the low-balance threshold and the portal URL. **There is no recharge API** — REVE exposes send, status and balance and nothing else — so the card's button is a link out to their billing portal and the balance is how the top-up becomes visible afterwards. An unreachable gateway answers **502, not a zero balance**: "we could not ask" and "the account is empty" lead an operator to opposite actions, and rendering them the same sends someone to top up a wallet that is already full. `estimated_segments` is an estimate from `sms.cost_paisa_per_segment`, a local figure REVE never returns — the description on that setting says so, because a wrong rate makes every cost figure in the system wrong.
+
+**New settings** (run `php artisan db:seed --class=EventSettingSeeder`): `sms.api_key`, `sms.secret_key` (both encrypted, seeded empty — a placeholder would look like a working config while failing every send), `sms.sender_id`, `sms.base_url`, `sms.client_id`, `sms.cost_paisa_per_segment`, `sms.low_balance_threshold_paisa`, `sms.recharge_url`. The seeder now fills metadata *before* the value, because `castForStorage()` branches on `is_encrypted` and the old order would have seeded a credential in plaintext.
+
+**Found by running it, not by a test:** `sms:test` printed `smpp.revesms.com:7790` and a blank sender ID while actually sending to the dashboard-configured host — it read `config()` directly instead of the resolver. The send was right and the header lied about it, which is the worse way round. Fixed.
+
+**Verified against the running app**: the four settings saved over HTTP came back with `value: null` and `masked_value` only; the database column held `eyJpdiI6…` ciphertext; the audit rows recorded `[redacted]`; the balance endpoint returned ৳1,420.50 and 3,945 segments at the configured 36 paisa; and both the balance call and a real send carried the **dashboard** key rather than the one in `config`. 15 tests in `tests/Feature/Admin/SmsGatewaySettingsTest.php`. Full suite **611 passing / 2 skipped**, Pint and PHPStan level 8 clean, SPA typecheck + build clean. OpenAPI regenerated — **115 paths** (was 114).
+
+**Still open:**
+
+- **Rotating `APP_KEY` now silently breaks these rows.** `decrypted()` returns null and logs rather than throwing — deliberately, so a key rotation does not take the whole settings screen down with a 500 and hide the page that explains what happened — but nothing re-encrypts them, and the row still reports itself as set. A key rotation needs the secrets re-entered. The same is true of `QR_SIGNING_PRIVATE_KEY`; neither has tooling.
+- No low-balance *alert*. The card warns when someone is looking at it; nothing notifies anyone who is not.
+- The balance is fetched on demand with a 60s stale time and no server-side cache, so several admins on the page each cost a round trip to Dhaka.
+
+### ✅ Why no SMS was sending, and the real REVE response format — 2026-08-22
+
+Two independent faults, and the response format is no longer guesswork.
+
+**Fault 1 — the gateway host is per-reseller, and ours was another operator's.** REVE licenses its platform to resellers who each run their own instance; **credentials are only valid on the instance that issued them.** Our account lives on `smpp.ajuratech.com`; every default in this repo pointed at `smpp.revesms.com`, taken from the vendor sheet. Verified live: the same real credentials answer
+
+- `smpp.revesms.com:7790` → **HTTP 200 with a completely empty body**
+- `smpp.ajuratech.com:7790` → a real, parseable response
+
+An empty 200 is the worst possible failure shape — it is not an auth error, so it read as a parser bug rather than a misconfiguration. `parseSendResponse()` now names the likely cause in as many words instead of reporting "the gateway said 200". The default, `.env.example` and the seeded setting all point at `smpp.ajuratech.com:7790`, and the config comment says plainly that this is per-account. **Note the bare origin is the billing portal, not the API** — `https://smpp.ajuratech.com/sendtext` answers 302 to a login page. The API is on `:7790` (TLS), `:7788` (cleartext), or the `api…` host with no port.
+
+**Fault 2 — no sender ID, so nothing was ever attempted.** All three of api key, secret key and sender ID are required; `sms.sender_id` was empty, so `isConfigured()` was false, the resolver handed back `FakeSmsDriver`, and no request was made at all. The old message for this named `REVESMS_*` env vars — actively misleading once the values live in Settings. `ReveSmsClient::missingCredentials()` now returns the missing ones *by their Settings label*, surfaced on the balance card ("still needed: SMS sender ID") and by both console commands. "Not configured" alone is the least useful thing this integration can say: three values are required and two are invisible once saved.
+
+**The response format, verified rather than inferred** (via `/getstatus` and a send to an unroutable number — the `SslCommerzClient`-shaped unknown this file flagged is now closed):
+
+```
+{"Status":"0","Text":"ACCEPTD","Message_ID":"353406678"}
+{"Status":"109","Text":"Invalid api key/secret key","Message_ID":""}
+{"Status":"114","Text":"REJECTD","Message_ID":"","Delivery Time":"0"}
+```
+
+Four things it does that the parser now survives, each seen for real:
+
+1. **`Status` is authoritative; `Text` is not — and this was a genuine bug.** A *request* rejection (bad keys `109`, unknown id `114`) comes back as `Text: REJECTD` — the same word an undeliverable message uses. `parseStatusResponse()` read `Text` first, so **an authentication failure during `sms:poll-dlr` would have settled every healthy message as `bounced`**, which is terminal and unrecoverable. Only a **numeric** `Status` is treated as a request code, because a deployment that puts the delivery word itself in that field (`status: DELIVRD`) is reporting a receipt, not an error.
+2. **No `Content-Type` header at all.** `Response::json()` decodes on body alone, so this works — but nothing may ever branch on content type here.
+3. **`Message_ID` is `""`, not absent**, on every error.
+4. **"No news" is not JSON.** `/getmultistatus` answers `[,,]` and `/getstatus` answers an empty body when there is no receipt yet. Neither is an error and neither is a verdict; both now decode to nothing rather than to a row carrying `[,,]` as a delivery state.
+
+**Two auth/transport variants from the collection that were missing**, both confirmed working live: `auth_style=basic` (HTTP Basic, username=apikey password=secretkey) and `method=form` (x-www-form-urlencoded — the fallback when something in front of the gateway will not forward a JSON body).
+
+**`/api/v2/balance` is not available on every deployment.** Ours answers `{"Status":"ERROR"}` for *any* credentials, valid or not. That is "this account cannot report a balance", which is not a balance of zero and must not render as one — hence `balance_available`, and a card that says so rather than showing ৳0.
+
+**Caught by a test, not by review:** the new `sms.base_url` description ran past `event_settings.description`'s VARCHAR(255) and would have broken `db:seed` on a fresh deployment. All 29 seeded descriptions were checked; nothing else is over.
+
+11 more tests in `ReveSmsClientTest` (25 in the file), each fixture a body copied from a real call. Full suite **621 passing / 2 skipped**, Pint and PHPStan level 8 clean, SPA typecheck clean.
+
+**Masking and non-masking, added the same day at the client's request.** The account sends **non-masking** (from a number) and wants masking (a branded sender name) available later, so `sms.masking_enabled` is a toggle, defaulting **off**.
+
+The load-bearing fact, confirmed live rather than assumed: **`callerID` is mandatory in both modes.** Omitting it or sending it empty answers `114 Inappropriate request parameter` and submits nothing — so the mode never decides *whether* a sender ID is needed, only what shape belongs in it:
+
+| | sender ID | recipient sees |
+|---|---|---|
+| masking off (default) | digits only, e.g. `8809612` — the vendor's own examples are numeric | a number |
+| masking on | operator-approved brand name, ≤ 11 chars (GSM 03.38) | the name |
+
+**The shape is validated at save time**, in `SmsSenderId::problemWith()`, because the gateway accepts either string and the mismatch fails later *at the carrier* — where there is no error message and nothing to look at. A brand name saved while masking is off is a 422 naming the toggle; a masking name over 11 characters is refused too, since the carrier drops it silently rather than the gateway refusing it. Flipping the toggle flushes the memo, so the very next save is judged against the new mode.
+
+`sms.masking_enabled` is deliberately **not** in `SmsGatewayConfig::KEY_MAP` — it is not a gateway credential and nothing is sent differently because of it. It is a `bool`, so it renders as the existing save-on-flip switch with no new UI primitive.
+
+**Still true, and it is the remaining step:** no message has been delivered to a handset yet. Put your account's numeric sender in Settings → SMS gateway → *SMS sender ID*, then `php artisan sms:test <number>`.
+
+### ✅ Attendee sign-in is real SMS, and dev mode is gone — 2026-08-22
+
+With SMS delivering for real, the attendee magic-link login was switched off dev mode — and doing that uncovered that **the login SMS had never worked at all**. Two bugs, both invisible for exactly as long as the shortcut existed.
+
+**The shortcut.** `POST /attendee/auth/request-link` returned `debug_token` — the plaintext sign-in token — whenever `app()->environment('local', 'testing')`, and the public site's `MagicLinkForm` rendered it as a "Dev mode — verify now" link. Anyone who could reach the endpoint could post a mobile number and get back a token that signs them in **as that attendee**. It was gated to `local`, so it was never live in production; it *was* live on a development machine that now holds real attendee records and real gateway credentials. It is removed outright rather than put behind a flag — a flag is a thing someone can switch on.
+
+**Bug 1 — the SMS had no body.** The controller wrote its outbox row with `Notification::create()` directly, passing `payload` and no `body_rendered`, and **there was no `attendee.login_link` template seeded at all**. `SmsDriver` casts a null body to `''`, so the message would have gone out empty.
+
+**Bug 2 — and nothing would have sent it anyway.** That hand-written row never dispatched `SendNotificationJob`. The row was created `queued` and nothing in the system drains a row it was not handed; it would have sat there forever.
+
+Neither showed up because every test read the token out of the HTTP response, so no test ever touched the delivery path. This is the docs/08 R12 failure mode again — a test that exercises the wrong code path — and it is the fourth occurrence recorded in this file.
+
+**Fixed by going through the outbox action** like every other notification. `executeForRecipient()` rather than `execute()`, and the reason is the dedupe key: `execute()` keys on (notifiable, template, channel), which is right for a one-per-event notification and would silently swallow somebody's **second** sign-in request as a duplicate. The token's hash is the dedupe suffix, so every request is its own message. Tests now recover the token from the rendered SMS body, which is what the recipient actually receives.
+
+**The link is built from `services.frontend.url` server-side**, never from the request — the same rule the payment return legs follow, and for the same reason: a client-supplied origin here mails an attendee a link that hands their session to someone else.
+
+**Where the reader was heading survives the round trip.** `next` used to reach `/verify` only through the dev-mode link, so removing that block would have quietly killed it. The SMS carries the token and nothing else — there is no room in a segment-billed message for a return path, and a URL that changed per visit would be a phishing tell — so `/login` remembers it in `sessionStorage` and `/verify` reads it back, falling through to `/dashboard` when the SMS is opened on another device. `safeNextPath()` moved into `features/attendee/nextPath.ts` and both paths share it: stored state is no more trustworthy than a query param, since another tab could have written it.
+
+**⚠️ Two things to set before a real attendee signs in:**
+
+1. **`FRONTEND_URL` is still `http://localhost:3000`.** The sign-in link is built from it, so every login SMS currently sends a localhost URL that is useless on a phone. This is the single highest-value thing to fix.
+2. **Bangla costs 3× per sign-in.** The link alone is ~70 characters, and one Bangla character forces the whole message to Unicode at 70 per segment. Measured against the seeded copy at the configured 36 paisa/segment:
+
+   | locale | chars | segments | per sign-in |
+   |---|---|---|---|
+   | `bn` (default) | 150 | 3 (Unicode) | ৳1.08 |
+   | `en` | 155 | 1 (GSM-7) | ৳0.36 |
+
+   Both rows are seeded and as short as the meaning allows. Set `notifications.locales.sms => 'en'` in `config/notifications.php` if the saving is worth more than the language — at 12,000 attendees it is a real bill, and it is a business decision rather than a technical one.
+
+**Still `local`-gated, deliberately left alone** — these were not what "dev mode" referred to, and neither is currently doing anything: the admin 2FA bypass in `Admin\AuthController` (no user has `two_factor_confirmed_at` set, so it is inert today) and CSP suppression in `SetSecurityHeaders` (Vite's HMR injects unnonced tags no strict policy survives). `APP_DEBUG` is also still `true`. Say so if you want any of them tightened.
+
+Full suite **630 passing / 2 skipped**, Pint and PHPStan level 8 clean, admin SPA typecheck clean; public site `tsc`, ESLint (0 errors, 7 pre-existing warnings) and `next build` clean. OpenAPI regenerated — still 115 paths, with `debug_token` gone from the documented response.
+
+### ✅ Attendee sign-in uses a password; SMS is once, or never — 2026-08-22
+
+Signing in used to send an SMS **every time**. It now sends one only when there is no other way in. A password is chosen during checkout, so an attendee who registers online never triggers a paid message at all.
+
+**The cost, which is the reason for the change.** Measured against the real 36 paisa/segment rate on the account:
+
+| | segments | per send |
+|---|---|---|
+| the old Bangla sign-in link | 3 (Unicode) | ৳1.08 |
+| the new English code | 1 (GSM-7) | ৳0.36 |
+
+At 12,000 attendees signing in twice, the old design billed roughly **৳26,000**. The new one bills for activations of people who never registered online, plus forgotten passwords — a small fraction of that, and it falls as adoption rises rather than growing with traffic.
+
+**SMS is English now** (`notifications.locales.sms => 'en'`), by explicit decision. It is a billing decision as much as a language one: GSM-7 fits 160 characters per segment and a *single* Bangla character drops the whole message to 70. Email and WhatsApp are untouched and stay Bangla.
+
+**A six-digit code replaced the link**, and it is both cheaper and friendlier. The reader stays in the tab they started in rather than following a link that opens whichever browser is default; the field carries `autocomplete="one-time-code"`, so a phone offers the code straight from the notification; and an OTP is the sign-in every Bangladeshi phone already understands. `/verify` is a `permanentRedirect` to `/login` rather than a deletion, so an old link lands somewhere that works.
+
+**Six digits is a million guesses, and the length is not what makes it safe.** `verify()` burns the code after **five** wrong attempts (`attendees.auth_code_attempts`), counted *before* the comparison so a near miss costs the same as a wild one. The route limiter sits at ten a minute rather than five, deliberately: the app's own ceiling should be what a mistyped digit hits, with a clear message, not a bare `429`. `verify()` also takes the **mobile** now — a six-digit code is not unique across attendees, and matching on it alone would let one person's code open whichever account happened to share it.
+
+**The load-bearing security rule: a password supplied at registration is applied only when the attendee has none.** `POST /public/registrations` is unauthenticated and resolves a *returning* registrant by mobile number, so a path that overwrote an existing password would be a complete account takeover — register with somebody else's number, choose a password, and their account is yours. A returning registrant keeps what they had and the submitted value is discarded in silence, because telling an anonymous caller that the number already has an account is the enumeration signal the rest of this flow is careful not to leak. `test_registering_again_cannot_overwrite_an_existing_password` pins it, and it was verified against the running app.
+
+**Two abuse surfaces closed, both of which cost real money:**
+
+- `request-code` had **no limiter of its own** — only the shared `api` bucket at 60/min, which let one IP spend roughly **৳2,000 an hour** of prepaid balance. It now has two buckets, because they stop different things: **3/hour per mobile** (burning one victim's balance and filling their inbox) and **20/hour per IP** (a script walking a list of numbers, which the per-mobile limit alone would happily allow). docs/06 §6.7 already required this — "throttled primarily to control SMS/email cost" — and it had never been implemented.
+- An unknown number costs nothing: `requestLink()` returns the generic response before writing anything, so a number range cannot be walked into a bill.
+
+**Sign-in answers identically for a wrong password and an unknown number** — same status, same body — and the bcrypt comparison **runs either way**, against a dummy hash when there is nothing real to compare with. Returning early for an unknown number would answer in microseconds where a real one costs a full verify, and that difference is measurable: account existence would be discoverable with a stopwatch despite the identical body.
+
+**`01711111111` signs in.** Nobody types `+880` into a login box on their own phone. `AttendeeIdentity::mobileLookupCandidates()` offers both forms to the query — and it is a *lookup* helper, deliberately separate from `normaliseMobile()`, which still refuses to canonicalise because it is the value a uniqueness constraint is built on and the guess is wrong for an overseas alumnus. Here being wrong costs one failed match rather than a corrupted row.
+
+- `attendees.password` is nullable, cast `hashed`, and outside `$fillable` — a credential must not be settable by mass assignment from any array that happens to carry the key. Nullable is the design: 22,000 existing rows have none and there is nothing truthful to backfill.
+- `POST /attendee/auth/password` sets the first one (no current password required — there is none) or changes an existing one (required, because a bearer token outlives the moment it was issued and a borrowed phone must not lock its owner out). It **revokes every other session** and spends any outstanding code, so a reset SMS from before the change stops working.
+- After a code sign-in the response carries `must_set_password`, and the public site asks straight away — that is the one moment somebody without a password is definitely present and definitely authenticated. Skipping is allowed; pressing it on someone who came to check their ticket is a good way to lose them.
+
+31 tests across `AttendeePasswordAuthTest` (18) and a rewritten `AttendeeAuthTest` (13). Full suite **649 passing / 2 skipped**, Pint and PHPStan level 8 clean; public site `tsc`, ESLint (0 errors) and `next build` clean. OpenAPI regenerated — **117 paths** (was 115).
+
+**Verified against the running app**: a registration carrying a password returned 201; signing in with `01799000111` (national form) returned a session and **wrote no notification row at all**; re-registering with the same number and a different password left the original working and the new one refused; and the fourth `request-code` in an hour answered 429.
+
+**Still open:** `FRONTEND_URL` is `http://localhost:3000`, which no longer breaks sign-in (the SMS carries no link) but still affects the ticket email's CTA. The admin 2FA bypass and CSP suppression remain `local`-gated and inert.
+
+### ✅ One SMS per ticket purchase, and templates are editable — 2026-08-22
+
+A ticket purchase used to fire **three** SMS — booking, payment, ticket. It now fires **one**, and the wording of every message is editable from the admin console.
+
+**Booking and payment no longer use the SMS channel.** `QueueRegistrationReceivedNotification`, `QueuePaymentSucceededNotification` and `QueueManualPaymentVerifiedNotification` are `['email', 'whatsapp']`. The ticket confirmation keeps SMS, because it is the message that says *you are in, and where to be*, and it now carries the event details the other two used to. `payment_failed` and `refund_issued` deliberately keep theirs: neither is part of a normal purchase, both need attention rather than a record, and an unopened email is no use for a payment that did not go through.
+
+At the seeded rate that is **৳1.08 → ৳0.36 per purchase**, or roughly **৳12,960 → ৳4,320** across 12,000 sales.
+
+**The new ticket SMS** (option D of four the client was shown, priced before anything was written):
+
+```
+Ticket confirmed - {{event_name}}
+ID: {{ticket_id}}
+{{event_date}}, {{event_time}}, {{venue}}
+QR ticket sent to your email. Keep it for entry.
+```
+
+144 of the 160 GSM-7 characters — one segment, with 16 to spare. Date, time and venue come from the ticket's own **session** rather than the event-wide setting, so an evening ticket does not print the morning's time.
+
+**The template the client first proposed did not work, and would have cost 5×.** Worth recording, because both failures are silent:
+
+1. **Its variables did not exist.** `interpolate()` replaces only the keys the dispatching listener passes and leaves anything else alone — so `{{customer_name}}` and `{{event_name}}` would have been **sent as literal text** to real ticket-holders. The listener now supplies all six (`customer_name`, `ticket_id`, `event_name`, `event_date`, `event_time`, `venue`) alongside the original four, which are kept exactly as they were because the email and WhatsApp templates interpolate them.
+2. **Emoji are not GSM-7 — and neither is a plain `|`.** Nor `{ } [ ] ~ ^ \ €`. Any one of them drops the whole message from 160 characters per segment to 70. The proposal measured 5 segments (৳21,600 across 12,000); the same words with the emoji and the pipe removed measured 2.
+
+**`event.name_en` / `event.venue_en` are new**, because `event.name` and `event.venue` hold Bangla and SMS is English — one Bangla character in an English SMS triples the segment count for the event's name alone. Seeded short (`NHS Centennial`, `School Campus`) precisely because the message has only 16 characters of headroom, and both descriptions say so.
+
+**A bug this uncovered: `{` and `}` are not GSM-7 either.** So measuring a *raw* template body reports Unicode for anything containing a placeholder — the seeded ticket confirmation measured **3 segments raw against 1 rendered**, a 3× over-count in the direction that makes an affordable message look unaffordable. `SmsSegmentCalculator::renderForEstimate()` substitutes placeholders before measuring and is shared by the seeder, the save path and the live preview, so those three can never disagree. The class docblock also claimed extension-table characters were "treated as GSM-7-safe" when the alphabet excludes them; the comment was wrong, not the code, and now says so.
+
+**Templates are editable** — `notification_templates` gained a `ulid` (an auto-increment id must not cross the API boundary), the resource now returns `body`, `variables` and `estimated_segments` (it previously returned neither the message nor its variables, which is why the screen could only ever list names), and three endpoints exist under `notification.manage_templates`:
+
+- `POST /admin/notifications/templates` — create. A duplicate (key, channel, locale, version) is a **422 naming the conflict** rather than the unique index being hit raw, which is a 500 with SQL in the log.
+- `PATCH /admin/notifications/templates/{ulid}` — edit wording, subject and active state. **Identity is create-only**: retargeting a template would silently change which notification it renders, so a different message is a different row.
+- `POST /admin/notifications/templates/preview` — encoding, segments and projected cost for a draft, before it is saved.
+
+`SaveNotificationTemplate` writes its own `ActivityLog` row (D8 discipline) recording the before/after body — unlike a credential, what the text used to say is exactly the point of the entry — and finally populates `estimated_segments`, a column that had existed unused since the table was created.
+
+**The editor shows the two things that are invisible while typing**, which is the whole reason it exists rather than being a plain text box: the **available variables** as clickable chips, with a warning naming any `{{placeholder}}` used that this template does not supply; and a **live cost readout** — characters, encoding, segments, cost each and cost across 12,000 — with an explicit warning listing the characters that force Unicode. The preview is debounced 350ms and measured server-side, so the number in the editor, the number in the list and the number that is billed all come from one implementation.
+
+11 tests in `NotificationTemplateAdminTest`, plus two rewritten outbox tests — `test_booking_notifies_by_email_and_whatsapp_but_never_by_sms` keeps an *active* SMS template present deliberately, to prove the channel list is what excludes it rather than a missing row. Full suite **660 passing / 2 skipped**, Pint and PHPStan level 8 clean, SPA typecheck and build clean.
+
+**Verified against the running app**: the templates endpoint returns the ticket SMS at 1 segment (en) and 2 (bn) with all ten variables; the preview endpoint priced the original proposal at 4 segments / ৳12,960 per 12,000 against template D's 1 segment / ৳3,240 at the account's current 27 paisa rate. Nothing was written to the database.
+
+**Needs `php artisan db:seed --class=EventSettingSeeder` and `--class=NotificationTemplateSeeder`** for the new settings and the new ticket copy.
+
 ### 💳 Payments — development environment
 
 Development runs against the **SSLCommerz sandbox** (<https://developer.sslcommerz.com/doc/v4/>). Credentials are self-service — no merchant onboarding — so the full money path is live in development. **`sslcommerz` is the public checkout's default gateway** (`services.payment.default_method`, `PAYMENT_DEFAULT_METHOD`); `bkash`/`nagad`/`rocket` still resolve to `FakeGateway` pending Phase 4B, so never make one of them the default.
@@ -528,7 +936,7 @@ Phase 4A shipped `SslCommerzClient` in full but explicitly never called a live s
 ### 🚨 External Dependencies (start during Phase 2!)
 - [ ] Payment gateway merchant applications (bKash, Nagad, Rocket, SSLCommerz) — **2-6 weeks lead time**. Blocks Phase 4B (live cutover) only; sandbox work is unblocked. Sequence SSLCommerz first.
 - [ ] WhatsApp Business template approval
-- [ ] SMS vendor contract and sender ID
+- [x] SMS vendor contract and sender ID — **REVE Systems** (smpp.revesms.com), integrated 2026-08-22. Still needs the account's real `REVESMS_API_KEY`/`REVESMS_SECRET_KEY`/`REVESMS_SENDER_ID` provisioned and one live send; see [§SMS is real](#-sms-is-real-reve-systems--2026-08-22).
 - [ ] Domain registration and email SPF/DKIM/DMARC setup
 - [ ] Hosting provider decision (added 2026-08-04, Phase 9) — docs/07 §7.3 specs sizing and topology, not a vendor. Blocks everything in Phase 9 past "publish a release image": production infrastructure, CDN/WAF, TLS, the live `deploy` step, on-call, event-day operations.
 
@@ -623,6 +1031,16 @@ php artisan db:seed --class=LoadTestSeeder       # bulk volume for performance w
 php artisan media:backfill-thumbnails
 ```
 
+**SMS** (REVE Systems — see CLAUDE.md's SMS section for what is and isn't verified):
+```bash
+php artisan sms:test 01711223344            # one real send; prints the raw gateway response
+php artisan sms:test 01711223344 --bangla   # Unicode probe — proves the 70-char segment rate end to end
+php artisan sms:test --status=1373104       # what the gateway says happened to one message
+php artisan sms:test --balance              # prepaid balance
+php artisan sms:poll-dlr                    # settle sent messages from delivery receipts; scheduled every 5m
+```
+Unset `REVESMS_API_KEY` and the `sms` channel stays on `FakeSmsDriver` — a checkout with no REVE account still drains its outbox.
+
 **Backup / restore** (Phase 9 — see CLAUDE.md's Phase 9 section for what this does and doesn't cover):
 ```bash
 php artisan db:backup                            # dump + checksum + row-count manifest, scheduled nightly
@@ -650,7 +1068,7 @@ Full design docs live in `docs/` (`01`–`08`, start at `docs/README.md`). Read 
 - **RBAC:** `spatie/laravel-permission` under the `web-admin` guard, catalogue seeded from the versioned `config/rbac.php` (never created ad hoc — this is what keeps staging/production provably in sync). Code must check **permissions** (`payment.verify_manual`), never role names. Staff (`users`) and attendees (`attendees`) are separate identity domains/guards — do not conflate them. Volunteer (`scanner` guard) access is additionally scoped server-side by enrolled device, assigned gate, and the check-in time window — see `docs/02-rbac-permissions.md` §2.4 for the full authorization flow (permission check **and** model policy must both pass).
 - **Routes** are split by audience under `routes/api/`: `public.php` (unauthenticated browse/register), `attendee.php` (attendee self-service, `auth:attendee`), `admin.php` (staff console, `auth:web-admin`), wired together in `routes/api/v1.php`; plus `routes/scanner.php` (volunteer devices) and `routes/webhooks.php` (payment gateway IPNs). `routes/api.php` just mounts `v1.php` under the `api/v1` prefix.
 - **Payments:** four gateways (bKash, Nagad, Rocket, SSLCommerz) behind one adapter contract (`createIntent`, `verify`, `refund`, `parseWebhook`) under `app/Domain/Payment/Gateways/`. A browser return-callback is **never** trusted to mark a payment succeeded — only a server-to-server verify call or a signature-validated IPN can do that. `payments` (the money intent) and `payment_transactions` (every gateway interaction, append-only) are deliberately separate tables — don't collapse them. ⚠️ Today **every** gateway name resolves to `FakeGateway` (`PaymentGatewayResolver::forMethod()`); `SslCommerzClient` is the Phase 4A deliverable — see the sandbox section above. `PaymentGatewayResolver` is the *only* place that may branch on gateway name; domain code never does.
-- **Notifications** go through a database outbox (`notifications`/`notification_events`) written in the same transaction as the triggering business event (via `Notification\Actions\QueueNotification`), then drained by `app/Jobs/SendNotificationJob` on the `notifications` Horizon lane via provider-agnostic channel drivers (`NotificationChannelResolver`). Don't call a notification provider directly from request-handling code — dispatch a domain event and add a `Notification\Listeners\Queue*Notification` instead, following the six existing examples. ⚠️ `email` is real (`MailDriver`); `sms`/`whatsapp` still resolve to `Fake*Driver` pending a vendor pick and Meta template approval (see Phase 5 above).
+- **Notifications** go through a database outbox (`notifications`/`notification_events`) written in the same transaction as the triggering business event (via `Notification\Actions\QueueNotification`), then drained by `app/Jobs/SendNotificationJob` on the `notifications` Horizon lane via provider-agnostic channel drivers (`NotificationChannelResolver`). Don't call a notification provider directly from request-handling code — dispatch a domain event and add a `Notification\Listeners\Queue*Notification` instead, following the six existing examples. `email` (`MailDriver`) and `sms` (`SmsDriver` over `ReveSmsClient`, REVE Systems) are both real; `sms` falls back to `FakeSmsDriver` when no credentials are configured, and says so in `notifications.provider`. Delivery receipts come back through `Notification\Actions\RecordDeliveryReceipt` — the only writer of `sent → delivered|bounced` — fed by either `POST /webhooks/sms/dlr` or the `sms:poll-dlr` sweep. ⚠️ `whatsapp` still resolves to `FakeWhatsAppDriver` pending Meta template approval (see Phase 5 above).
 
 Queue lanes (Horizon) are named by urgency — `payments` (<5s), `tickets` (<30s), `notifications` (<60s), `reports` (minutes) — keep jobs on the queue that matches their latency budget, since notification volume must never delay a payment webhook. `app/Jobs/SendNotificationJob` lives on the `notifications` lane (Phase 5); `app/Jobs/GenerateTicketAssetsJob` (Phase 6) is the first job on the `tickets` lane, rendering the QR PNG and PDF off the issuance transaction. `payments`/`reports` still have nothing dispatched to them. When you add one, put it on the lane matching its latency budget rather than the default.
 
@@ -680,7 +1098,7 @@ Vite + React 19 + TypeScript strict, TanStack Query for all server state, TanSta
 
 - **Feature-folder structure.** Each module is `features/<name>/` with `api.ts` (typed request functions), `types.ts` (response shapes), and `<Name>Page.tsx`. Shared primitives live in `components/` and `lib/`; don't add a second UI kit.
 - **All requests go through `lib/api.ts`.** It attaches the Sanctum bearer token, and a 401 anywhere clears the session via the registered handler. Never call `axios` directly from a feature, and never read the token from `localStorage` yourself.
-- **Errors normalise through `toApiError()`** into the API's `{ code, message, errors?, request_id }` envelope. Surface `errors` as field-level messages and `message` as the toast; a 403 should say which permission is missing.
+- **Errors normalise through `toApiError()`** into the API's `{ code, message, errors?, request_id }` envelope. Surface `errors` as field-level messages and `message` as the toast; a 403 should say which permission is missing. ⚠️ Most feature `api.ts` files still do `throw new Error(toApiError(e).message)`, which **discards `errors`** and makes that impossible — a 422 can then only ever appear as one vague banner. New write calls should `throw new ApiRequestError(e)` (`lib/api.ts`) instead, as `updateAttendee` does; it subclasses `Error`, so an existing `onError: (e: Error) => push(e.message)` keeps working. Render the field messages with `Field` (`components/ui.tsx`, which wires `aria-describedby` for you) and keep the toast a summary — the field says what is wrong, the toast says the save did not happen.
 - **Server-side pagination, sorting, and filtering only.** The attendee table targets 20,000+ rows — client-side sorting of a full table will not survive real data. Use `lib/pagination.ts` (`PaginatedResponse`, `unwrap`) and `lib/sorting.ts` (`useTableSorting`, `SortParams`). A sortable column's TanStack **id must equal the API's `sort` field name**, since that id is what gets sent, and it must be declared with `accessorKey` (or an `accessorFn`) — `getCanSort()` returns false without one, so an `id`-only column renders a sortable-looking header that silently does nothing. `DataTable` disables sorting entirely unless the page passes `onSortingChange`, for the same reason.
 - **Address resources by `ulid`, not `id`.** Some existing filters still pass numeric `ticket_type_id`, which leaks an internal primary key across the API boundary — don't extend that pattern; new filters take ULIDs.
 - **Navigation and actions render from the permission set returned at login**, never from role names — same rule as the backend. A user must not see a control they cannot use.

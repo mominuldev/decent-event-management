@@ -44,6 +44,7 @@ class TicketTypeController extends Controller
                                         new OAT\Property(property: 'base_price_paisa', type: 'integer', description: 'Amount in paisa (1 BDT = 100 paisa)'),
                                         new OAT\Property(property: 'additional_adult_price_paisa', type: 'integer', description: 'Amount in paisa'),
                                         new OAT\Property(property: 'additional_child_price_paisa', type: 'integer', description: 'Amount in paisa'),
+                                        new OAT\Property(property: 'current_student_price_paisa', type: 'integer', nullable: true, description: 'Amount in paisa, or null when this type has no student rate.'),
                                         new OAT\Property(property: 'currency', type: 'string'),
                                         new OAT\Property(property: 'base_admits', type: 'integer'),
                                         new OAT\Property(property: 'max_admits', type: 'integer'),
@@ -99,6 +100,7 @@ class TicketTypeController extends Controller
                         new OAT\Property(property: 'base_price_paisa', type: 'integer', description: 'Amount in paisa (1 BDT = 100 paisa)', required: ['base_price_paisa']),
                         new OAT\Property(property: 'additional_adult_price_paisa', type: 'integer', description: 'Amount in paisa', required: ['additional_adult_price_paisa']),
                         new OAT\Property(property: 'additional_child_price_paisa', type: 'integer', description: 'Amount in paisa', required: ['additional_child_price_paisa']),
+                        new OAT\Property(property: 'current_student_price_paisa', type: 'integer', nullable: true, description: 'Amount in paisa. What a current student pays for their own seat; null means they pay base_price_paisa.'),
                         new OAT\Property(property: 'currency', type: 'string', nullable: true, description: 'ISO 4217 currency code, e.g. BDT'),
                         new OAT\Property(property: 'base_admits', type: 'integer', required: ['base_admits']),
                         new OAT\Property(property: 'max_admits', type: 'integer', description: 'Must be >= base_admits', required: ['max_admits']),
@@ -188,6 +190,7 @@ class TicketTypeController extends Controller
                             new OAT\Property(property: 'base_price_paisa', type: 'integer', description: 'Amount in paisa (1 BDT = 100 paisa)'),
                             new OAT\Property(property: 'additional_adult_price_paisa', type: 'integer', description: 'Amount in paisa'),
                             new OAT\Property(property: 'additional_child_price_paisa', type: 'integer', description: 'Amount in paisa'),
+                            new OAT\Property(property: 'current_student_price_paisa', type: 'integer', nullable: true, description: 'Amount in paisa, or null when this type has no student rate.'),
                             new OAT\Property(property: 'currency', type: 'string'),
                             new OAT\Property(property: 'base_admits', type: 'integer'),
                             new OAT\Property(property: 'max_admits', type: 'integer'),
@@ -242,6 +245,7 @@ class TicketTypeController extends Controller
                         new OAT\Property(property: 'base_price_paisa', type: 'integer', description: 'Amount in paisa. Locked after sales start.'),
                         new OAT\Property(property: 'additional_adult_price_paisa', type: 'integer', description: 'Amount in paisa. Locked after sales start.'),
                         new OAT\Property(property: 'additional_child_price_paisa', type: 'integer', description: 'Amount in paisa. Locked after sales start.'),
+                        new OAT\Property(property: 'current_student_price_paisa', type: 'integer', nullable: true, description: 'Amount in paisa. Locked after sales start.'),
                         new OAT\Property(property: 'currency', type: 'string', nullable: true),
                         new OAT\Property(property: 'base_admits', type: 'integer'),
                         new OAT\Property(property: 'max_admits', type: 'integer', description: 'Must be >= base_admits'),
@@ -299,7 +303,7 @@ class TicketTypeController extends Controller
         $validated = $request->validated();
 
         if ($ticketType->quantity_sold > 0) {
-            $restrictedKeys = ['code', 'base_price_paisa', 'additional_adult_price_paisa', 'additional_child_price_paisa'];
+            $restrictedKeys = ['code', 'base_price_paisa', 'additional_adult_price_paisa', 'additional_child_price_paisa', 'current_student_price_paisa'];
             foreach ($restrictedKeys as $key) {
                 if (array_key_exists($key, $validated) && $validated[$key] !== $ticketType->{$key}) {
                     return response()->json([

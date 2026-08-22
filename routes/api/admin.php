@@ -47,6 +47,10 @@ Route::get('notifications/costs', [NotificationController::class, 'costs'])->nam
 Route::get('notifications/kill-switches', [NotificationController::class, 'killSwitches'])->name('notifications.kill-switches');
 Route::patch('notifications/kill-switches', [NotificationController::class, 'updateKillSwitch'])->name('notifications.kill-switches.update');
 Route::get('notifications/templates', [NotificationController::class, 'templates'])->name('notifications.templates');
+Route::post('notifications/templates', [NotificationController::class, 'storeTemplate'])->name('notifications.templates.store');
+Route::post('notifications/templates/preview', [NotificationController::class, 'previewTemplate'])->name('notifications.templates.preview');
+Route::patch('notifications/templates/{template:ulid}', [NotificationController::class, 'updateTemplate'])->name('notifications.templates.update');
+Route::get('notifications/sms-balance', [NotificationController::class, 'smsBalance'])->name('notifications.sms-balance');
 Route::apiResource('notifications', NotificationController::class)->only(['index', 'show']);
 Route::post('notifications/{notification:ulid}/resend', [NotificationController::class, 'resend'])->name('notifications.resend');
 

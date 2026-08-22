@@ -30,6 +30,13 @@ export const BLOCK_TYPES = [
     'home_hero', 'stat_bar', 'history_teaser', 'milestone_timeline',
     'guest_carousel', 'attraction_grid', 'testimonial_carousel',
     'pricing_teaser', 'cta_banner',
+    // History-page sections — see ContentBlock::TYPES. `cta_banner` above is
+    // shared between the two pages rather than duplicated.
+    'history_hero', 'founding_story', 'history_timeline',
+    'archive_gallery', 'numbers_bar', 'headmaster_message',
+    // Events-page sections — see ContentBlock::TYPES. `attraction_grid`,
+    // `guest_carousel` and `cta_banner` are shared with the homepage.
+    'event_hero', 'programme_glance', 'full_schedule', 'venue_directions',
 ] as const;
 
 export type BlockType = (typeof BLOCK_TYPES)[number];

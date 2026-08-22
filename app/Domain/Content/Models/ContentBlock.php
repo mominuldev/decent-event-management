@@ -51,6 +51,23 @@ class ContentBlock extends Model
         'testimonial_carousel',
         'pricing_teaser',
         'cta_banner',
+        // History-page sections, on the same principle as the homepage ones:
+        // each maps to exactly one bespoke section of the History design.
+        // `cta_banner` above is shared — the design binds identical copy to
+        // that symbol on both pages — so it is not repeated here.
+        'history_hero',
+        'founding_story',
+        'history_timeline',
+        'archive_gallery',
+        'numbers_bar',
+        'headmaster_message',
+        // Events-page sections. `attraction_grid`, `guest_carousel` and
+        // `cta_banner` above are shared with the homepage — the same design
+        // symbols — so they are not repeated here either.
+        'event_hero',
+        'programme_glance',
+        'full_schedule',
+        'venue_directions',
     ];
 
     protected $fillable = [

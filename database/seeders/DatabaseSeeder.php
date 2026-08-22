@@ -21,16 +21,18 @@ class DatabaseSeeder extends Seeder
             // Before ContentSeeder: that seeder's menu pass resolves menu
             // items to pages by slug, and `home` is created here.
             HomePageSeeder::class,
+            HistoryPageSeeder::class,
+            EventPageSeeder::class,
             ContentSeeder::class,
             NotificationTemplateSeeder::class,
             DummyDataSeeder::class,
         ]);
 
         $superAdmin = User::firstOrCreate(
-            ['email' => 'admin@decent100.example'],
+            ['email' => 'mominulfed@gmail.com'],
             [
                 'name' => 'Super Admin',
-                'phone' => '+8801700000000',
+                'phone' => '+8801711022299',
                 'password' => 'password',
                 'status' => 'active',
             ]

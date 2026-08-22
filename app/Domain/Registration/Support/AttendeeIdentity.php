@@ -46,4 +46,47 @@ final class AttendeeIdentity
 
         return $email === '' ? null : $email;
     }
+
+    /**
+     * Every stored form a typed-in mobile number might be sitting under,
+     * for a *lookup* — never for a write.
+     *
+     * {@see self::normaliseMobile()} deliberately does not canonicalise
+     * `01711…` into `+8801711…`, because that guess is wrong for an
+     * overseas alumnus and this is the value a uniqueness constraint is
+     * built on. Signing in is the opposite problem: nobody types `+880`
+     * into a login box on their own phone, and refusing them because of it
+     * is a support call. So the guess is made here, where being wrong
+     * costs one failed match rather than a corrupted row, and both forms
+     * are offered to the query.
+     *
+     * @return array<int, string>
+     */
+    public static function mobileLookupCandidates(?string $number): array
+    {
+        $normalised = self::normaliseMobile($number);
+
+        // Nothing dialable was typed. An empty candidate list makes the
+        // caller's `whereIn` match no rows, which is the right answer —
+        // where a `where('mobile', '')` would match any row that somehow
+        // stored a blank.
+        if ($normalised === '') {
+            return [];
+        }
+
+        $candidates = [$normalised];
+        $digits = ltrim($normalised, '+');
+
+        // 01XXXXXXXXX -> +8801XXXXXXXXX, and back the other way, so a
+        // number stored in either form is found from either form.
+        if (preg_match('/^01\d{9}$/', $digits) === 1) {
+            $candidates[] = '+880'.substr($digits, 1);
+            $candidates[] = '880'.substr($digits, 1);
+        } elseif (preg_match('/^8801\d{9}$/', $digits) === 1) {
+            $candidates[] = '+'.$digits;
+            $candidates[] = '0'.substr($digits, 3);
+        }
+
+        return array_values(array_unique($candidates));
+    }
 }

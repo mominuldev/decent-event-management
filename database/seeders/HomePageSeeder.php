@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use App\Domain\Content\Models\ContentBlock;
 use App\Domain\Content\Models\ContentPage;
+use Database\Seeders\Concerns\SeedsContentBlocks;
 use Illuminate\Database\Seeder;
 
 /**
@@ -28,19 +28,7 @@ use Illuminate\Database\Seeder;
  */
 class HomePageSeeder extends Seeder
 {
-    /**
-     * Marks a value as differing per language. Anything not wrapped in this —
-     * an image path, a link, an icon name, a tone key, an ASCII numeral the
-     * renderer localises itself — is written identically to `data` and
-     * `data_bn`, which is what keeps the two block payloads key-for-key and
-     * row-for-row aligned.
-     *
-     * @return array{en: string, bn: string}
-     */
-    private static function t(string $en, string $bn): array
-    {
-        return ['en' => $en, 'bn' => $bn];
-    }
+    use SeedsContentBlocks;
 
     public function run(): void
     {
@@ -52,8 +40,11 @@ class HomePageSeeder extends Seeder
                 'title_bn' => 'শতবর্ষ উদযাপন',
                 'excerpt' => 'One hundred years of the institution, celebrated by the people who made it.',
                 'excerpt_bn' => 'প্রতিষ্ঠানের একশ বছর, উদযাপন করছেন যাঁরা একে গড়ে তুলেছেন।',
-                'seo_title' => 'Centenary Celebration — Namosanker Bati High School',
-                'seo_title_bn' => 'শতবর্ষ উদযাপন — নামোশংকরবাটী উচ্চ বিদ্যালয়',
+                // Bare, no school name: the public site's root layout appends
+                // "— <school> শতবর্ষ" to every page title, so repeating it here
+                // renders the school twice in one <title>.
+                'seo_title' => 'Centenary Celebration',
+                'seo_title_bn' => 'শতবর্ষ উদযাপন',
                 'seo_description' => 'The one-room school that opened in 1927 turns one hundred in 2027. Every batch, every teacher, every family — one day, together.',
                 'seo_description_bn' => '১৯২৭ সালে শুরু হওয়া পাঠশালা ২০২৭ সালে পূর্ণ করছে একশ বছর। প্রতিটি ব্যাচ, প্রতিটি শিক্ষক, প্রতিটি পরিবার — একদিনের এই উৎসব।',
                 'status' => 'published',
@@ -63,75 +54,7 @@ class HomePageSeeder extends Seeder
             ]
         );
 
-        $blocks = $this->blocks();
-
-        foreach ($blocks as $position => $block) {
-            [$data, $dataBn] = $this->split($block['fields']);
-
-            ContentBlock::updateOrCreate(
-                ['content_page_id' => $page->id, 'position' => $position],
-                [
-                    'type' => $block['type'],
-                    'data' => $data,
-                    'data_bn' => $dataBn,
-                    'is_visible' => true,
-                ]
-            );
-        }
-
-        // A shorter homepage on a re-run must not leave orphaned sections
-        // rendering below the last one this seeder wrote.
-        ContentBlock::where('content_page_id', $page->id)
-            ->where('position', '>=', count($blocks))
-            ->delete();
-    }
-
-    /**
-     * Splits an authoring payload into the English and Bangla halves the
-     * `content_blocks.data` / `data_bn` pair stores. Repeater rows recurse, so
-     * a row's untranslatable keys land in both arrays at the same index.
-     *
-     * @param  array<string, mixed>  $fields
-     * @return array{0: array<string, mixed>, 1: array<string, mixed>}
-     */
-    private function split(array $fields): array
-    {
-        $en = [];
-        $bn = [];
-
-        foreach ($fields as $key => $value) {
-            if (is_string($value)) {
-                $en[$key] = $value;
-                $bn[$key] = $value;
-
-                continue;
-            }
-
-            if (is_array($value) && array_keys($value) === ['en', 'bn']) {
-                $en[$key] = $value['en'];
-                $bn[$key] = $value['bn'];
-
-                continue;
-            }
-
-            // A repeater: a list of rows, each split the same way.
-            if (is_array($value)) {
-                $enRows = [];
-                $bnRows = [];
-
-                foreach ($value as $row) {
-                    /** @var array<string, mixed> $row */
-                    [$rowEn, $rowBn] = $this->split($row);
-                    $enRows[] = $rowEn;
-                    $bnRows[] = $rowBn;
-                }
-
-                $en[$key] = $enRows;
-                $bn[$key] = $bnRows;
-            }
-        }
-
-        return [$en, $bn];
+        $this->syncBlocks($page, $this->blocks());
     }
 
     /**

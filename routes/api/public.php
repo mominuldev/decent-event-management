@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Public\AttendeeDirectoryController;
 use App\Http\Controllers\Api\Public\Content\FaqController;
 use App\Http\Controllers\Api\Public\Content\GalleryController;
 use App\Http\Controllers\Api\Public\Content\MenuController;
@@ -15,6 +16,16 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('event', [EventSettingController::class, 'show'])->name('event.show');
 Route::get('ticket-types', [TicketTypeController::class, 'index'])->name('ticket-types.index');
+
+// Public attendees directory. Only registrations that actually succeeded are
+// listed (PublicAttendeeDirectory::VISIBLE_STATUSES) — a pending registration
+// is anonymous and unpaid, so publishing one would put a name on the site for
+// free. Throttled because each call runs a LIKE search plus two aggregates for
+// an anonymous caller, and page size is capped in the controller so the whole
+// roster can never be pulled in one request.
+Route::get('attendees', [AttendeeDirectoryController::class, 'index'])
+    ->middleware('throttle:60,1')
+    ->name('attendees.index');
 
 Route::post('registrations', [RegistrationController::class, 'store'])
     ->middleware('idempotent:registration.create')

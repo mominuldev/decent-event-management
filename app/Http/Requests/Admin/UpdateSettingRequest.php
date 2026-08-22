@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Domain\Notification\Support\SmsGatewayConfig;
+use App\Domain\Notification\Support\SmsSenderId;
 use App\Domain\Shared\Models\EventSetting;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
@@ -24,6 +26,13 @@ class UpdateSettingRequest extends FormRequest
      */
     public function rules(): array
     {
+        // A secret is cleared by saving it empty, so `required` is wrong for
+        // it — `present` keeps the field mandatory while allowing the empty
+        // string that means "remove this credential".
+        if ($this->setting()?->isSecret()) {
+            return ['value' => ['present', 'nullable', 'string', 'max:500']];
+        }
+
         return [
             'value' => match ($this->setting()?->type) {
                 'int' => ['required', 'integer'],
@@ -39,6 +48,21 @@ class UpdateSettingRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            // A sender ID that does not match the account's mode is accepted
+            // by the gateway and then fails at the carrier, where it is far
+            // harder to diagnose. This is the last point where someone is
+            // looking at the field.
+            if ($this->setting()?->key === 'sms.sender_id') {
+                $problem = SmsSenderId::problemWith(
+                    (string) $this->input('value'),
+                    app(SmsGatewayConfig::class)->maskingEnabled(),
+                );
+
+                if ($problem !== null) {
+                    $validator->errors()->add('value', $problem);
+                }
+            }
+
             if ($this->setting()?->type !== 'json') {
                 return;
             }

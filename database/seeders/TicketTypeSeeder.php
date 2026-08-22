@@ -54,9 +54,22 @@ class TicketTypeSeeder extends Seeder
             //
             // The tiered columns carry the whole rule:
             //   registrant        → base_price_paisa          (৳2,500)
+            //   a current student → current_student_price     (৳500)
             //   each extra adult  → additional_adult_price    (৳2,000)
             //   each extra child  → additional_child_price    (৳2,000)
             //   child under 2     → free, still admitted
+            //
+            // The student rate applies to the student's own seat only —
+            // family they bring pays the standard extra rates, so the
+            // discount follows the student, not their whole party.
+            //
+            // ⚠️ ৳500 is carried over from the standalone STU ticket type
+            // above, which is the only current-student price this system has
+            // ever had. It is a starting value, not a client decision: set
+            // the real one in the admin console (Tickets → Centennial
+            // Ticket → Student price), or here before first seeding a
+            // production database. Note the price lock — once CEN has sold
+            // anything, PATCH refuses to change it.
             //
             // `allowed_participant_types` is the public form's own dropdown
             // — it builds the list from this column and CreateRegistration
@@ -65,7 +78,7 @@ class TicketTypeSeeder extends Seeder
             // deliberately absent: they have their own VIP/SPN types, which
             // are is_public=false and requires_approval=true, and must not
             // become self-serve at the centennial price.
-            ['code' => 'CEN', 'name' => 'Centennial Ticket', 'name_bn' => 'শতবর্ষ টিকিট', 'base_admits' => 1, 'max_admits' => 9, 'base_price_paisa' => 250000, 'additional_adult_price_paisa' => 200000, 'additional_child_price_paisa' => 200000, 'child_free_under_age' => 2, 'allowed_participant_types' => self::CENTENNIAL_AUDIENCE, 'quantity_total' => 12000, 'includes_tshirt' => true],
+            ['code' => 'CEN', 'name' => 'Centennial Ticket', 'name_bn' => 'শতবর্ষ টিকিট', 'base_admits' => 1, 'max_admits' => 9, 'base_price_paisa' => 250000, 'additional_adult_price_paisa' => 200000, 'additional_child_price_paisa' => 200000, 'current_student_price_paisa' => 50000, 'child_free_under_age' => 2, 'allowed_participant_types' => self::CENTENNIAL_AUDIENCE, 'quantity_total' => 12000, 'includes_tshirt' => true],
         ];
 
         foreach ($types as $i => $type) {

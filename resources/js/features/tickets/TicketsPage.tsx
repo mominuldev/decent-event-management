@@ -249,6 +249,7 @@ function emptyTicketTypeForm(): TicketTypePayload {
         base_price_paisa: 0,
         additional_adult_price_paisa: 0,
         additional_child_price_paisa: 0,
+        current_student_price_paisa: null,
         base_admits: 1,
         max_admits: 1,
         quantity_total: null,
@@ -271,6 +272,7 @@ function ticketTypeToForm(t: TicketType): TicketTypePayload {
         base_price_paisa: t.base_price_paisa,
         additional_adult_price_paisa: t.additional_adult_price_paisa,
         additional_child_price_paisa: t.additional_child_price_paisa,
+        current_student_price_paisa: t.current_student_price_paisa,
         base_admits: t.base_admits,
         max_admits: t.max_admits,
         quantity_total: t.quantity_total,
@@ -366,6 +368,29 @@ function TicketTypeFormDialog({ existing, onClose }: { existing: TicketType | nu
                             onChange={(e) => setForm({ ...form, additional_child_price_paisa: money2paisa(e.target.value) })}
                         />
                     </div>
+                </div>
+
+                <div>
+                    <Label htmlFor="tt_student_price">Current student price (BDT)</Label>
+                    <Input
+                        id="tt_student_price"
+                        type="number"
+                        min={0}
+                        disabled={locked}
+                        placeholder="No student rate"
+                        aria-describedby="tt_student_price_help"
+                        value={form.current_student_price_paisa === null || form.current_student_price_paisa === undefined ? '' : form.current_student_price_paisa / 100}
+                        onChange={(e) =>
+                            setForm({
+                                ...form,
+                                current_student_price_paisa: e.target.value === '' ? null : money2paisa(e.target.value),
+                            })
+                        }
+                    />
+                    <p id="tt_student_price_help" className="mt-1 text-[11.5px] text-text-faint">
+                        What a current student pays for their own seat. Family they bring is still charged the
+                        +Adult / +Child rates above. Leave blank for no student rate — 0 means a free student ticket.
+                    </p>
                 </div>
 
                 <div className="grid grid-cols-3 gap-3">
@@ -496,7 +521,14 @@ function TicketTypesTab() {
                                         <div className="font-medium text-text">{t.name}</div>
                                         <div className="text-[11.5px] text-text-faint">{t.code}</div>
                                     </td>
-                                    <td className="tnum px-3 py-2.5">{money(t.base_price_paisa)}</td>
+                                    <td className="tnum px-3 py-2.5">
+                                        <div>{money(t.base_price_paisa)}</div>
+                                        {t.current_student_price_paisa !== null && (
+                                            <div className="text-[11.5px] text-text-faint">
+                                                {money(t.current_student_price_paisa)} student
+                                            </div>
+                                        )}
+                                    </td>
                                     <td className="tnum px-3 py-2.5">{num(t.quantity_sold)} / {t.quantity_total ? num(t.quantity_total) : '∞'}</td>
                                     <td className="px-3 py-2.5">
                                         <Badge tone={t.is_active ? 'success' : 'neutral'}>{t.is_active ? 'Active' : 'Inactive'}</Badge>

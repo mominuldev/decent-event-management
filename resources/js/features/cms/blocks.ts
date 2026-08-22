@@ -445,6 +445,273 @@ export const BLOCK_SCHEMAS: Record<BlockType, BlockSchema> = {
             { key: 'secondary_url', label: 'Secondary button link', kind: 'url' },
         ],
     },
+
+    // ---------------------------------------------------------------------
+    // History-page sections. Same contract as the homepage ones above: every
+    // field is optional in practice, because the public site keeps the
+    // designed copy as its fallback and a cleared field degrades to it.
+    //
+    // `cta_banner` above closes the History page too — the design binds
+    // identical copy to that symbol on both pages, so it is one type, not two.
+    // ---------------------------------------------------------------------
+
+    history_hero: {
+        label: 'History hero',
+        description: 'The centered History banner: breadcrumb, year pill, two-tone title, subheading and intro.',
+        media: 'none',
+        fields: [
+            { key: 'breadcrumb', label: 'Breadcrumb label', kind: 'text', help: 'The trailing crumb after “Home ›”.' },
+            { key: 'year_pill', label: 'Year pill', kind: 'text', help: 'ASCII with an en-dash, e.g. “1927–2027” — the digits are localised for you. Blank uses the school’s founding-to-centenary range.' },
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_lead', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent word', kind: 'text', help: 'Drawn in gold with the swash underneath.' },
+            { key: 'subheading', label: 'Subheading', kind: 'text' },
+            { key: 'body', label: 'Intro paragraph', kind: 'textarea' },
+        ],
+    },
+
+    founding_story: {
+        label: 'Founding story',
+        description: 'Two mounted archive photos and the founding-date badge, beside the origin narrative and its chips.',
+        media: 'none',
+        fields: [
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'line1', label: 'Heading line 1', kind: 'text' },
+            { key: 'line2_pre', label: 'Heading line 2, before the accent', kind: 'text' },
+            { key: 'accent', label: 'Heading accent word', kind: 'text' },
+            { key: 'line2_post', label: 'Heading line 2, after the accent', kind: 'text' },
+            { key: 'body', label: 'Body', kind: 'textarea' },
+            { key: 'badge', label: 'Photo badge label', kind: 'text' },
+            { key: 'badge_year', label: 'Photo badge year', kind: 'text' },
+            { key: 'image_primary', label: 'Back photo', kind: 'url' },
+            { key: 'image_primary_alt', label: 'Back photo alt text', kind: 'text' },
+            { key: 'image_secondary', label: 'Front photo', kind: 'url' },
+            { key: 'image_secondary_alt', label: 'Front photo alt text', kind: 'text' },
+            {
+                key: 'chips',
+                label: 'Value chips',
+                kind: 'repeater',
+                itemLabel: 'chip',
+                help: 'Three fit the row before it wraps.',
+                item: [
+                    { key: 'label', label: 'Label', kind: 'text' },
+                    { key: 'icon', label: 'Icon', kind: 'text', placeholder: 'CalendarDays', translatable: false },
+                    { key: 'tone', label: 'Tone', kind: 'text', placeholder: 'gold', translatable: false },
+                ],
+            },
+        ],
+    },
+
+    history_timeline: {
+        label: 'Milestone timeline',
+        description: 'The vertical zig-zag rail of dated milestones. Not the homepage’s horizontal “Journey timeline” — this one alternates cards either side of a connector.',
+        media: 'none',
+        fields: [
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_dark', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+            {
+                key: 'milestones',
+                label: 'Milestones',
+                kind: 'repeater',
+                itemLabel: 'milestone',
+                help: 'These dates are the institutional record — change them against it, not to fit the layout. Four is what the rail is drawn for; the connector re-colours itself for any number.',
+                item: [
+                    { key: 'year', label: 'Year', kind: 'text', placeholder: '1927', translatable: false },
+                    { key: 'title', label: 'Title', kind: 'text' },
+                    { key: 'description', label: 'Description', kind: 'textarea' },
+                    { key: 'tone', label: 'Tone', kind: 'text', placeholder: 'gold', translatable: false },
+                ],
+            },
+        ],
+    },
+
+    archive_gallery: {
+        label: 'Archive gallery',
+        description: 'The tilted then-and-now photo strip with year pills.',
+        media: 'none',
+        fields: [
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_dark', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+            {
+                key: 'photos',
+                label: 'Photos',
+                kind: 'repeater',
+                itemLabel: 'photo',
+                help: 'Five slots — size, tilt and overlap are the design, so a sixth photo has nowhere to sit and is dropped.',
+                item: [
+                    { key: 'image', label: 'Photo', kind: 'image' },
+                    { key: 'year', label: 'Pill label', kind: 'text', placeholder: '1927' },
+                ],
+            },
+        ],
+    },
+
+    numbers_bar: {
+        label: 'By the numbers',
+        description: 'The divided stat card under a heading. The homepage’s “Stat bar” is the same card without one.',
+        media: 'none',
+        fields: [
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_dark', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+            {
+                key: 'stats',
+                label: 'Statistics',
+                kind: 'repeater',
+                itemLabel: 'statistic',
+                help: 'Four reads best — the card divides evenly at four across.',
+                item: [
+                    { key: 'value', label: 'Value', kind: 'text', placeholder: '100', translatable: false },
+                    { key: 'label', label: 'Label', kind: 'text', placeholder: 'বছরের পথচলা' },
+                    { key: 'icon', label: 'Icon', kind: 'text', placeholder: 'CalendarDays', translatable: false },
+                    { key: 'tone', label: 'Tone', kind: 'text', placeholder: 'gold', translatable: false },
+                ],
+            },
+        ],
+    },
+
+    headmaster_message: {
+        label: "Headmaster's message",
+        description: 'The portrait-and-quote card that closes the page before the CTA.',
+        media: 'none',
+        fields: [
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_dark', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+            { key: 'name', label: 'Name', kind: 'text' },
+            { key: 'title', label: 'Title', kind: 'text', help: 'The role under the name, e.g. “Headmaster”.' },
+            { key: 'quote', label: 'Message', kind: 'textarea' },
+            { key: 'portrait', label: 'Portrait', kind: 'url', help: 'Square or the circular crop will cut it off.' },
+        ],
+    },
+
+    // ---------------------------------------------------------------------
+    // Events-page sections. Same contract again: every field is optional in
+    // practice, because the public site keeps the designed copy as its
+    // fallback.
+    //
+    // The Attractions grid, Guests carousel and CTA banner on that page are
+    // the homepage's own types above — the design uses one symbol for each
+    // across both pages, so there is one block type for each, not two.
+    // ---------------------------------------------------------------------
+
+    event_hero: {
+        label: 'Event hero',
+        description: 'The Events banner: breadcrumb, year pill, two-tone title, intro and the date/venue/time fact cards.',
+        media: 'none',
+        fields: [
+            { key: 'breadcrumb', label: 'Breadcrumb label', kind: 'text', help: 'The trailing crumb after “Home ›”.' },
+            { key: 'year_pill', label: 'Year pill', kind: 'text', help: 'ASCII with an en-dash, e.g. “1927–2027” — the digits are localised for you.' },
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_lead', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent word', kind: 'text', help: 'Drawn in violet with the swash underneath.' },
+            { key: 'body', label: 'Intro paragraph', kind: 'textarea' },
+            {
+                key: 'facts',
+                label: 'Key facts',
+                kind: 'repeater',
+                itemLabel: 'fact',
+                help: 'Three fit the row as designed — date, venue, time.',
+                item: [
+                    { key: 'label', label: 'Label', kind: 'text', placeholder: 'Date' },
+                    { key: 'value', label: 'Value', kind: 'text', placeholder: '12 February 2027, Friday' },
+                    { key: 'icon', label: 'Icon', kind: 'text', placeholder: 'Calendar', translatable: false },
+                    { key: 'tone', label: 'Tone', kind: 'text', placeholder: 'violet', translatable: false },
+                ],
+            },
+        ],
+    },
+
+    programme_glance: {
+        label: 'Programme at a glance',
+        description: 'The horizontal icon-disc rail summarising the day. The same rail the homepage draws, under this page’s own heading.',
+        media: 'none',
+        fields: [
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text', help: 'The design leaves this blank here; fill it only if you want one.' },
+            { key: 'heading_dark', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+            {
+                key: 'stops',
+                label: 'Stops',
+                kind: 'repeater',
+                itemLabel: 'stop',
+                help: 'Keep these in step with the full schedule below — this rail is its summary, not a second programme.',
+                item: [
+                    { key: 'time', label: 'Time', kind: 'text', placeholder: '08:00 AM', translatable: false },
+                    { key: 'title', label: 'Title', kind: 'text' },
+                    { key: 'description', label: 'Description', kind: 'text' },
+                    { key: 'icon', label: 'Icon', kind: 'text', placeholder: 'ClipboardList', translatable: false },
+                    { key: 'tone', label: 'Tone', kind: 'text', placeholder: 'gold', translatable: false },
+                ],
+            },
+        ],
+    },
+
+    full_schedule: {
+        label: 'Full schedule',
+        description: 'The vertical, card-per-session programme with times, tracks, venues and speakers.',
+        media: 'none',
+        fields: [
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_dark', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+            {
+                key: 'event_date',
+                label: 'Event date',
+                kind: 'text',
+                help: 'YYYY-MM-DD, e.g. 2027-02-12. Sessions take this date unless a row overrides it; times are Bangladesh time.',
+            },
+            {
+                key: 'items',
+                label: 'Sessions',
+                kind: 'repeater',
+                itemLabel: 'session',
+                help: 'A session with no start time is skipped rather than drawn with an unreadable time. Sessions are sorted and grouped by day for you.',
+                item: [
+                    { key: 'start_time', label: 'Start time', kind: 'text', placeholder: '08:00', translatable: false },
+                    { key: 'end_time', label: 'End time', kind: 'text', placeholder: '09:30', translatable: false },
+                    { key: 'date', label: 'Date override', kind: 'text', placeholder: '2027-02-13', translatable: false },
+                    { key: 'title', label: 'Title', kind: 'text' },
+                    { key: 'description', label: 'Description', kind: 'textarea' },
+                    { key: 'track', label: 'Track', kind: 'text', placeholder: 'Registration' },
+                    { key: 'venue', label: 'Venue', kind: 'text', placeholder: 'Main Gate' },
+                    { key: 'tone', label: 'Tone', kind: 'text', placeholder: 'purple', translatable: false },
+                    { key: 'speaker_name', label: 'Speaker', kind: 'text' },
+                    { key: 'speaker_title', label: 'Speaker title', kind: 'text' },
+                    { key: 'speaker_photo', label: 'Speaker photo', kind: 'image' },
+                ],
+            },
+        ],
+    },
+
+    venue_directions: {
+        label: 'Venue & directions',
+        description: 'The venue card: map panel, address, arrival notes and the Google Maps link.',
+        media: 'none',
+        fields: [
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_dark', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+            { key: 'map_label', label: 'Map panel label', kind: 'text', help: 'The design ships a placeholder panel, not a live embed — this is what it says.' },
+            { key: 'venue_label', label: 'Venue eyebrow', kind: 'text' },
+            { key: 'venue_name', label: 'Venue name', kind: 'text' },
+            { key: 'venue_address', label: 'Address', kind: 'text' },
+            { key: 'maps_label', label: 'Maps link label', kind: 'text' },
+            { key: 'maps_url', label: 'Maps link', kind: 'url' },
+            {
+                key: 'notes',
+                label: 'Arrival notes',
+                kind: 'repeater',
+                itemLabel: 'note',
+                item: [
+                    { key: 'label', label: 'Label', kind: 'text', placeholder: 'Parking' },
+                    { key: 'body', label: 'Note', kind: 'text' },
+                ],
+            },
+        ],
+    },
 };
 
 /** A stat-row entry, the only structured (non-string) field value we store. */

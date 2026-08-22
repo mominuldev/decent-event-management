@@ -31,6 +31,10 @@ class UpdateTicketTypeRequest extends FormRequest
             'base_price_paisa' => ['sometimes', 'required', 'integer', 'min:0'],
             'additional_adult_price_paisa' => ['sometimes', 'required', 'integer', 'min:0'],
             'additional_child_price_paisa' => ['sometimes', 'required', 'integer', 'min:0'],
+            // Null means this type has no student rate and a current
+            // student pays `base_price_paisa` like everyone else. 0 is a
+            // real price (a free student ticket), not "unset".
+            'current_student_price_paisa' => ['nullable', 'integer', 'min:0'],
             'currency' => ['sometimes', 'string', 'size:3'],
             'base_admits' => ['sometimes', 'required', 'integer', 'min:1', 'max:20'],
             'max_admits' => ['sometimes', 'required', 'integer', 'min:1', 'max:20', 'gte:base_admits'],

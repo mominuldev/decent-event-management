@@ -1,7 +1,15 @@
-import { api, toApiError } from '@/lib/api';
+import { api, ApiRequestError, toApiError } from '@/lib/api';
 import type { PaginatedResponse } from '@/lib/pagination';
 import { unwrap } from '@/lib/pagination';
-import type { CostRow, KillSwitches, NotificationChannel, NotificationRecord, NotificationTemplateSummary } from './types';
+import type {
+    CostRow,
+    KillSwitches,
+    NotificationChannel,
+    NotificationRecord,
+    NotificationTemplateSummary,
+    SaveTemplateInput,
+    TemplatePreview,
+} from './types';
 
 export interface NotificationFilters {
     channel?: string;
@@ -66,4 +74,32 @@ export async function updateKillSwitch(channel: NotificationChannel, enabled: bo
 export async function fetchNotificationTemplates(key?: string): Promise<NotificationTemplateSummary[]> {
     const { data } = await api.get('/admin/notifications/templates', { params: { key: key || undefined } });
     return (data as { data: NotificationTemplateSummary[] }).data;
+}
+
+export async function saveNotificationTemplate(
+    ulid: string | null,
+    input: SaveTemplateInput,
+): Promise<NotificationTemplateSummary> {
+    try {
+        const { data } = ulid
+            ? await api.patch(`/admin/notifications/templates/${ulid}`, input)
+            : await api.post('/admin/notifications/templates', input);
+        return (data as { data: NotificationTemplateSummary }).data;
+    } catch (e) {
+        // ApiRequestError rather than a flattened message: a template save
+        // fails per field (a duplicate key, a body over the limit) and the
+        // editor needs to put each message beside its own control.
+        throw new ApiRequestError(e);
+    }
+}
+
+/**
+ * What a draft body would cost as an SMS, before it is saved. The server
+ * measures it rather than the browser so the number here, the number on
+ * the list, and the number that is actually billed all come from one
+ * implementation of the GSM-7 rules.
+ */
+export async function previewTemplate(body: string, recipients?: number): Promise<TemplatePreview> {
+    const { data } = await api.post('/admin/notifications/templates/preview', { body, recipients });
+    return data as TemplatePreview;
 }

@@ -43,10 +43,24 @@ Route::prefix('admin')->name('admin.')->middleware(['auth:web-admin', 'abilities
     Route::group([], base_path('routes/api/admin.php'));
 });
 
-// Attendee self-service — unauthenticated (magic link / OTP request + verify)
+// Attendee self-service — unauthenticated sign-in.
+//
+// `login` is the ordinary path and costs nothing. `request-code` sends an
+// SMS, so it carries its own strict limiter rather than the shared `api`
+// bucket: it is the only unauthenticated route in this application that
+// spends money on every call.
 Route::prefix('attendee')->name('attendee.')->group(function (): void {
-    Route::post('auth/request-link', [AttendeeAuthController::class, 'requestLink'])->name('auth.request-link');
-    Route::post('auth/verify', [AttendeeAuthController::class, 'verify'])->name('auth.verify');
+    Route::post('auth/login', [AttendeeAuthController::class, 'login'])
+        ->middleware('throttle:attendee-login')
+        ->name('auth.login');
+
+    Route::post('auth/request-code', [AttendeeAuthController::class, 'requestLink'])
+        ->middleware('throttle:sms-code')
+        ->name('auth.request-code');
+
+    Route::post('auth/verify', [AttendeeAuthController::class, 'verify'])
+        ->middleware('throttle:attendee-login')
+        ->name('auth.verify');
 });
 
 // Attendee self-service — authenticated

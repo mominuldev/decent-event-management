@@ -31,7 +31,6 @@ class RegistrationResource extends JsonResource
             'total_paisa' => $this->total_paisa,
             'currency' => $this->currency,
             'discount_code' => $this->discount_code,
-            'comments' => $this->comments,
             'special_notes' => $this->special_notes,
             'source' => $this->source,
             'submitted_at' => $this->submitted_at?->toISOString(),

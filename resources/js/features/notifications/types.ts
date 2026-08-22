@@ -34,14 +34,50 @@ export interface NotificationRecord {
 }
 
 export interface NotificationTemplateSummary {
+    /** Public identifier — the auto-increment id never crosses the API. */
+    ulid: string;
     key: string;
     channel: string;
     locale: string;
     version: number;
     subject: string | null;
+    /** The message itself. */
+    body: string;
+    /**
+     * The `{{placeholders}}` this template may use. Shown in the editor
+     * because a template written against a variable the dispatching code
+     * does not pass renders the `{{key}}` verbatim into a real message
+     * rather than failing — which is exactly how a broken template ships.
+     */
+    variables: string[];
+    /** SMS only; null for email and WhatsApp, which are not billed per segment. */
+    estimated_segments: number | null;
     whatsapp_template_name: string | null;
     whatsapp_template_status: string | null;
     is_active: boolean;
+    updated_at: string | null;
+}
+
+/** `POST /admin/notifications/templates/preview` — what a draft would cost. */
+export interface TemplatePreview {
+    rendered: string;
+    characters: number;
+    encoding: 'GSM-7' | 'Unicode';
+    characters_per_segment: number;
+    segments: number;
+    cost_paisa_each: number;
+    cost_paisa_total: number;
+    recipients: number;
+}
+
+export interface SaveTemplateInput {
+    key?: string;
+    channel?: string;
+    locale?: string;
+    subject?: string | null;
+    body: string;
+    is_active?: boolean;
+    variables?: string[];
 }
 
 export interface CostRow {

@@ -102,7 +102,6 @@ erDiagram
         bigint subtotal_paisa
         bigint discount_paisa
         bigint total_paisa
-        text comments
         text special_notes
         timestamp confirmed_at
         timestamp locked_at

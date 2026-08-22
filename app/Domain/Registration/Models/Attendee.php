@@ -55,6 +55,32 @@ class Attendee extends AuthUserBase
         'remember_token',
     ];
 
+    /**
+     * The name to address this attendee by in a Bangla message.
+     *
+     * The public form has required `full_name_bn` since 2026-08-16, but rows
+     * created before that — and by an admin or an import, which still accept
+     * neither as required — may not have it, and greeting somebody by an
+     * empty string is worse than greeting them in Latin script.
+     */
+    public function banglaName(): string
+    {
+        return (string) ($this->full_name_bn ?: $this->full_name);
+    }
+
+    /**
+     * Whether this attendee can sign in with a password.
+     *
+     * False is an ordinary state, not a broken one: every attendee created
+     * before 2026-08-22, and every one an admin adds or an import loads, has
+     * none. Those sign in with a one-time SMS code and set a password
+     * afterwards.
+     */
+    public function hasPassword(): bool
+    {
+        return $this->password !== null && $this->password !== '';
+    }
+
     protected function casts(): array
     {
         return [
@@ -63,6 +89,10 @@ class Attendee extends AuthUserBase
             'is_verified' => 'boolean',
             'verified_at' => 'datetime',
             'auth_token_expires_at' => 'datetime',
+            'password_set_at' => 'datetime',
+            // Hashes on assignment, so no write path can store a plaintext
+            // password by forgetting to call Hash::make().
+            'password' => 'hashed',
         ];
     }
 

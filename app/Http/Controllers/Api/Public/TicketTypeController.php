@@ -36,6 +36,7 @@ class TicketTypeController extends Controller
                                         new OAT\Property(property: 'base_price_paisa', type: 'integer', description: 'Price in paisa (1 BDT = 100 paisa)'),
                                         new OAT\Property(property: 'additional_adult_price_paisa', type: 'integer'),
                                         new OAT\Property(property: 'additional_child_price_paisa', type: 'integer'),
+                                        new OAT\Property(property: 'current_student_price_paisa', type: 'integer', nullable: true),
                                         new OAT\Property(property: 'currency', type: 'string'),
                                         new OAT\Property(property: 'base_admits', type: 'integer'),
                                         new OAT\Property(property: 'max_admits', type: 'integer'),

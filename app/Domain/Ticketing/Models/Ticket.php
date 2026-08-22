@@ -4,12 +4,15 @@ namespace App\Domain\Ticketing\Models;
 
 use App\Domain\CheckIn\Models\CheckIn;
 use App\Domain\CheckIn\Models\EventSession;
+use App\Domain\Notification\Mail\MailPresentation;
+use App\Domain\Notification\Mail\ProvidesMailPresentation;
 use App\Domain\Registration\Models\Attendee;
 use App\Domain\Registration\Models\Registration;
 use App\Domain\Shared\Models\MediaFile;
 use App\Domain\Shared\Models\User;
 use App\Domain\Shared\Support\HasStateMachine;
 use App\Domain\Shared\Support\HasUlid;
+use App\Domain\Ticketing\Services\TicketMailPresentation;
 use Database\Factories\TicketFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -22,7 +25,7 @@ use Illuminate\Support\Facades\DB;
  * An issued admission instrument. Immutable once created (ADR-09) —
  * corrections happen by void + reissue, never edit.
  */
-class Ticket extends Model
+class Ticket extends Model implements ProvidesMailPresentation
 {
     /** @use HasFactory<TicketFactory> */
     use HasFactory, HasStateMachine, HasUlid;
@@ -149,6 +152,20 @@ class Ticket extends Model
     public function checkIns(): HasMany
     {
         return $this->hasMany(CheckIn::class);
+    }
+
+    /**
+     * The QR plate and detail table this ticket's email is built around
+     * (docs/06 §6.5 — the code is the admission instrument, so it belongs
+     * in the message itself, not behind a link that expires).
+     *
+     * Resolution is delegated rather than inlined: the notification is
+     * drained by a worker, and the model should not be the thing that
+     * knows how to reach storage or render a symbol.
+     */
+    public function mailPresentation(): ?MailPresentation
+    {
+        return app(TicketMailPresentation::class)->for($this);
     }
 
     /**

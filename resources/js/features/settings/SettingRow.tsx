@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, Globe, Lock, Pencil, X } from 'lucide-react';
+import { Check, Globe, KeyRound, Lock, Pencil, X } from 'lucide-react';
 import { Badge, Button, Input, Switch, Textarea } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { cn } from '@/lib/cn';
@@ -17,6 +17,11 @@ function MetaLine({ setting }: { setting: EventSetting }) {
     return (
         <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-text-faint">
             <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[10.5px]">{setting.key}</code>
+            {setting.is_secret && (
+                <span className="inline-flex items-center gap-1" title="Stored encrypted; never sent back to the browser">
+                    <KeyRound size={11} /> Encrypted
+                </span>
+            )}
             {setting.is_public ? (
                 <span className="inline-flex items-center gap-1" title="Readable on the public website">
                     <Globe size={11} /> Public
@@ -71,8 +76,12 @@ export default function SettingRow({ setting, canEdit }: { setting: EventSetting
     });
 
     const isBool = setting.type === 'bool';
+    const isSecret = setting.is_secret;
     const isWide = WIDE_TYPES.has(setting.type);
-    const dirty = draft !== toDraft(setting);
+    // For a secret the editor always opens blank, so "unchanged" cannot mean
+    // "same as stored". Typing anything is a replace; leaving it blank is a
+    // clear, which is only offered when something is actually stored.
+    const dirty = isSecret ? draft.trim() !== '' || Boolean(setting.is_set) : draft !== toDraft(setting);
 
     function commit() {
         const message = validateDraft(setting, draft);
@@ -128,10 +137,14 @@ export default function SettingRow({ setting, canEdit }: { setting: EventSetting
                                 <Input
                                     ref={inputRef}
                                     type={
-                                        setting.type === 'datetime' ? 'datetime-local'
-                                            : setting.type === 'int' || setting.type === 'money' ? 'number'
-                                                : 'text'
+                                        isSecret ? 'password'
+                                            : setting.type === 'datetime' ? 'datetime-local'
+                                                : setting.type === 'int' || setting.type === 'money' ? 'number'
+                                                    : 'text'
                                     }
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    placeholder={isSecret ? (setting.is_set ? 'Enter a new key to replace it' : 'Paste the key from your REVE account') : undefined}
                                     value={draft}
                                     onChange={(e) => {
                                         setDraft(e.target.value);
@@ -147,8 +160,16 @@ export default function SettingRow({ setting, canEdit }: { setting: EventSetting
                                 />
                             )}
 
-                            {setting.type === 'money' && (
+                            {setting.type === 'money' && !isSecret && (
                                 <p className="text-[11.5px] text-text-faint">Amount in paisa — 100 paisa is ৳1.</p>
+                            )}
+
+                            {isSecret && (
+                                <p className="text-[11.5px] text-text-faint">
+                                    {setting.is_set
+                                        ? 'Saving replaces the stored key. Leave it blank and save to remove it entirely.'
+                                        : 'Stored encrypted. It cannot be read back afterwards — only replaced.'}
+                                </p>
                             )}
 
                             {error && <p className="text-[12px] text-critical-fg">{error}</p>}
@@ -167,15 +188,23 @@ export default function SettingRow({ setting, canEdit }: { setting: EventSetting
                             <span
                                 className={cn(
                                     'tnum min-w-0 break-words text-[13px]',
-                                    setting.typed_value === null || setting.typed_value === '' ? 'text-text-faint' : 'text-text',
+                                    isSecret
+                                        ? setting.is_set ? 'font-mono text-text' : 'text-text-faint'
+                                        : setting.typed_value === null || setting.typed_value === '' ? 'text-text-faint' : 'text-text',
                                 )}
-                                title={displayValue(setting)}
+                                title={isSecret ? undefined : displayValue(setting)}
                             >
                                 {displayValue(setting)}
                             </span>
                             {canEdit && (
-                                <Button variant="ghost" size="sm" onClick={() => setEditing(true)} aria-label={`Edit ${setting.label}`}>
-                                    <Pencil size={14} /> Edit
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setEditing(true)}
+                                    aria-label={`${isSecret ? (setting.is_set ? 'Replace' : 'Set') : 'Edit'} ${setting.label}`}
+                                >
+                                    {isSecret ? <KeyRound size={14} /> : <Pencil size={14} />}
+                                    {isSecret ? (setting.is_set ? 'Replace' : 'Set') : 'Edit'}
                                 </Button>
                             )}
                         </div>
