@@ -363,6 +363,38 @@ jobs:
 
           echo "Running artisan under $php_bin ($("$php_bin" -r 'echo PHP_VERSION;'))"
 
+          [ -f .env ] || {
+            echo "No .env on the host. The deploy never uploads one -- it holds the"
+            echo "credentials, and --delete would destroy the server's copy. Create it"
+            echo "by hand; docs/09-hostinger-deployment.md section 4 has the key set."
+            exit 1
+          }
+
+          # Spatie's permission migration flushes the permission cache at the end
+          # of its up(), so an unreachable cache store fails *after* five tables
+          # already exist. MySQL DDL is not transactional, so nothing rolls back
+          # and the next `migrate` trips over the tables it half-created. Check
+          # the store is reachable first and abort with the database untouched.
+          if grep -qE '^(CACHE_STORE|SESSION_DRIVER|QUEUE_CONNECTION)=redis' .env; then
+            redis_host=$(sed -n 's/^REDIS_HOST=//p' .env | head -1 | tr -d '"'"'"' ')
+            redis_port=$(sed -n 's/^REDIS_PORT=//p' .env | head -1 | tr -d '"'"'"' ')
+            redis_host=${redis_host:-127.0.0.1}
+            redis_port=${redis_port:-6379}
+
+            if ! "$php_bin" -r 'exit(@fsockopen($argv[1], (int) $argv[2], $e, $s, 3) ? 0 : 1);' \
+                 "$redis_host" "$redis_port"; then
+              echo "The .env asks for redis (CACHE_STORE / SESSION_DRIVER / QUEUE_CONNECTION)"
+              echo "but nothing is listening on $redis_host:$redis_port."
+              echo
+              echo "Shared hosting has no Redis. Set all three to 'database' -- the cache,"
+              echo "sessions and jobs tables are already in the migration set. See"
+              echo "docs/09-hostinger-deployment.md section 4."
+              echo
+              echo "Aborting before migrate, so the database is left untouched."
+              exit 1
+            fi
+          fi
+
           "$php_bin" artisan migrate --force
           "$php_bin" artisan storage:link || true
           "$php_bin" artisan config:cache
