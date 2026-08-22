@@ -457,8 +457,20 @@ jobs:
           if [ "$reset_database" = "true" ]; then
             echo "reset_database was requested: dropping every table and re-migrating."
             "$php_bin" artisan migrate:fresh --force
-          else
-            "$php_bin" artisan migrate --force
+          elif ! "$php_bin" artisan migrate --force; then
+            echo
+            echo "----------------------------------------------------------------"
+            echo "If that says \"table ... already exists\", an earlier migration run"
+            echo "created its tables and then threw before recording itself. MySQL"
+            echo "does not roll DDL back, so the tables are there with no migrations"
+            echo "row naming them, and every retry will fail here from now on."
+            echo
+            echo "Recover without a shell: Actions -> CI/CD -> Run workflow, tick"
+            echo "reset_database, Run. It drops every table and migrates cleanly, so"
+            echo "only do it while the database holds no real registrations, and"
+            echo "re-run the seeders afterwards (docs/09 section 6)."
+            echo "----------------------------------------------------------------"
+            exit 1
           fi
 
           "$php_bin" artisan storage:link || true
