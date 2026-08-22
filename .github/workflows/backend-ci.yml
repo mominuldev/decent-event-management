@@ -15,15 +15,51 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
 
+    # Tests need a real MySQL 8, not SQLite: migrations use utf8mb4_0900_ai_ci
+    # collation, VARBINARY IP columns and STORED generated columns SQLite
+    # cannot represent (phpunit.xml says the same). Redis is what
+    # CheckApplicationHealth and the Horizon config resolve to.
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+          MYSQL_DATABASE: decent_event_testing
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     steps:
       - uses: actions/checkout@v5
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
-          extensions: mbstring, xml, sqlite3, zip, gd, curl, bcmath
+          # composer.json requires ^8.3 and pins config.platform.php to 8.3.0.
+          php-version: '8.3'
+          # sodium is load-bearing — QrSigner signs every ticket with it.
+          extensions: mbstring, xml, zip, gd, curl, bcmath, intl, sodium, pdo_mysql, redis
+          tools: composer:v2
           coverage: none
+
+      - name: Cache composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
 
       - name: Install Composer dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
@@ -33,14 +69,60 @@ jobs:
           cp .env.example .env
           php artisan key:generate
 
+      # SecurityHeadersTest requests the SPA shell (`/login`) and asserts its
+      # inline script's nonce matches the CSP header. That shell renders
+      # `@vite(...)`, which throws without a build manifest — the whole
+      # response becomes an error page and the nonce assertion fails. The
+      # assets are gitignored, so CI has to build them; a developer's box
+      # passes only because a previous `npm run build` left them behind.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build SPA assets for the shell tests
+        run: |
+          npm ci
+          npm run build
+
+      # Ticket and directory PDFs render through headless Chrome
+      # (config/pdf.php), and the Bangla text-layer tests read the result back
+      # with pdftotext. Both are installed explicitly rather than relying on
+      # whatever the runner image happens to ship, so a runner image change
+      # shows up as a failed install rather than as tests quietly skipping
+      # themselves.
+      - name: Install Chromium and poppler-utils for PDF tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends chromium-browser poppler-utils \
+            || sudo apt-get install -y --no-install-recommends chromium poppler-utils
+
       - name: Lint (Pint)
         run: vendor/bin/pint --test
 
       - name: Static Analysis (Larastan)
-        run: vendor/bin/phpstan analyse --memory-limit=2G
+        run: vendor/bin/phpstan analyse --no-progress --memory-limit=2G
+
+      - name: Wait for MySQL
+        run: |
+          for i in $(seq 1 30); do
+            mysqladmin ping -h127.0.0.1 -P3306 -uroot --silent && break
+            sleep 1
+          done
+
+      - name: Run migrations
+        run: php artisan migrate --force
+        env:
+          DB_HOST: 127.0.0.1
+          DB_DATABASE: decent_event_testing
 
       - name: Run Tests
         run: php artisan test
+        env:
+          DB_HOST: 127.0.0.1
+          DB_DATABASE: decent_event_testing
+          REDIS_HOST: 127.0.0.1
 
       - name: Composer Audit
         run: composer audit
@@ -55,28 +137,20 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
           cache: npm
 
       - name: Install frontend dependencies
         run: npm ci
 
+      # package.json defines exactly three scripts: dev, build, typecheck.
+      # This repo has no ESLint config, no frontend test runner and no
+      # bundle-budget script — steps for those belong here once they exist.
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Lint
-        run: npm run lint
-
-      - name: Test
-        run: npm run test
-
       - name: Build
         run: npm run build
-
-      # The SPA once shipped as one 2,120 KB (533 KB gzipped) chunk because every screen was a
-      # static import in router.tsx. Vite's own warning was the only signal and it scrolled past.
-      - name: Check bundle budget
-        run: npm run check:bundle
 
   deploy:
     name: Deploy to Hostinger
@@ -87,10 +161,24 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, xml, zip, gd, curl, bcmath, intl, sodium, pdo_mysql, redis
+          tools: composer:v2
+          coverage: none
+
+      # Built here rather than on the shared host: the release has to carry a
+      # vendor/ tree, because the rsync below runs --delete and would
+      # otherwise wipe the server's.
+      - name: Install production Composer dependencies
+        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-progress
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
           cache: npm
 
       - name: Install frontend dependencies
@@ -139,6 +227,10 @@ jobs:
             -o ConnectTimeout=20 \
             "$SSH_USER@$SSH_HOST" "echo 'SSH Connection Successful'"
 
+      # --delete removes anything on the host the checkout does not carry, so
+      # every path that lives only on the server must be excluded explicitly:
+      # .env holds the credentials, storage/ holds uploaded media, generated
+      # ticket PDFs and the logs, and public/storage is the symlink into it.
       - name: Deploy Files
         env:
           SSH_HOST: ${{ secrets.HOSTINGER_SSH_HOST }}
@@ -157,4 +249,28 @@ jobs:
             --exclude="node_modules" \
             --exclude="tests" \
             --exclude=".env" \
+            --exclude="storage/" \
+            --exclude="public/storage" \
             ./ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH"
+
+      # Migrations run against the release that was just uploaded. Horizon is
+      # asked to finish the job in hand rather than killed, so a notification
+      # or a half-rendered ticket is not dropped mid-flight.
+      - name: Migrate and refresh caches
+        env:
+          SSH_HOST: ${{ secrets.HOSTINGER_SSH_HOST }}
+          SSH_USER: ${{ secrets.HOSTINGER_SSH_USER }}
+          SSH_PORT: ${{ secrets.HOSTINGER_SSH_PORT }}
+          DEPLOY_PATH: ${{ secrets.HOSTINGER_DEPLOY_PATH }}
+        run: |
+          SSH_PORT=${SSH_PORT:-65002}
+
+          ssh -i ~/.ssh/id_rsa -p "$SSH_PORT" -o StrictHostKeyChecking=no \
+            "$SSH_USER@$SSH_HOST" "set -e
+              cd '$DEPLOY_PATH'
+              php artisan migrate --force
+              php artisan storage:link || true
+              php artisan config:cache
+              php artisan route:cache
+              php artisan view:cache
+              php artisan horizon:terminate || true"
