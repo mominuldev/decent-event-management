@@ -19,8 +19,22 @@ return new class extends Migration
         // addressed by ULID — an auto-increment primary key is internal and
         // must not cross that boundary. Backfilled rather than generated on
         // write, so the rows the seeder already created are addressable too.
-        NotificationTemplate::query()->whereNull('ulid')->cursor()
-            ->each(fn (NotificationTemplate $t) => $t->newQuery()->whereKey($t->getKey())->update(['ulid' => (string) Str::ulid()]));
+        // Deliberately not `cursor()`. Under `migrate --pretend` the connection
+        // returns a plain array instead of a PDOStatement, so streaming it dies
+        // with "Call to a member function fetch() on array" — which fails the
+        // deploy pipeline's migration gate rather than the migration itself.
+        // `chunkById` degrades to a no-op there, and is the right paging here
+        // regardless: the filter column is the one being written, so an offset
+        // walk would skip a row at every boundary as the set shrank beneath it.
+        NotificationTemplate::query()
+            ->whereNull('ulid')
+            ->chunkById(100, function ($templates): void {
+                foreach ($templates as $template) {
+                    $template->newQuery()
+                        ->whereKey($template->getKey())
+                        ->update(['ulid' => (string) Str::ulid()]);
+                }
+            });
 
         Schema::table('notification_templates', function (Blueprint $table): void {
             $table->ulid('ulid')->nullable(false)->change();
