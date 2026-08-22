@@ -90,14 +90,26 @@ jobs:
       # a fresh database with no manual intervention, because that is
       # exactly what the deploy job's `migrate --force` does against a live
       # one before any traffic reaches the new image.
+      #
+      # CACHE_STORE=array because `create_permission_tables` ends with a
+      # real `app('cache')->…->forget()` call — Spatie flushing its
+      # permission cache — and `.env.example` points the cache at Redis.
+      # This job has no Redis service (it is a schema gate, not a runtime
+      # one), so the default store would refuse the connection and fail the
+      # migration. Note that `--pretend` does *not* save you here: pretend
+      # only intercepts schema statements, and that forget() is ordinary
+      # PHP that runs for real. backend-ci.yml's test job survives the same
+      # migration only because it happens to stand up Redis for the suite.
       - run: php artisan migrate --pretend
         env:
           DB_HOST: 127.0.0.1
           DB_DATABASE: decent_event_deploy_check
+          CACHE_STORE: array
       - run: php artisan migrate --force
         env:
           DB_HOST: 127.0.0.1
           DB_DATABASE: decent_event_deploy_check
+          CACHE_STORE: array
 
   build-and-push:
     name: Build & push image
