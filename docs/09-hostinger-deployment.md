@@ -160,6 +160,11 @@ APP_TIMEZONE=Asia/Dhaka
 # Shared hosting has no Redis. These three all default to redis in
 # .env.example; the cache/sessions/jobs tables already exist in the
 # migration set, so the database driver needs no extra work.
+#
+# The deploy repairs these three itself if it finds them set to redis
+# with nothing listening -- it backs the file up to .env.backup-<stamp>
+# first and prints what it changed. Setting them here is still better:
+# the repair only runs after a deploy has already reached the host.
 CACHE_STORE=database
 SESSION_DRIVER=database
 QUEUE_CONNECTION=database
@@ -255,6 +260,31 @@ the outbox:
 
 **Verify:** register a test attendee, then check `notifications.status` moves off `queued`
 within ~2 minutes, and that the ticket gets a `pdf_media_id`.
+
+---
+
+## 5a. Recovering a half-applied migration, without a shell
+
+A migration that throws partway leaves its tables behind — MySQL does not roll DDL back —
+and writes no `migrations` row recording them, so every retry dies on *"table
+`permissions` already exists"*. This is not hypothetical: the first deploy here hit it,
+because Spatie's permission migration creates five tables and only then flushes the
+permission cache, which failed against a Redis that was not there.
+
+Clearing it needs the tables dropped. If you have SSH:
+
+```bash
+cd ~/domains/100potal.nsbatihighschool.edu.bd/app
+<php-binary> artisan migrate:fresh --force
+```
+
+If you do not, the workflow can do it: **Actions → CI/CD → Run workflow**, tick
+**reset_database**, run. It is a `workflow_dispatch` input only, so a push can never
+trigger it.
+
+> **It drops every table.** Only ever use it on a deployment that has never carried real
+> registrations or payments — which is to say, during first-deploy setup and never again.
+> Afterwards you must re-run the seeders in §6.
 
 ---
 

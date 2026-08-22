@@ -5,6 +5,12 @@ on:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
+    inputs:
+      reset_database:
+        description: "DESTRUCTIVE: drop every table on the host and re-migrate. First-deploy recovery only — it deletes all data."
+        type: boolean
+        default: false
 
 # Superseded PR runs are worth cancelling; a run on main is not, because this
 # workflow deploys. Interrupting one between `rsync --delete` and
@@ -356,16 +362,18 @@ jobs:
         env:
           DEPLOY_PATH: ${{ secrets.HOSTINGER_DEPLOY_PATH }}
           PHP_BIN_OVERRIDE: ${{ vars.HOSTINGER_PHP_BIN }}
+          RESET_DATABASE: ${{ inputs.reset_database }}
         run: |
           set -e
 
           ssh -i ~/.ssh/id_rsa -p "$DEPLOY_SSH_PORT" -o StrictHostKeyChecking=no \
             "$DEPLOY_SSH_USER@$DEPLOY_SSH_HOST" \
-            bash -s -- "$DEPLOY_PATH" "$PHP_BIN_OVERRIDE" <<'REMOTE'
+            bash -s -- "$DEPLOY_PATH" "$PHP_BIN_OVERRIDE" "$RESET_DATABASE" <<'REMOTE'
           set -e
 
           deploy_path=$1
           php_override=$2
+          reset_database=$3
 
           [ -n "$deploy_path" ] || { echo "HOSTINGER_DEPLOY_PATH missing"; exit 1; }
           cd "$deploy_path"
@@ -415,19 +423,44 @@ jobs:
 
             if ! "$php_bin" -r 'exit(@fsockopen($argv[1], (int) $argv[2], $e, $s, 3) ? 0 : 1);' \
                  "$redis_host" "$redis_port"; then
-              echo "The .env asks for redis (CACHE_STORE / SESSION_DRIVER / QUEUE_CONNECTION)"
-              echo "but nothing is listening on $redis_host:$redis_port."
-              echo
-              echo "Shared hosting has no Redis. Set all three to 'database' -- the cache,"
-              echo "sessions and jobs tables are already in the migration set. See"
-              echo "docs/09-hostinger-deployment.md section 4."
-              echo
-              echo "Aborting before migrate, so the database is left untouched."
-              exit 1
+              echo "The .env asks for redis but nothing is listening on $redis_host:$redis_port,"
+              echo "so those drivers cannot work on this host. Rewriting them to 'database' --"
+              echo "the cache, sessions and jobs tables are already in the migration set."
+
+              backup=".env.backup-$(date +%Y%m%d%H%M%S)"
+              cp .env "$backup"
+
+              # Anchored to a whole value, so `REDIS_HOST=...` and a commented
+              # line are both left alone, and every duplicate of a key is
+              # rewritten rather than just the first -- a stale line further
+              # down the file is exactly how an edit appears not to have taken.
+              sed -i -E 's/^([[:space:]]*)(CACHE_STORE|SESSION_DRIVER|QUEUE_CONNECTION)=redis([[:space:]]*(#.*)?)$/\1\2=database\3/' .env
+
+              echo "Backed up the original to $(pwd)/$backup. Now:"
+              grep -nE '^[[:space:]]*(CACHE_STORE|SESSION_DRIVER|QUEUE_CONNECTION)=' .env
+
+              if grep -qE '^[[:space:]]*(CACHE_STORE|SESSION_DRIVER|QUEUE_CONNECTION)=redis([[:space:]]|#|$)' .env; then
+                echo "A redis driver survived the rewrite -- the line is shaped in a way this"
+                echo "does not match. Edit $(pwd)/.env by hand; docs/09 section 4 has the values."
+                exit 1
+              fi
             fi
           fi
 
-          "$php_bin" artisan migrate --force
+          # migrate:fresh only on an explicit manual dispatch with the box
+          # ticked — never on a push. It exists because a migration that fails
+          # partway leaves behind tables MySQL will not roll back (DDL is not
+          # transactional) and no migrations row recording them, so every retry
+          # dies on "table already exists" and the only way forward is dropping
+          # them. That needs a shell on the host, which whoever is reading a
+          # failed deploy may not have.
+          if [ "$reset_database" = "true" ]; then
+            echo "reset_database was requested: dropping every table and re-migrating."
+            "$php_bin" artisan migrate:fresh --force
+          else
+            "$php_bin" artisan migrate --force
+          fi
+
           "$php_bin" artisan storage:link || true
           "$php_bin" artisan config:cache
           "$php_bin" artisan route:cache
