@@ -187,6 +187,12 @@ jobs:
       - name: Build frontend assets
         run: npm run build
 
+      # Hostinger's panel presents SSH access as a whole command --
+      # `ssh -p 65002 u123456789@82.180.132.207` -- so that string, or a bare
+      # `user@host`, is what usually ends up in HOSTINGER_SSH_HOST. Handed
+      # straight to ssh-keyscan it looks up a host literally called "ssh" and
+      # fails with a name-resolution error that reads like a network fault.
+      # Normalise once here and export the parts every later step uses.
       - name: Setup SSH
         env:
           SSH_HOST: ${{ secrets.HOSTINGER_SSH_HOST }}
@@ -198,34 +204,81 @@ jobs:
 
           echo "Checking secrets..."
 
-          [ -n "$SSH_HOST" ] || (echo "HOSTINGER_SSH_HOST missing" && exit 1)
-          [ -n "$SSH_USER" ] || (echo "HOSTINGER_SSH_USER missing" && exit 1)
-          [ -n "$SSH_KEY" ] || (echo "HOSTINGER_SSH_KEY missing" && exit 1)
+          [ -n "$SSH_HOST" ] || { echo "HOSTINGER_SSH_HOST missing"; exit 1; }
+          [ -n "$SSH_KEY" ] || { echo "HOSTINGER_SSH_KEY missing"; exit 1; }
+
+          host=$(printf '%s' "$SSH_HOST" | tr -d '\r' | xargs)
+          user=$(printf '%s' "$SSH_USER" | tr -d '\r' | xargs)
+          port=$(printf '%s' "$SSH_PORT" | tr -d '\r' | xargs)
+
+          # `ssh [-p PORT] [user@]host` pasted whole: take the port if it
+          # carries one and no port secret was set, then the last word.
+          case "$host" in
+            ssh\ *|ssh://*)
+              echo "HOSTINGER_SSH_HOST looks like a connection command or URL; parsing it."
+              embedded_port=$(printf '%s' "$host" | sed -n 's/.*-p[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+              [ -n "$embedded_port" ] && [ -z "$port" ] && port="$embedded_port"
+              host=${host##* }
+              host=${host#ssh://}
+              ;;
+          esac
+
+          # `user@host` in the host secret: the user half wins only when
+          # HOSTINGER_SSH_USER was not set, so an explicit secret still rules.
+          case "$host" in
+            *@*)
+              [ -n "$user" ] || user=${host%@*}
+              host=${host#*@}
+              ;;
+          esac
+
+          # A trailing `:port` (the URL form), same precedence rule.
+          case "$host" in
+            *:[0-9]*)
+              [ -n "$port" ] || port=${host##*:}
+              host=${host%:*}
+              ;;
+          esac
+
+          host=${host%/}
+          port=${port:-65002}
+
+          [ -n "$user" ] || { echo "HOSTINGER_SSH_USER missing, and HOSTINGER_SSH_HOST carries no user@ to fall back on"; exit 1; }
+
+          # The parsed values are no longer byte-identical to the secrets, so
+          # nothing masks them any more. Register them before they can reach
+          # a log line.
+          echo "::add-mask::$host"
+          echo "::add-mask::$user"
+
+          if ! getent hosts "$host" >/dev/null 2>&1; then
+            echo "HOSTINGER_SSH_HOST does not resolve to an address."
+            echo "Set it to the hostname or IP alone -- for example 82.180.132.207 --"
+            echo "with the username in HOSTINGER_SSH_USER and the port in HOSTINGER_SSH_PORT."
+            exit 1
+          fi
 
           mkdir -p ~/.ssh
-
-          echo "$SSH_KEY" > ~/.ssh/id_rsa
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-          SSH_PORT=${SSH_PORT:-65002}
+          ssh-keyscan -p "$port" "$host" >> ~/.ssh/known_hosts 2>/dev/null
 
-          echo "Testing SSH connection..."
+          {
+            echo "DEPLOY_SSH_HOST=$host"
+            echo "DEPLOY_SSH_USER=$user"
+            echo "DEPLOY_SSH_PORT=$port"
+          } >> "$GITHUB_ENV"
 
-          ssh-keyscan -v -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
+          echo "SSH target resolved; port $port."
 
       - name: Verify SSH Login
-        env:
-          SSH_HOST: ${{ secrets.HOSTINGER_SSH_HOST }}
-          SSH_USER: ${{ secrets.HOSTINGER_SSH_USER }}
-          SSH_PORT: ${{ secrets.HOSTINGER_SSH_PORT }}
         run: |
-          SSH_PORT=${SSH_PORT:-65002}
-
           ssh -i ~/.ssh/id_rsa \
-            -p "$SSH_PORT" \
+            -p "$DEPLOY_SSH_PORT" \
             -o StrictHostKeyChecking=no \
             -o ConnectTimeout=20 \
-            "$SSH_USER@$SSH_HOST" "echo 'SSH Connection Successful'"
+            "$DEPLOY_SSH_USER@$DEPLOY_SSH_HOST" "echo 'SSH Connection Successful'"
 
       # --delete removes anything on the host the checkout does not carry, so
       # every path that lives only on the server must be excluded explicitly:
@@ -233,17 +286,14 @@ jobs:
       # ticket PDFs and the logs, and public/storage is the symlink into it.
       - name: Deploy Files
         env:
-          SSH_HOST: ${{ secrets.HOSTINGER_SSH_HOST }}
-          SSH_USER: ${{ secrets.HOSTINGER_SSH_USER }}
-          SSH_PORT: ${{ secrets.HOSTINGER_SSH_PORT }}
           DEPLOY_PATH: ${{ secrets.HOSTINGER_DEPLOY_PATH }}
         run: |
-          SSH_PORT=${SSH_PORT:-65002}
+          set -e
 
-          [ -n "$DEPLOY_PATH" ] || (echo "HOSTINGER_DEPLOY_PATH missing" && exit 1)
+          [ -n "$DEPLOY_PATH" ] || { echo "HOSTINGER_DEPLOY_PATH missing"; exit 1; }
 
           rsync -avz --delete \
-            -e "ssh -i ~/.ssh/id_rsa -p $SSH_PORT" \
+            -e "ssh -i ~/.ssh/id_rsa -p $DEPLOY_SSH_PORT" \
             --exclude=".git" \
             --exclude=".github" \
             --exclude="node_modules" \
@@ -251,22 +301,17 @@ jobs:
             --exclude=".env" \
             --exclude="storage/" \
             --exclude="public/storage" \
-            ./ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH"
+            ./ "$DEPLOY_SSH_USER@$DEPLOY_SSH_HOST:$DEPLOY_PATH"
 
       # Migrations run against the release that was just uploaded. Horizon is
       # asked to finish the job in hand rather than killed, so a notification
       # or a half-rendered ticket is not dropped mid-flight.
       - name: Migrate and refresh caches
         env:
-          SSH_HOST: ${{ secrets.HOSTINGER_SSH_HOST }}
-          SSH_USER: ${{ secrets.HOSTINGER_SSH_USER }}
-          SSH_PORT: ${{ secrets.HOSTINGER_SSH_PORT }}
           DEPLOY_PATH: ${{ secrets.HOSTINGER_DEPLOY_PATH }}
         run: |
-          SSH_PORT=${SSH_PORT:-65002}
-
-          ssh -i ~/.ssh/id_rsa -p "$SSH_PORT" -o StrictHostKeyChecking=no \
-            "$SSH_USER@$SSH_HOST" "set -e
+          ssh -i ~/.ssh/id_rsa -p "$DEPLOY_SSH_PORT" -o StrictHostKeyChecking=no \
+            "$DEPLOY_SSH_USER@$DEPLOY_SSH_HOST" "set -e
               cd '$DEPLOY_PATH'
               php artisan migrate --force
               php artisan storage:link || true
