@@ -287,7 +287,18 @@ jobs:
           printf '%s\n' "$SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-          ssh-keyscan -p "$port" "$host" >> ~/.ssh/known_hosts 2>/dev/null
+          # Best-effort, and never fatal. Every ssh and rsync below passes
+          # StrictHostKeyChecking=no, so a populated known_hosts is a nicety
+          # rather than a requirement -- and ssh-keyscan's exit status varies
+          # by OpenSSH build (it answers 0 for an unresolvable host on macOS
+          # and non-zero on some Linux builds), so letting `set -e` act on it
+          # turns a cosmetic step into a deploy that dies with no output at
+          # all. Its stderr is shown rather than discarded, for the same
+          # reason: a silent failure here cost a full debugging round trip.
+          if ! ssh-keyscan -p "$port" "$host" >> ~/.ssh/known_hosts; then
+            echo "ssh-keyscan could not fetch a host key; continuing, since"
+            echo "StrictHostKeyChecking is off for this deploy."
+          fi
 
           {
             echo "DEPLOY_SSH_HOST=$host"
@@ -318,7 +329,7 @@ jobs:
           [ -n "$DEPLOY_PATH" ] || { echo "HOSTINGER_DEPLOY_PATH missing"; exit 1; }
 
           rsync -avz --delete \
-            -e "ssh -i ~/.ssh/id_rsa -p $DEPLOY_SSH_PORT" \
+            -e "ssh -i ~/.ssh/id_rsa -p $DEPLOY_SSH_PORT -o StrictHostKeyChecking=no" \
             --exclude=".git" \
             --exclude=".github" \
             --exclude="node_modules" \
