@@ -6,9 +6,13 @@ on:
       - main
   pull_request:
 
+# Superseded PR runs are worth cancelling; a run on main is not, because this
+# workflow deploys. Interrupting one between `rsync --delete` and
+# `migrate --force` leaves the host serving new code against an old schema,
+# which is why deploy.yml sets cancel-in-progress: false for the same reason.
 concurrency:
   group: portal-event-management-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   test:
