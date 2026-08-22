@@ -1,0 +1,311 @@
+name: Deploy
+
+# Phase 9 (docs/08 §Phase 9). Structure follows `decentedu`'s deploy.yml —
+# same job shape, same variable and secret names, same "no-op rather than
+# fail when the host isn't configured" behaviour — so an operator who knows
+# one repo knows this one.
+#
+# It keeps the three gates the previous build-only workflow had, because
+# they catch things a deploy step cannot: the migration set must apply to a
+# fresh database, the image must boot, and the Chromium binary the PDF
+# renderer shells out to must exist. A base-image change that dropped
+# Chromium would pass every other check and surface as tickets failing to
+# render in production.
+#
+# Two deliberate departures from decentedu, both because this application
+# is shaped differently:
+#
+#   * **There is no `nginx` service.** nginx and php-fpm share one
+#     container here (see the Dockerfile's runtime stage), because
+#     `fastcgi_pass` hands PHP-FPM a filesystem path and the two processes
+#     must see identical files at identical paths. `up -d nginx` would fail
+#     on an unknown service.
+#   * **The image is pinned by writing the override file, not `sed`ing
+#     it.** `docker-compose.prod.yml` declares `build:` rather than
+#     `image:`, so there is no `image:` line to substitute — decentedu's
+#     `sed … || true` would match nothing, succeed, and deploy the previous
+#     image while reporting success. Writing the file is deterministic and
+#     cannot half-apply.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy
+        required: true
+        type: choice
+        options: [staging, production]
+        default: staging
+
+concurrency:
+  # Not cancel-in-progress: interrupting a deploy between `migrate --force`
+  # and the container swap leaves a database ahead of the code running
+  # against it.
+  group: deploy-${{ github.event.inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+jobs:
+  migrate-dry-run:
+    name: Migration set applies cleanly
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+          MYSQL_DATABASE: decent_event_deploy_check
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+          coverage: none
+      - name: Cache composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+      - run: composer install --no-interaction --prefer-dist
+      - run: cp .env.example .env
+      - run: php artisan key:generate
+      - name: Wait for MySQL
+        run: |
+          for i in $(seq 1 30); do
+            mysqladmin ping -h127.0.0.1 -P3306 -uroot --silent && break
+            sleep 1
+          done
+      # The real gate: every migration on this branch must apply cleanly to
+      # a fresh database with no manual intervention, because that is
+      # exactly what the deploy job's `migrate --force` does against a live
+      # one before any traffic reaches the new image.
+      - run: php artisan migrate --pretend
+        env:
+          DB_HOST: 127.0.0.1
+          DB_DATABASE: decent_event_deploy_check
+      - run: php artisan migrate --force
+        env:
+          DB_HOST: 127.0.0.1
+          DB_DATABASE: decent_event_deploy_check
+
+  build-and-push:
+    name: Build & push image
+    needs: migrate-dry-run
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set image tag
+        id: image
+        run: echo "image=ghcr.io/${{ github.repository }}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      # Built and loaded before it is pushed, so the two checks below run
+      # against the exact bytes that will be published rather than against
+      # a rebuild.
+      - name: Build image (not yet pushed)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: release-candidate:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Deliberately not a full DB/Redis smoke test: this proves the PHP
+      # extensions, vendor autoloading and entrypoint do not fail outright
+      # — the class of bug a missing `docker-php-ext-install` causes —
+      # without standing up and networking service containers, which is a
+      # second unverified surface.
+      - name: Boot-check the built image
+        run: docker run --rm --entrypoint php release-candidate:${{ github.sha }} artisan --version
+
+      # PDF rendering shells out to Chromium, so a base-image change that
+      # moved or dropped the binary would pass every check above and
+      # surface as tickets failing to render in production.
+      - name: Assert the PDF renderer's binary is present
+        run: docker run --rm --entrypoint /usr/bin/chromium release-candidate:${{ github.sha }} --version
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag and push
+        run: |
+          set -euo pipefail
+          IMAGE="ghcr.io/${{ github.repository }}"
+          docker tag release-candidate:${{ github.sha }} "${IMAGE}:${{ github.sha }}"
+          docker tag release-candidate:${{ github.sha }} "${IMAGE}:latest"
+          docker push "${IMAGE}:${{ github.sha }}"
+          docker push "${IMAGE}:latest"
+
+  # Auto-deploys every push to main. Requires the repo variable STAGING_HOST
+  # — the job is a deliberate no-op (not a failure) when that is not
+  # configured, so CI stays green until a host is picked. No hosting
+  # provider is named in docs/07 yet; see CLAUDE.md's External Dependencies.
+  deploy-staging:
+    name: Deploy to staging
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event_name == 'push' || github.event.inputs.environment == 'staging'
+    environment:
+      name: staging
+    steps:
+      - name: Check staging is configured
+        id: check
+        run: echo "configured=${{ vars.STAGING_HOST != '' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy over SSH
+        if: steps.check.outputs.configured == 'true'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ vars.STAGING_HOST }}
+          username: ${{ vars.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: IMAGE
+          script: |
+            set -euo pipefail
+            cd "${DEPLOY_PATH:-/srv/decent-event-management}"
+            export IMAGE=${{ needs.build-and-push.outputs.image }}
+            COMPOSE="docker compose -f docker-compose.prod.yml -f docker-compose.override.yml"
+
+            # Written rather than edited: docker-compose.prod.yml declares
+            # `build:`, not `image:`, so there is no line to substitute and
+            # a sed would silently no-op onto the previous release.
+            cat > docker-compose.override.yml <<EOF
+            services:
+              app:
+                image: ${IMAGE}
+              horizon:
+                image: ${IMAGE}
+              scheduler:
+                image: ${IMAGE}
+            EOF
+
+            $COMPOSE pull app horizon scheduler
+
+            # Migrations run before the swap and against the *old* running
+            # container, so a failure here aborts the deploy with the
+            # previous release still serving. Every migration in this repo
+            # is written to be safe against the release before it for
+            # exactly this window.
+            $COMPOSE exec -T app php artisan migrate --force
+
+            # No `nginx` service: it shares the app container.
+            $COMPOSE up -d --no-deps app horizon scheduler
+
+            $COMPOSE exec -T app php artisan config:cache
+            $COMPOSE exec -T app php artisan route:cache
+            $COMPOSE exec -T app php artisan view:cache
+
+            # Graceful: Horizon finishes the job in hand before exiting, and
+            # supervisord restarts it on the new image. Killing it outright
+            # would drop a notification or a half-rendered ticket.
+            $COMPOSE exec -T horizon php artisan horizon:terminate
+
+            # The deep health check (database, Redis, filesystem), not just
+            # "did the container start". A non-200 here fails the deploy
+            # loudly rather than leaving a broken release serving quietly.
+            for i in $(seq 1 15); do
+              code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/up || true)
+              [ "$code" = "200" ] && echo "health check OK" && exit 0
+              sleep 4
+            done
+            echo "health check never returned 200 — the new release is up but unhealthy" >&2
+            exit 1
+
+      - name: Skipped — no staging host configured
+        if: steps.check.outputs.configured != 'true'
+        run: echo "Set the STAGING_HOST repo variable plus DEPLOY_USER and the DEPLOY_SSH_KEY secret to enable this step."
+
+  # Production needs a manual dispatch AND the `production` GitHub
+  # Environment's required reviewers to approve — this job will not start
+  # until that approval is granted. Nothing that reaches real ticket-holders
+  # should be a side effect of a merge.
+  deploy-production:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event.inputs.environment == 'production'
+    environment:
+      name: production
+    steps:
+      - name: Check production is configured
+        id: check
+        run: echo "configured=${{ vars.PRODUCTION_HOST != '' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy over SSH
+        if: steps.check.outputs.configured == 'true'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ vars.PRODUCTION_HOST }}
+          username: ${{ vars.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: IMAGE
+          script: |
+            set -euo pipefail
+            cd "${DEPLOY_PATH:-/srv/decent-event-management}"
+            export IMAGE=${{ needs.build-and-push.outputs.image }}
+            COMPOSE="docker compose -f docker-compose.prod.yml -f docker-compose.override.yml"
+
+            # Take a dump first, and through prod.yml alone: the override
+            # file does not exist yet on a first deploy, and passing a
+            # missing -f is a hard error. `exec` finds the running container
+            # by project name either way. `db:backup` writes the gzip plus
+            # the row-count manifest `db:restore --verify` checks against,
+            # and this is the last moment before `migrate --force` touches a
+            # database holding real registrations and payments.
+            docker compose -f docker-compose.prod.yml exec -T app php artisan db:backup
+
+            cat > docker-compose.override.yml <<EOF
+            services:
+              app:
+                image: ${IMAGE}
+              horizon:
+                image: ${IMAGE}
+              scheduler:
+                image: ${IMAGE}
+            EOF
+
+            $COMPOSE pull app horizon scheduler
+            $COMPOSE exec -T app php artisan migrate --force
+            $COMPOSE up -d --no-deps app horizon scheduler
+            $COMPOSE exec -T app php artisan config:cache
+            $COMPOSE exec -T app php artisan route:cache
+            $COMPOSE exec -T app php artisan view:cache
+            $COMPOSE exec -T horizon php artisan horizon:terminate
+
+            for i in $(seq 1 15); do
+              code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/up || true)
+              [ "$code" = "200" ] && echo "health check OK" && exit 0
+              sleep 4
+            done
+            echo "health check never returned 200 — the new release is up but unhealthy" >&2
+            exit 1
+
+      - name: Skipped — no production host configured
+        if: steps.check.outputs.configured != 'true'
+        run: echo "Set the PRODUCTION_HOST repo variable plus DEPLOY_USER and the DEPLOY_SSH_KEY secret, and add required reviewers to the 'production' environment, to enable this step."
