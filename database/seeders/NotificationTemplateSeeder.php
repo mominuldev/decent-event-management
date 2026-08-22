@@ -8,7 +8,16 @@ use Illuminate\Database\Seeder;
 
 /**
  * Bilingual (EN/BN) draft copy for every (template_key, channel) pair in
- * the channel matrix (docs/01 §1.6). Which of the two a notification is
+ * the channel matrix (docs/01 §1.6).
+ *
+ * **Re-running this never overwrites wording somebody edited.** Templates
+ * are editable from the admin console, so `subject`, `body`, `is_active`
+ * and `whatsapp_template_status` are seeded only for a row that does not
+ * exist yet — the same admin-owns-the-value rule
+ * {@see EventSettingSeeder} follows. `variables` is the exception and is
+ * always refreshed: which placeholders exist is decided by the dispatching
+ * listener, and a stale list is worse than none because the editor shows
+ * it as the set that is safe to use. Which of the two a notification is
  * actually written in is `config/notifications.php`'s decision, not this
  * seeder's — Bangla by default. Both rows must stay complete: a missing
  * one falls back to the other locale mid-send, which is worse than a
@@ -31,28 +40,59 @@ class NotificationTemplateSeeder extends Seeder
 
             foreach ($definition['channels'] as $channel => $locales) {
                 foreach ($locales as $locale => $content) {
-                    NotificationTemplate::updateOrCreate(
-                        ['key' => $key, 'channel' => $channel, 'locale' => $locale, 'version' => 1],
-                        [
+                    $template = NotificationTemplate::firstOrNew([
+                        'key' => $key,
+                        'channel' => $channel,
+                        'locale' => $locale,
+                        'version' => 1,
+                    ]);
+
+                    // Which `{{placeholders}}` exist is decided by the
+                    // dispatching listener, not by whoever last edited the
+                    // wording, so it is code-owned and always refreshed —
+                    // and a stale list is actively harmful, because the
+                    // editor renders it as the set of variables that are
+                    // safe to use. `whatsapp_template_name` is derived from
+                    // the key for the same reason.
+                    $template->fill([
+                        'variables' => $definition['variables'],
+                        'whatsapp_template_name' => $channel === 'whatsapp' ? $key : null,
+                    ]);
+
+                    // The wording is admin-owned. Since templates became
+                    // editable from the admin console (2026-08-22) this
+                    // seeder runs on deployments where somebody has already
+                    // rewritten a message, and `updateOrCreate` would have
+                    // silently reverted it — the same trap
+                    // `EventSettingSeeder` avoids, and the reason a deploy
+                    // must never run this blind.
+                    //
+                    // `is_active` and `whatsapp_template_status` go with it:
+                    // both record a decision somebody made (a message turned
+                    // off, a Meta approval that landed), not a fact about
+                    // this code.
+                    if (! $template->exists) {
+                        $template->fill([
                             'subject' => $content['subject'] ?? null,
                             'body' => $content['body'],
-                            // Measured the same way the admin editor
-                            // measures it, so a seeded template and an
-                            // edited one never disagree about what a send
-                            // costs. Rendered first: `{` and `}` are not
-                            // GSM-7, so a raw body with placeholders
-                            // over-counts by up to 3x.
-                            'estimated_segments' => $channel === 'sms'
-                                ? SmsSegmentCalculator::segmentCount(
-                                    SmsSegmentCalculator::renderForEstimate($content['body']),
-                                )
-                                : null,
-                            'whatsapp_template_name' => $channel === 'whatsapp' ? $key : null,
-                            'whatsapp_template_status' => $channel === 'whatsapp' ? 'pending_approval' : null,
-                            'variables' => $definition['variables'],
                             'is_active' => true,
-                        ],
-                    );
+                            'whatsapp_template_status' => $channel === 'whatsapp' ? 'pending_approval' : null,
+                        ]);
+                    }
+
+                    // Measured from the body this row actually holds, not
+                    // from the seeded one — otherwise an edited template
+                    // would report the cost of the copy it replaced. Same
+                    // helper the admin editor uses, so the two can never
+                    // disagree; rendered first, because `{` and `}` are not
+                    // GSM-7 and a raw body over-counts by up to 3x.
+                    $template->estimated_segments = $channel === 'sms'
+                        ? max(0, SmsSegmentCalculator::segmentCount(
+                            SmsSegmentCalculator::renderForEstimate((string) $template->body),
+                        ))
+                        : null;
+
+                    $template->save();
                 }
             }
         }

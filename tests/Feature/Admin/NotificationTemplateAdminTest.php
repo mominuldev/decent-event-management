@@ -206,4 +206,82 @@ class NotificationTemplateAdminTest extends TestCase
         $this->assertContains('event_name', $ticketSms['variables']);
         $this->assertSame(1, $ticketSms['estimated_segments']);
     }
+
+    // --- Re-seeding must not undo an edit ---------------------------------
+
+    public function test_reseeding_does_not_overwrite_wording_edited_in_the_dashboard(): void
+    {
+        $this->seed(NotificationTemplateSeeder::class);
+
+        $template = NotificationTemplate::query()
+            ->where('key', 'ticket_delivered')->where('channel', 'sms')->where('locale', 'en')->sole();
+
+        $this->as()->patchJson("/api/v1/admin/notifications/templates/{$template->ulid}", [
+            'body' => 'Our own wording, chosen deliberately.',
+            'is_active' => false,
+        ])->assertOk();
+
+        // The deploy pipeline, a fresh checkout, anyone running db:seed.
+        // Before this fix `updateOrCreate` reverted the lot in silence.
+        $this->seed(NotificationTemplateSeeder::class);
+
+        $template->refresh();
+        $this->assertSame('Our own wording, chosen deliberately.', $template->body);
+        $this->assertFalse($template->is_active);
+    }
+
+    public function test_reseeding_refreshes_the_variable_list_even_on_an_edited_template(): void
+    {
+        $this->seed(NotificationTemplateSeeder::class);
+
+        $template = NotificationTemplate::query()
+            ->where('key', 'ticket_delivered')->where('channel', 'sms')->where('locale', 'en')->sole();
+
+        $template->forceFill(['variables' => ['stale_only']])->save();
+
+        $this->seed(NotificationTemplateSeeder::class);
+
+        // Deliberately *not* admin-owned: which placeholders exist is
+        // decided by the dispatching listener, and the editor renders this
+        // list as the set that is safe to use. A stale one sends
+        // `{{whatever}}` to a real person as literal text.
+        $this->assertContains('event_name', $template->refresh()->variables);
+        $this->assertNotContains('stale_only', $template->variables);
+    }
+
+    public function test_reseeding_recomputes_the_cost_from_the_edited_body(): void
+    {
+        $this->seed(NotificationTemplateSeeder::class);
+
+        $template = NotificationTemplate::query()
+            ->where('key', 'ticket_delivered')->where('channel', 'sms')->where('locale', 'en')->sole();
+
+        $this->assertSame(1, $template->estimated_segments);
+
+        $this->as()->patchJson("/api/v1/admin/notifications/templates/{$template->ulid}", [
+            'body' => str_repeat('a', 200),
+        ])->assertOk();
+
+        $this->seed(NotificationTemplateSeeder::class);
+
+        // Measured from the body the row actually holds, not the seeded
+        // one — otherwise an edited template would report the cost of the
+        // copy it replaced.
+        $this->assertSame(2, $template->refresh()->estimated_segments);
+    }
+
+    public function test_a_missing_template_is_still_created_by_a_reseed(): void
+    {
+        $this->seed(NotificationTemplateSeeder::class);
+        $before = NotificationTemplate::query()->count();
+
+        NotificationTemplate::query()
+            ->where('key', 'ticket_delivered')->where('channel', 'sms')->where('locale', 'en')->delete();
+
+        // Protecting edits must not turn the seeder into a no-op — a new
+        // template added in code still has to arrive.
+        $this->seed(NotificationTemplateSeeder::class);
+
+        $this->assertSame($before, NotificationTemplate::query()->count());
+    }
 }
