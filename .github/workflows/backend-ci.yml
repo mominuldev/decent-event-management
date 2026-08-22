@@ -187,7 +187,12 @@ jobs:
     name: Deploy to Hostinger
     runs-on: ubuntu-latest
     needs: [test, frontend]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # workflow_dispatch as well as push, or the reset_database input has no
+    # job to reach: a manual run would pass its tests and skip the deploy.
+    # Still main-only, so a dispatch from a branch cannot deploy it.
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
 
     steps:
       - uses: actions/checkout@v5
