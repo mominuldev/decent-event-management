@@ -23,11 +23,20 @@ use Throwable;
  * needs to throw, never to construct a response itself.
  *
  * Checks every dependency the app cannot serve a single request without:
- * the primary database, Redis (both the cache store and the Horizon queue
- * connection resolve here per `config/cache.php`/`config/queue.php`), and
- * the default filesystem disk (private media, generated tickets/QR images).
- * All three run even if the first one fails, so a single `/up` hit reports
- * every broken dependency at once instead of one per retry.
+ * the primary database, the default filesystem disk (private media,
+ * generated tickets/QR images), and Redis — but Redis only when this
+ * deployment actually resolves something to it. Every check runs even if
+ * an earlier one fails, so a single `/up` hit reports every broken
+ * dependency at once instead of one per retry.
+ *
+ * The Redis check is conditional because a deployment that stores its
+ * cache, sessions and queue in MySQL never opens a Redis connection, and
+ * probing one anyway reports `down` on a host that is serving every
+ * request perfectly well. A health check that is permanently red is worse
+ * than no health check: it trains whoever is on call to ignore it, and it
+ * will be ignored on the morning it finally means something. `driversInUse()`
+ * reads the same config the framework resolves at runtime, so the probe
+ * follows the deployment rather than an assumption about it.
  */
 class CheckApplicationHealth
 {
@@ -35,13 +44,42 @@ class CheckApplicationHealth
     {
         $failures = array_filter([
             'database' => $this->check($this->checkDatabase(...)),
-            'redis' => $this->check($this->checkRedis(...)),
+            'redis' => $this->usesRedis() ? $this->check($this->checkRedis(...)) : null,
             'storage' => $this->check($this->checkStorage(...)),
         ]);
 
         if ($failures !== []) {
             throw new RuntimeException('Health check failed: '.implode('; ', $failures));
         }
+    }
+
+    /**
+     * Whether anything this deployment serves a request through resolves to
+     * Redis — the active cache store, the default queue connection, or the
+     * session driver.
+     *
+     * Horizon is deliberately not consulted. `config/horizon.php` names the
+     * redis connection on all four supervisors unconditionally, so reading it
+     * would make the check unskippable on every deployment, which is the
+     * behaviour this replaces. Horizon only has work to do when the queue
+     * connection is redis, and that is already covered here.
+     */
+    private function usesRedis(): bool
+    {
+        $drivers = [
+            $this->configString('cache.stores.'.$this->configString('cache.default').'.driver'),
+            $this->configString('queue.connections.'.$this->configString('queue.default').'.driver'),
+            $this->configString('session.driver'),
+        ];
+
+        return in_array('redis', $drivers, true);
+    }
+
+    private function configString(string $key): string
+    {
+        $value = config($key);
+
+        return is_string($value) ? $value : '';
     }
 
     private function check(callable $probe): ?string

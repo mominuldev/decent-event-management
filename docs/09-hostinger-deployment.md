@@ -250,10 +250,11 @@ extractable text layer. Shared hosting will not let you install it. Options, wor
 Until one of those, ticket issuance still works — the QR is signed and the email carries it
 as an inline image — but the **PDF download and both export formats fail**.
 
-**`/up` returns 500.** `CheckApplicationHealth` probes Redis unconditionally. With no Redis
-this reports unhealthy forever, which trains everyone to ignore it. Either add Redis, or
-change that listener to skip Redis when the cache/queue drivers are not Redis-backed —
-a small code change, not a config one. Worth doing before anyone wires up uptime monitoring.
+**`/up` — fixed, nothing to configure.** `CheckApplicationHealth` used to probe Redis
+unconditionally, so a host with none reported unhealthy forever while serving every
+request perfectly well. It now probes Redis only when the active cache store, queue
+connection or session driver actually resolves to it, which for a `.env` written per §4
+means never. Database and disk are still checked on every hit.
 
 **Horizon's dashboard is dead weight.** `/horizon` will render but show nothing, because
 nothing is supervising Redis queues. The cron worker in §5 has no dashboard; use the admin
