@@ -1007,6 +1007,12 @@ composer test
 # or
 php artisan test
 ```
+Faster, and what CI runs (paratest, added 2026-08-22 — 674 tests go from ~307s to ~106s on four cores):
+```bash
+php artisan test --parallel
+```
+Each process gets **its own database** (`decent_event_testing_test_1`, `_test_2`, …), so anything that shells out to a second process must read its connection off the parent rather than naming a database literally — `tests/Feature/Concurrency/*Test.php`'s `runConcurrently()` is the worked example, and hardcoding it there made the race pass while proving nothing. `--parallel` takes no path argument; narrow with `--filter` or drop back to a serial run.
+
 Single test file / single test method:
 ```bash
 php artisan test tests/Feature/Auth/AdminAuthTest.php

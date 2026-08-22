@@ -98,9 +98,25 @@ jobs:
       # themselves.
       - name: Install Chromium and poppler-utils for PDF tests
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends chromium-browser poppler-utils \
-            || sudo apt-get install -y --no-install-recommends chromium poppler-utils
+          set -e
+
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends poppler-utils
+
+          # The runner image already ships Google Chrome, which config/pdf.php
+          # lists among its binary candidates, so the chromium package download
+          # is usually pure waste. Fall back to installing one rather than
+          # assuming: a base-image change that dropped Chrome has to fail here,
+          # where the message says so, not later as unrenderable tickets.
+          if command -v google-chrome >/dev/null 2>&1; then
+            echo "CHROME_BINARY=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          elif command -v chromium >/dev/null 2>&1; then
+            echo "CHROME_BINARY=$(command -v chromium)" >> "$GITHUB_ENV"
+          else
+            echo "No preinstalled Chrome on this runner image; installing chromium."
+            sudo apt-get install -y -qq --no-install-recommends chromium-browser \
+              || sudo apt-get install -y -qq --no-install-recommends chromium
+          fi
 
       - name: Lint (Pint)
         run: vendor/bin/pint --test
@@ -121,8 +137,13 @@ jobs:
           DB_HOST: 127.0.0.1
           DB_DATABASE: decent_event_testing
 
+      # --parallel (paratest) takes the suite from ~307s to ~106s on a 4-core
+      # box. It gives each process its own database (`..._test_1`, `_test_2`),
+      # which is why the concurrency tests read their connection off the parent
+      # instead of naming one -- see the comment in runConcurrently().
+      # Omitting --processes lets paratest match the runner's core count.
       - name: Run Tests
-        run: php artisan test
+        run: php artisan test --parallel
         env:
           DB_HOST: 127.0.0.1
           DB_DATABASE: decent_event_testing

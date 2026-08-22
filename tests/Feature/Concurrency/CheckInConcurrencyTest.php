@@ -6,6 +6,7 @@ use App\Domain\Registration\Models\Registration;
 use App\Domain\Ticketing\Models\Ticket;
 use App\Domain\Ticketing\Models\TicketType;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Process;
 use Tests\TestCase;
 
@@ -75,14 +76,22 @@ class CheckInConcurrencyTest extends TestCase
      */
     private function runConcurrently(int $workerCount, array $args): array
     {
+        // Read the connection back off the parent rather than naming a
+        // database literally: under `--parallel` each process is given its
+        // own (`..._test_1`, `_test_2`), so a hardcoded name would point every
+        // worker at a database the test is not using. The race would then run
+        // against rows nobody wrote and pass while proving nothing -- the
+        // docs/08 R12 failure mode these two tests exist to close.
+        $db = DB::connection()->getConfig();
+
         $env = array_merge($_SERVER, [
             'APP_ENV' => 'testing',
             'DB_CONNECTION' => 'mysql',
-            'DB_HOST' => '127.0.0.1',
-            'DB_PORT' => '3306',
-            'DB_DATABASE' => 'decent_event_testing',
-            'DB_USERNAME' => 'root',
-            'DB_PASSWORD' => '',
+            'DB_HOST' => $db['host'] ?? '127.0.0.1',
+            'DB_PORT' => (string) ($db['port'] ?? 3306),
+            'DB_DATABASE' => $db['database'],
+            'DB_USERNAME' => $db['username'] ?? 'root',
+            'DB_PASSWORD' => $db['password'] ?? '',
             'QUEUE_CONNECTION' => 'sync',
             'CACHE_STORE' => 'array',
         ]);
