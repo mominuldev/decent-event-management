@@ -310,16 +310,63 @@ jobs:
       # Migrations run against the release that was just uploaded. Horizon is
       # asked to finish the job in hand rather than killed, so a notification
       # or a half-rendered ticket is not dropped mid-flight.
+      # Hostinger's default CLI `php` is 8.2 and composer.json requires ^8.3,
+      # so bare `php artisan` aborts on the platform check before running
+      # anything. The 8.3+ builds sit alongside the default rather than
+      # replacing it, so resolve one instead of trusting PATH. Set the
+      # repository variable HOSTINGER_PHP_BIN if the plan puts it somewhere
+      # this list does not cover.
+      #
+      # This selects the CLI only. The PHP the *website* runs under is set
+      # per-domain in hPanel and has to be 8.3+ as well, or the deploy
+      # succeeds and every request 500s.
       - name: Migrate and refresh caches
         env:
           DEPLOY_PATH: ${{ secrets.HOSTINGER_DEPLOY_PATH }}
+          PHP_BIN_OVERRIDE: ${{ vars.HOSTINGER_PHP_BIN }}
         run: |
+          set -e
+
           ssh -i ~/.ssh/id_rsa -p "$DEPLOY_SSH_PORT" -o StrictHostKeyChecking=no \
-            "$DEPLOY_SSH_USER@$DEPLOY_SSH_HOST" "set -e
-              cd '$DEPLOY_PATH'
-              php artisan migrate --force
-              php artisan storage:link || true
-              php artisan config:cache
-              php artisan route:cache
-              php artisan view:cache
-              php artisan horizon:terminate || true"
+            "$DEPLOY_SSH_USER@$DEPLOY_SSH_HOST" \
+            bash -s -- "$DEPLOY_PATH" "$PHP_BIN_OVERRIDE" <<'REMOTE'
+          set -e
+
+          deploy_path=$1
+          php_override=$2
+
+          [ -n "$deploy_path" ] || { echo "HOSTINGER_DEPLOY_PATH missing"; exit 1; }
+          cd "$deploy_path"
+
+          php_bin=""
+          for candidate in "$php_override" \
+            /opt/alt/php84/usr/bin/php /opt/alt/php83/usr/bin/php \
+            /usr/bin/php8.4 /usr/bin/php8.3 \
+            /usr/local/bin/php8.4 /usr/local/bin/php8.3 \
+            php8.4 php8.3 php; do
+              [ -n "$candidate" ] || continue
+              command -v "$candidate" >/dev/null 2>&1 || continue
+              version_id=$("$candidate" -r 'echo PHP_VERSION_ID;' 2>/dev/null) || continue
+              case "$version_id" in ''|*[!0-9]*) continue ;; esac
+              [ "$version_id" -ge 80300 ] || continue
+              php_bin=$candidate
+              break
+          done
+
+          if [ -z "$php_bin" ]; then
+            echo "No PHP 8.3 or newer found on the host."
+            echo "Default CLI is: $(php -v 2>/dev/null | head -1)"
+            echo "Set the repository variable HOSTINGER_PHP_BIN to the full path of an"
+            echo "8.3+ binary (Hostinger usually keeps them under /opt/alt/phpXX/usr/bin/php)."
+            exit 1
+          fi
+
+          echo "Running artisan under $php_bin ($("$php_bin" -r 'echo PHP_VERSION;'))"
+
+          "$php_bin" artisan migrate --force
+          "$php_bin" artisan storage:link || true
+          "$php_bin" artisan config:cache
+          "$php_bin" artisan route:cache
+          "$php_bin" artisan view:cache
+          "$php_bin" artisan horizon:terminate || true
+          REMOTE
