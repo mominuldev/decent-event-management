@@ -173,9 +173,26 @@ class GenerateTicketAssetsJobTest extends TestCase
         // The holder name is styled `font-weight: 700` by the template.
         $this->assertStringContainsString('মোহাম্মদরহিম', $normalised);
 
-        // And a bold face genuinely carrying Bengali glyphs is embedded,
-        // rather than the text silently falling back to a regular weight.
+        // And the bold run is a genuinely separate instance of the Bengali
+        // variable font, rather than the text collapsing onto the regular
+        // weight or falling back to a Latin-only face.
+        //
+        // Deliberately not asserting a face *named* Bold. Chrome names an
+        // embedded variable-font subset differently per platform: macOS
+        // names it by resolved weight (NotoSansBengali-Bold), Linux keeps the
+        // font's default instance name (NotoSansBengali-Regular) even at
+        // weight 700. Both embed one subset per instanced weight, so the
+        // count of distinct subsets is the portable signal; the name is not.
         $fonts = Process::run(['pdffonts', $pdfPath])->output();
-        $this->assertMatchesRegularExpression('/Bengali-\w*Bold/i', $fonts, 'No bold Bengali face was embedded in the ticket PDF.');
+
+        preg_match_all('/^(\w{6})\+\S*Bengali\S*/mi', $fonts, $bengali);
+        $subsets = array_unique($bengali[1]);
+
+        $this->assertGreaterThanOrEqual(
+            2,
+            count($subsets),
+            'The ticket PDF embeds fewer than two Bengali font subsets, so the bold '.
+            "holder name did not render at its own weight. pdffonts said:\n".$fonts
+        );
     }
 }

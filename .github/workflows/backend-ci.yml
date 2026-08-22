@@ -104,6 +104,19 @@ jobs:
       - run: composer install --no-interaction --prefer-dist
       - run: cp .env.example .env
       - run: php artisan key:generate
+      # SecurityHeadersTest requests the SPA shell (`/login`) and asserts its
+      # inline script's nonce matches the CSP header. That shell renders
+      # `@vite(...)`, which throws without a build manifest — the whole
+      # response becomes an error page and the nonce assertion fails. The
+      # assets are gitignored, so CI has to build them; a developer's box
+      # passes only because a previous `npm run build` left them behind.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
       # Ticket and directory PDFs render through headless Chrome
       # (config/pdf.php), and the Bangla text-layer tests read the result
       # back with pdftotext. Both are installed explicitly rather than
