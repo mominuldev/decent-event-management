@@ -4,11 +4,58 @@ What has to be configured **outside this repo** for `.github/workflows/backend-c
 deploy job to produce a working site. The workflow uploads code, migrates and rebuilds
 caches; everything below is state that lives on the host and is never uploaded.
 
-> **Not verified against a live account.** Nobody has run this end to end — there is no
-> hPanel access from the development environment, and no host was configured when this was
-> written. Every item says what to check rather than asserting it works. hPanel also
-> renames its menus periodically, so treat the navigation paths as "look for something
-> called roughly this".
+> **Not verified against a live account.** The domains below are this project's real ones,
+> but nobody has run this setup end to end — there is no hPanel or SSH access from the
+> development environment, so every item says what to check rather than asserting it works.
+> hPanel also renames its menus periodically, so treat the navigation paths as "look for
+> something called roughly this".
+
+---
+
+## The two origins, and how they are wired to each other
+
+Two separate applications on two subdomains. Mixing them up is the failure that produces a
+site which looks fine and cannot take a payment.
+
+| Origin | Application | Repo |
+|---|---|---|
+| `https://100potal.nsbatihighschool.edu.bd` | Laravel API + admin console — **this repo** | `decent-event-management` |
+| `https://100.nsbatihighschool.edu.bd` | Public ticket site (Next.js) | `centennial-celebration` |
+
+Each has to be told the other's address, and the four keys below are the whole contract:
+
+**On the backend host** (`.env`, §4):
+
+```dotenv
+APP_URL=https://100potal.nsbatihighschool.edu.bd
+FRONTEND_URL=https://100.nsbatihighschool.edu.bd
+CONTENT_REVALIDATE_URL=https://100.nsbatihighschool.edu.bd/api/revalidate
+CONTENT_REVALIDATE_SECRET=            # same value both sides
+```
+
+**On the public site** (`.env`, that repo):
+
+```dotenv
+NEXT_PUBLIC_API_URL=https://100potal.nsbatihighschool.edu.bd
+CONTENT_REVALIDATE_SECRET=            # same value both sides
+```
+
+`NEXT_PUBLIC_API_URL` is the **bare origin** — `src/lib/api/client.ts` appends `/api/v1`
+itself, so a trailing `/api/v1` here produces `…/api/v1/api/v1` and a 404 on every call.
+
+`FRONTEND_URL` is the load-bearing one on this side, because five separate things read it
+and none of them accept a client-supplied alternative:
+
+- **CORS** (`config/cors.php`) allowlists exactly this origin. Wrong value and the public
+  site's every request fails in the browser with no server-side error to find.
+- **The SSLCommerz return legs** redirect the payer here after checkout, and
+  `SslCommerzReturnController` refuses any `next` whose host does not match — deliberately,
+  so a crafted request cannot turn the return into an open redirect.
+- **The payment callback URL** (`PaymentController::initiate`) is built from it server-side.
+- **The ticket email's CTA** links to `{FRONTEND_URL}/registrations/{ulid}`.
+- **CMS preview links** minted by the admin console.
+
+Set it wrong and payments still take money at the gateway while the payer lands nowhere.
 
 ---
 
@@ -37,18 +84,18 @@ Laravel serves from `public/`, not the project root. Everything above it — `.e
 
 Two workable shapes:
 
-- **Preferred:** deploy to `~/domains/<domain>/app`, then point the domain's document root
-  at `~/domains/<domain>/app/public` (hPanel: *Websites → Manage → Advanced*, look for a
+- **Preferred:** deploy to `~/domains/100potal.nsbatihighschool.edu.bd/app`, then point the domain's document root
+  at `~/domains/100potal.nsbatihighschool.edu.bd/app/public` (hPanel: *Websites → Manage → Advanced*, look for a
   document-root or website-root setting).
-- **If the plan will not let you move the document root:** deploy to `~/domains/<domain>/app`
-  and symlink `ln -s ~/domains/<domain>/app/public ~/domains/<domain>/public_html`. Delete
+- **If the plan will not let you move the document root:** deploy to `~/domains/100potal.nsbatihighschool.edu.bd/app`
+  and symlink `ln -s ~/domains/100potal.nsbatihighschool.edu.bd/app/public ~/domains/100potal.nsbatihighschool.edu.bd/public_html`. Delete
   the existing `public_html` first — a symlink cannot replace a non-empty directory.
 
 Whichever you pick, `HOSTINGER_DEPLOY_PATH` (repo secret) is the **project root**, not the
 document root. Pointing it at `public_html` uploads the whole framework into a
 web-served directory and exposes `.env`.
 
-**Verify:** `curl -sI https://<domain>/.env` must return 403 or 404, never 200.
+**Verify:** `curl -sI https://100potal.nsbatihighschool.edu.bd/.env` must return 403 or 404, never 200.
 
 ---
 
@@ -107,7 +154,7 @@ APP_NAME="Decent Event Management"
 APP_ENV=production
 APP_DEBUG=false
 APP_KEY=                      # php artisan key:generate
-APP_URL=https://<domain>
+APP_URL=https://100potal.nsbatihighschool.edu.bd
 APP_TIMEZONE=Asia/Dhaka
 
 # Shared hosting has no Redis. These three all default to redis in
@@ -131,9 +178,16 @@ FILESYSTEM_DISK=local
 QR_SIGNING_KEY_ID=
 QR_SIGNING_PRIVATE_KEY=
 
-# The public site's origin. The ticket email's CTA and the payment
-# return legs are built from this server-side, never from a request.
-FRONTEND_URL=https://<public-site-domain>
+# The public site's origin — see "The two origins" above. CORS, the
+# payment return legs, the ticket email's CTA and CMS preview links all
+# read it server-side, never from a request.
+FRONTEND_URL=https://100.nsbatihighschool.edu.bd
+
+# The public site's ISR revalidation endpoint, and the shared secret it
+# checks. A no-op until both are set, so the CMS is usable before the
+# public site is deployed.
+CONTENT_REVALIDATE_URL=https://100.nsbatihighschool.edu.bd/api/revalidate
+CONTENT_REVALIDATE_SECRET=
 
 MAIL_MAILER=smtp
 MAIL_HOST=
@@ -171,7 +225,7 @@ intended state.
 **a. The scheduler** — one entry runs everything in `routes/console.php`:
 
 ```
-* * * * * /opt/alt/php83/usr/bin/php /home/uXXXXXXXX/domains/<domain>/app/artisan schedule:run >> /dev/null 2>&1
+* * * * * /opt/alt/php83/usr/bin/php /home/uXXXXXXXX/domains/100potal.nsbatihighschool.edu.bd/app/artisan schedule:run >> /dev/null 2>&1
 ```
 
 This drives: payment-intent expiry (every 5 min — without it, abandoned checkouts hold
@@ -189,7 +243,7 @@ database backup (03:00).
 the outbox:
 
 ```
-* * * * * /opt/alt/php83/usr/bin/php /home/uXXXXXXXX/domains/<domain>/app/artisan queue:work --queue=payments,tickets,notifications,reports --stop-when-empty --max-time=55 --tries=3 >> /dev/null 2>&1
+* * * * * /opt/alt/php83/usr/bin/php /home/uXXXXXXXX/domains/100potal.nsbatihighschool.edu.bd/app/artisan queue:work --queue=payments,tickets,notifications,reports --stop-when-empty --max-time=55 --tries=3 >> /dev/null 2>&1
 ```
 
 - Queue order **is** priority under the database driver — payments first, reports last,
@@ -210,7 +264,7 @@ The rsync excludes `storage/`, so on a fresh host that tree does not exist and L
 cannot boot. Create it once:
 
 ```bash
-cd ~/domains/<domain>/app
+cd ~/domains/100potal.nsbatihighschool.edu.bd/app
 mkdir -p storage/app/public storage/app/private \
          storage/framework/{cache/data,sessions,views} storage/logs
 chmod -R 775 storage bootstrap/cache
@@ -269,8 +323,8 @@ periodically. Neither is automated.
 
 ## 8. Verification checklist after the first green deploy
 
-- [ ] `curl -sI https://<domain>/.env` → 403/404, not 200
-- [ ] `curl -s https://<domain>/api/v1/public/ticket-types` → JSON with the `CEN` type
+- [ ] `curl -sI https://100potal.nsbatihighschool.edu.bd/.env` → 403/404, not 200
+- [ ] `curl -s https://100potal.nsbatihighschool.edu.bd/api/v1/public/ticket-types` → JSON with the `CEN` type
 - [ ] Admin console loads at `/login` and a seeded Super Admin can sign in
 - [ ] A test registration reaches `pending_payment` and returns a real SSLCommerz redirect URL
 - [ ] Within ~2 minutes of a paid registration: `notifications` row leaves `queued`, and the ticket has a QR image
