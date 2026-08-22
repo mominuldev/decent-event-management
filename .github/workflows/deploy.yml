@@ -103,7 +103,7 @@ jobs:
     if: github.event.inputs.environment == 'production'
     environment:
       name: production
-      url: https://portal.decentthemes.com
+      url: https://100potal.nsbatihighschool.edu.bd
     steps:
       - name: Check production is configured
         id: check
@@ -119,7 +119,7 @@ jobs:
           envs: IMAGE
           script: |
             set -euo pipefail
-            cd /srv/decentedu
+            cd /srv/decent-event-management
             export IMAGE=${{ needs.build-and-push.outputs.image }}
             sed -i "s#^image:.*#image: ${IMAGE}#" docker-compose.override.yml || true
             docker compose pull app horizon scheduler

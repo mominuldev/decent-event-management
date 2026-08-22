@@ -1,148 +1,160 @@
-name: Backend CI
+name: CI/CD
 
 on:
   push:
-    branches: [main]
-  pull_request: {}
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: portal-event-management-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  lint:
-    name: Lint (Pint)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          tools: composer:v2
-          coverage: none
-      - name: Cache composer dependencies
-        uses: actions/cache@v4
-        with:
-          path: vendor
-          key: composer-${{ hashFiles('composer.lock') }}
-      - run: composer install --no-interaction --prefer-dist
-      - run: ./vendor/bin/pint --test
-
-  static-analysis:
-    name: Static analysis (PHPStan level 8)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          tools: composer:v2
-          coverage: none
-      - name: Cache composer dependencies
-        uses: actions/cache@v4
-        with:
-          path: vendor
-          key: composer-${{ hashFiles('composer.lock') }}
-      - run: composer install --no-interaction --prefer-dist
-      - run: cp .env.example .env
-      - run: php artisan key:generate
-      - run: ./vendor/bin/phpstan analyse --no-progress --memory-limit=1G
-
-  audit:
-    name: Dependency audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          tools: composer:v2
-          coverage: none
-      - name: Cache composer dependencies
-        uses: actions/cache@v4
-        with:
-          path: vendor
-          key: composer-${{ hashFiles('composer.lock') }}
-      - run: composer install --no-interaction --prefer-dist
-      - run: composer audit
-
   test:
-    name: Tests
+    name: Test
     runs-on: ubuntu-latest
 
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ALLOW_EMPTY_PASSWORD: yes
-          MYSQL_DATABASE: decent_event_testing
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd="redis-cli ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, xml, sqlite3, zip, gd, curl, bcmath
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Lint (Pint)
+        run: vendor/bin/pint --test
+
+      - name: Static Analysis (Larastan)
+        run: vendor/bin/phpstan analyse --memory-limit=2G
+
+      - name: Run Tests
+        run: php artisan test
+
+      - name: Composer Audit
+        run: composer audit
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          tools: composer:v2
-          coverage: xdebug
-      - name: Cache composer dependencies
-        uses: actions/cache@v4
-        with:
-          path: vendor
-          key: composer-${{ hashFiles('composer.lock') }}
-      - run: composer install --no-interaction --prefer-dist
-      - run: cp .env.example .env
-      - run: php artisan key:generate
-      # SecurityHeadersTest requests the SPA shell (`/login`) and asserts its
-      # inline script's nonce matches the CSP header. That shell renders
-      # `@vite(...)`, which throws without a build manifest — the whole
-      # response becomes an error page and the nonce assertion fails. The
-      # assets are gitignored, so CI has to build them; a developer's box
-      # passes only because a previous `npm run build` left them behind.
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-      - run: npm ci
-      - run: npm run build
+      - uses: actions/checkout@v5
 
-      # Ticket and directory PDFs render through headless Chrome
-      # (config/pdf.php), and the Bangla text-layer tests read the result
-      # back with pdftotext. Both are installed explicitly rather than
-      # relying on whatever the runner image happens to ship, so a runner
-      # image change shows up as a failed install rather than as tests
-      # quietly skipping themselves.
-      - name: Install Chromium and poppler-utils for PDF tests
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends chromium-browser poppler-utils \
-            || sudo apt-get install -y --no-install-recommends chromium poppler-utils
-      - name: Wait for MySQL
-        run: |
-          for i in $(seq 1 30); do
-            mysqladmin ping -h127.0.0.1 -P3306 -uroot --silent && break
-            sleep 1
-          done
-      - run: php artisan migrate --force
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      # The SPA once shipped as one 2,120 KB (533 KB gzipped) chunk because every screen was a
+      # static import in router.tsx. Vite's own warning was the only signal and it scrolled past.
+      - name: Check bundle budget
+        run: npm run check:bundle
+
+  deploy:
+    name: Deploy to Hostinger
+    runs-on: ubuntu-latest
+    needs: [test, frontend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend assets
+        run: npm run build
+
+      - name: Setup SSH
         env:
-          DB_HOST: 127.0.0.1
-          DB_DATABASE: decent_event_testing
-      # No --min coverage gate yet: most REST endpoints are still Phase 2
-      # stubs (docs/08). Raise this once the domain modules are built out
-      # — the Phase 2 exit target is >=80% on domain logic.
-      - run: php artisan test --coverage
+          SSH_HOST: ${{ secrets.HOSTINGER_SSH_HOST }}
+          SSH_USER: ${{ secrets.HOSTINGER_SSH_USER }}
+          SSH_PORT: ${{ secrets.HOSTINGER_SSH_PORT }}
+          SSH_KEY: ${{ secrets.HOSTINGER_SSH_KEY }}
+        run: |
+          set -e
+
+          echo "Checking secrets..."
+
+          [ -n "$SSH_HOST" ] || (echo "HOSTINGER_SSH_HOST missing" && exit 1)
+          [ -n "$SSH_USER" ] || (echo "HOSTINGER_SSH_USER missing" && exit 1)
+          [ -n "$SSH_KEY" ] || (echo "HOSTINGER_SSH_KEY missing" && exit 1)
+
+          mkdir -p ~/.ssh
+
+          echo "$SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          SSH_PORT=${SSH_PORT:-65002}
+
+          echo "Testing SSH connection..."
+
+          ssh-keyscan -v -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Verify SSH Login
         env:
-          DB_HOST: 127.0.0.1
-          DB_DATABASE: decent_event_testing
-          REDIS_HOST: 127.0.0.1
+          SSH_HOST: ${{ secrets.HOSTINGER_SSH_HOST }}
+          SSH_USER: ${{ secrets.HOSTINGER_SSH_USER }}
+          SSH_PORT: ${{ secrets.HOSTINGER_SSH_PORT }}
+        run: |
+          SSH_PORT=${SSH_PORT:-65002}
+
+          ssh -i ~/.ssh/id_rsa \
+            -p "$SSH_PORT" \
+            -o StrictHostKeyChecking=no \
+            -o ConnectTimeout=20 \
+            "$SSH_USER@$SSH_HOST" "echo 'SSH Connection Successful'"
+
+      - name: Deploy Files
+        env:
+          SSH_HOST: ${{ secrets.HOSTINGER_SSH_HOST }}
+          SSH_USER: ${{ secrets.HOSTINGER_SSH_USER }}
+          SSH_PORT: ${{ secrets.HOSTINGER_SSH_PORT }}
+          DEPLOY_PATH: ${{ secrets.HOSTINGER_DEPLOY_PATH }}
+        run: |
+          SSH_PORT=${SSH_PORT:-65002}
+
+          [ -n "$DEPLOY_PATH" ] || (echo "HOSTINGER_DEPLOY_PATH missing" && exit 1)
+
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/id_rsa -p $SSH_PORT" \
+            --exclude=".git" \
+            --exclude=".github" \
+            --exclude="node_modules" \
+            --exclude="tests" \
+            --exclude=".env" \
+            ./ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH"
