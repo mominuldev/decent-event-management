@@ -67,9 +67,12 @@ class TicketTypeSeeder extends Seeder
             // above, which is the only current-student price this system has
             // ever had. It is a starting value, not a client decision: set
             // the real one in the admin console (Tickets → Centennial
-            // Ticket → Student price), or here before first seeding a
-            // production database. Note the price lock — once CEN has sold
-            // anything, PATCH refuses to change it.
+            // Ticket → Student price), or here before this database is
+            // first seeded. Two things follow from that ordering — the
+            // post-sale price lock means PATCH refuses to change it once CEN
+            // has sold anything, and since 2026-08-22 this seeder no longer
+            // updates an existing row, so editing the figure here does
+            // nothing to a database that has already been seeded.
             //
             // `allowed_participant_types` is the public form's own dropdown
             // — it builds the list from this column and CreateRegistration
@@ -82,16 +85,42 @@ class TicketTypeSeeder extends Seeder
         ];
 
         foreach ($types as $i => $type) {
-            $ticketType = TicketType::updateOrCreate(
-                ['code' => $type['code']],
-                array_merge([
+            // `withTrashed()`, and it stays trashed. `ticket_types.code` is
+            // unique across soft-deleted rows, so the default scope would
+            // skip a deleted type, try to insert a second one, and die on a
+            // duplicate-key error — `updateOrCreate` had the same hole.
+            // Leaving it trashed is the point: deleting a type is an
+            // admin decision like any other, and a seeder that quietly put
+            // a withdrawn ticket back on sale would be the same class of
+            // bug as one that reverts its price.
+            $ticketType = TicketType::withTrashed()->firstOrNew(['code' => $type['code']]);
+
+            // Seeded only for a row that does not exist yet. `code` is the
+            // identity; **everything else on this table is admin-owned** —
+            // `UpdateTicketTypeRequest` accepts every other column, so any
+            // of them may hold a decision somebody made in the admin
+            // console. `updateOrCreate` reverted the lot on every re-seed,
+            // and the money columns are the part that matters: a re-seed
+            // during a release could silently reprice a ticket that has
+            // already sold, and the post-sale price lock in
+            // `TicketTypeController::update()` would not stop it, because
+            // that lock guards the HTTP path and a seeder does not use it.
+            //
+            // The cost of this is worth stating: editing a price here now
+            // only affects a database that has never been seeded. Changing
+            // one on a live system is an admin-console edit or a migration,
+            // which is the right shape for a deliberate data change anyway.
+            if (! $ticketType->exists) {
+                $ticketType->fill(array_merge([
                     'currency' => 'BDT',
                     'includes_meal' => true,
                     'is_active' => true,
                     'is_public' => true,
                     'sort_order' => $i,
-                ], $type)
-            );
+                ], $type));
+            }
+
+            $ticketType->save();
 
             // The public ticket-types endpoint filters on
             // `sale_starts_at <= now()`, and SQL's NULL comparison is not
