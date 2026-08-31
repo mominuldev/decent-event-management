@@ -4,6 +4,19 @@ on:
   push:
     branches: [main]
   pull_request: {}
+  workflow_dispatch:
+    inputs:
+      reset_database:
+        description: "DESTRUCTIVE: drop every table on the host and re-migrate. First-deploy recovery only — it deletes all data."
+        type: boolean
+        default: false
+
+# Superseded PR runs are worth cancelling; a run on main is not, because this
+# workflow deploys. Interrupting one between `rsync --delete` and
+# `migrate --force` leaves the host serving new code against an old schema.
+concurrency:
+  group: portal-event-management-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   lint:
@@ -62,9 +75,13 @@ jobs:
       - run: composer install --no-interaction --prefer-dist
       - run: composer audit
 
+  # Pull requests only. A push to main is the deploy path (deploy.yml), and a
+  # test run that finishes after the image is already rolling out gates
+  # nothing — it only adds ~5 minutes of noise. The gate is the PR.
   test:
     name: Tests
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
 
     services:
       mysql:
@@ -95,7 +112,7 @@ jobs:
         with:
           php-version: '8.3'
           tools: composer:v2
-          coverage: xdebug
+          coverage: none
       - name: Cache composer dependencies
         uses: actions/cache@v4
         with:
@@ -138,11 +155,353 @@ jobs:
         env:
           DB_HOST: 127.0.0.1
           DB_DATABASE: decent_event_testing
-      # No --min coverage gate yet: most REST endpoints are still Phase 2
-      # stubs (docs/08). Raise this once the domain modules are built out
-      # — the Phase 2 exit target is >=80% on domain logic.
-      - run: php artisan test --coverage
+      # --parallel (paratest), not --coverage: xdebug's line tracking roughly
+      # triples the run and nothing gates on the percentage it prints, so the
+      # report was pure wall-clock. Each worker gets its own database
+      # (decent_event_testing_test_1, _2, …), which is why anything shelling
+      # out to a second process must read its connection off the parent — see
+      # tests/Feature/Concurrency/*Test.php. Coverage is still available on
+      # demand locally with `php artisan test --coverage`.
+      - run: php artisan test --parallel
         env:
           DB_HOST: 127.0.0.1
           DB_DATABASE: decent_event_testing
           REDIS_HOST: 127.0.0.1
+
+  # Restored 2026-08-31. Gated on lint/static-analysis/audit rather than on
+  # `test`, because `test` is pull-request-only (see its comment above) and a
+  # job that `needs` a skipped job is skipped along with it — so gating on it
+  # would mean this never runs on a push to main at all. The PR is the test
+  # gate; this is the deploy.
+  deploy:
+    name: Deploy to Hostinger
+    runs-on: ubuntu-latest
+    needs: [lint, static-analysis, audit]
+    # workflow_dispatch as well as push, or the reset_database input has no
+    # job to reach: a manual run would pass its checks and skip the deploy.
+    # Still main-only, so a dispatch from a branch cannot deploy it.
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, xml, zip, gd, curl, bcmath, intl, sodium, pdo_mysql, redis
+          tools: composer:v2
+          coverage: none
+
+      # Built here rather than on the shared host: the release has to carry a
+      # vendor/ tree, because the rsync below runs --delete and would
+      # otherwise wipe the server's.
+      - name: Install production Composer dependencies
+        run: composer install --no-dev --optimize-autoloader --prefer-dist --no-interaction --no-progress
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend assets
+        run: npm run build
+
+      # Hostinger's panel presents SSH access as a whole command --
+      # `ssh -p 65002 u123456789@82.180.132.207` -- so that string, or a bare
+      # `user@host`, is what usually ends up in HOSTINGER_SSH_HOST. Handed
+      # straight to ssh-keyscan it looks up a host literally called "ssh" and
+      # fails with a name-resolution error that reads like a network fault.
+      # Normalise once here and export the parts every later step uses.
+      - name: Setup SSH
+        env:
+          SSH_HOST: ${{ secrets.HOSTINGER_SSH_HOST }}
+          SSH_USER: ${{ secrets.HOSTINGER_SSH_USER }}
+          SSH_PORT: ${{ secrets.HOSTINGER_SSH_PORT }}
+          SSH_KEY: ${{ secrets.HOSTINGER_SSH_KEY }}
+        run: |
+          set -e
+
+          echo "Checking secrets..."
+
+          [ -n "$SSH_HOST" ] || { echo "HOSTINGER_SSH_HOST missing"; exit 1; }
+          [ -n "$SSH_KEY" ] || { echo "HOSTINGER_SSH_KEY missing"; exit 1; }
+
+          host=$(printf '%s' "$SSH_HOST" | tr -d '\r' | xargs)
+          user=$(printf '%s' "$SSH_USER" | tr -d '\r' | xargs)
+          port=$(printf '%s' "$SSH_PORT" | tr -d '\r' | xargs)
+
+          # `ssh [-p PORT] [user@]host` pasted whole: take the port if it
+          # carries one and no port secret was set, then the last word.
+          case "$host" in
+            ssh\ *|ssh://*)
+              echo "HOSTINGER_SSH_HOST looks like a connection command or URL; parsing it."
+              embedded_port=$(printf '%s' "$host" | sed -n 's/.*-p[[:space:]]*\([0-9][0-9]*\).*/\1/p')
+              [ -n "$embedded_port" ] && [ -z "$port" ] && port="$embedded_port"
+              host=${host##* }
+              host=${host#ssh://}
+              ;;
+          esac
+
+          # `user@host` in the host secret: the user half wins only when
+          # HOSTINGER_SSH_USER was not set, so an explicit secret still rules.
+          case "$host" in
+            *@*)
+              [ -n "$user" ] || user=${host%@*}
+              host=${host#*@}
+              ;;
+          esac
+
+          # A trailing `:port` (the URL form), same precedence rule.
+          case "$host" in
+            *:[0-9]*)
+              [ -n "$port" ] || port=${host##*:}
+              host=${host%:*}
+              ;;
+          esac
+
+          host=${host%/}
+          port=${port:-65002}
+
+          [ -n "$user" ] || { echo "HOSTINGER_SSH_USER missing, and HOSTINGER_SSH_HOST carries no user@ to fall back on"; exit 1; }
+
+          # The parsed values are no longer byte-identical to the secrets, so
+          # nothing masks them any more. Register them before they can reach
+          # a log line.
+          echo "::add-mask::$host"
+          echo "::add-mask::$user"
+
+          if ! getent hosts "$host" >/dev/null 2>&1; then
+            echo "HOSTINGER_SSH_HOST does not resolve to an address."
+            echo "Set it to the hostname or IP alone -- for example 82.180.132.207 --"
+            echo "with the username in HOSTINGER_SSH_USER and the port in HOSTINGER_SSH_PORT."
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          # Best-effort, and never fatal. Every ssh and rsync below passes
+          # StrictHostKeyChecking=no, so a populated known_hosts is a nicety
+          # rather than a requirement -- and ssh-keyscan's exit status varies
+          # by OpenSSH build (it answers 0 for an unresolvable host on macOS
+          # and non-zero on some Linux builds), so letting `set -e` act on it
+          # turns a cosmetic step into a deploy that dies with no output at
+          # all. Its stderr is shown rather than discarded, for the same
+          # reason: a silent failure here cost a full debugging round trip.
+          if ! ssh-keyscan -p "$port" "$host" >> ~/.ssh/known_hosts; then
+            echo "ssh-keyscan could not fetch a host key; continuing, since"
+            echo "StrictHostKeyChecking is off for this deploy."
+          fi
+
+          {
+            echo "DEPLOY_SSH_HOST=$host"
+            echo "DEPLOY_SSH_USER=$user"
+            echo "DEPLOY_SSH_PORT=$port"
+          } >> "$GITHUB_ENV"
+
+          echo "SSH target resolved; port $port."
+
+      - name: Verify SSH Login
+        run: |
+          ssh -i ~/.ssh/id_rsa \
+            -p "$DEPLOY_SSH_PORT" \
+            -o StrictHostKeyChecking=no \
+            -o ConnectTimeout=20 \
+            "$DEPLOY_SSH_USER@$DEPLOY_SSH_HOST" "echo 'SSH Connection Successful'"
+
+      # --delete removes anything on the host the checkout does not carry, so
+      # every path that lives only on the server must be named here.
+      #
+      # --exclude both skips sending a path and spares it from --delete:
+      # .env holds the credentials, storage/ holds uploaded media, generated
+      # ticket PDFs and the logs, and public/storage is the symlink into it.
+      #
+      # --filter='protect ...' is the other half, and it is NOT the same as an
+      # exclude: it spares a path from deletion while still allowing the repo's
+      # own copy to be sent. That distinction is the whole point for .htaccess.
+      # This deploy path is the document root, so the host's own
+      # public_html/.htaccess -- the rewrite that sends every request into
+      # public/ -- lives one level above anything this repo tracks, and
+      # --delete used to remove it on every single deploy. Excluding
+      # `.htaccess` outright would have fixed that and broken the other half:
+      # public/.htaccess IS tracked here, it is Laravel's front controller
+      # rewrite, and a deploy that stopped shipping it would take the site down
+      # a different way. Protect deletes, keep transfers.
+      #
+      # .well-known is the same failure with a slower fuse: ACME challenge
+      # files live there during a certificate renewal, and deleting them turns
+      # up weeks later as an expired certificate rather than as a failed deploy.
+      - name: Deploy Files
+        env:
+          DEPLOY_PATH: ${{ secrets.HOSTINGER_DEPLOY_PATH }}
+        run: |
+          set -e
+
+          [ -n "$DEPLOY_PATH" ] || { echo "HOSTINGER_DEPLOY_PATH missing"; exit 1; }
+
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/id_rsa -p $DEPLOY_SSH_PORT -o StrictHostKeyChecking=no" \
+            --filter='protect .htaccess' \
+            --filter='protect .well-known/***' \
+            --filter='protect .user.ini' \
+            --exclude=".git" \
+            --exclude=".github" \
+            --exclude="node_modules" \
+            --exclude="tests" \
+            --exclude=".env" \
+            --exclude="storage/" \
+            --exclude="public/storage" \
+            ./ "$DEPLOY_SSH_USER@$DEPLOY_SSH_HOST:$DEPLOY_PATH"
+
+      # Migrations run against the release that was just uploaded. Horizon is
+      # asked to finish the job in hand rather than killed, so a notification
+      # or a half-rendered ticket is not dropped mid-flight.
+      # Hostinger's default CLI `php` is 8.2 and composer.json requires ^8.3,
+      # so bare `php artisan` aborts on the platform check before running
+      # anything. The 8.3+ builds sit alongside the default rather than
+      # replacing it, so resolve one instead of trusting PATH. Set the
+      # repository variable HOSTINGER_PHP_BIN if the plan puts it somewhere
+      # this list does not cover.
+      #
+      # This selects the CLI only. The PHP the *website* runs under is set
+      # per-domain in hPanel and has to be 8.3+ as well, or the deploy
+      # succeeds and every request 500s.
+      - name: Migrate and refresh caches
+        env:
+          DEPLOY_PATH: ${{ secrets.HOSTINGER_DEPLOY_PATH }}
+          PHP_BIN_OVERRIDE: ${{ vars.HOSTINGER_PHP_BIN }}
+          RESET_DATABASE: ${{ inputs.reset_database }}
+        run: |
+          set -e
+
+          ssh -i ~/.ssh/id_rsa -p "$DEPLOY_SSH_PORT" -o StrictHostKeyChecking=no \
+            "$DEPLOY_SSH_USER@$DEPLOY_SSH_HOST" \
+            bash -s -- "$DEPLOY_PATH" "$PHP_BIN_OVERRIDE" "$RESET_DATABASE" <<'REMOTE'
+          set -e
+
+          deploy_path=$1
+          php_override=$2
+          reset_database=$3
+
+          [ -n "$deploy_path" ] || { echo "HOSTINGER_DEPLOY_PATH missing"; exit 1; }
+          cd "$deploy_path"
+
+          php_bin=""
+          for candidate in "$php_override" \
+            /opt/alt/php84/usr/bin/php /opt/alt/php83/usr/bin/php \
+            /usr/bin/php8.4 /usr/bin/php8.3 \
+            /usr/local/bin/php8.4 /usr/local/bin/php8.3 \
+            php8.4 php8.3 php; do
+              [ -n "$candidate" ] || continue
+              command -v "$candidate" >/dev/null 2>&1 || continue
+              version_id=$("$candidate" -r 'echo PHP_VERSION_ID;' 2>/dev/null) || continue
+              case "$version_id" in ''|*[!0-9]*) continue ;; esac
+              [ "$version_id" -ge 80300 ] || continue
+              php_bin=$candidate
+              break
+          done
+
+          if [ -z "$php_bin" ]; then
+            echo "No PHP 8.3 or newer found on the host."
+            echo "Default CLI is: $(php -v 2>/dev/null | head -1)"
+            echo "Set the repository variable HOSTINGER_PHP_BIN to the full path of an"
+            echo "8.3+ binary (Hostinger usually keeps them under /opt/alt/phpXX/usr/bin/php)."
+            exit 1
+          fi
+
+          echo "Running artisan under $php_bin ($("$php_bin" -r 'echo PHP_VERSION;'))"
+
+          [ -f .env ] || {
+            echo "No .env on the host. The deploy never uploads one -- it holds the"
+            echo "credentials, and --delete would destroy the server's copy. Create it"
+            echo "by hand; docs/09-hostinger-deployment.md section 4 has the key set."
+            exit 1
+          }
+
+          # Spatie's permission migration flushes the permission cache at the end
+          # of its up(), so an unreachable cache store fails *after* five tables
+          # already exist. MySQL DDL is not transactional, so nothing rolls back
+          # and the next `migrate` trips over the tables it half-created. Check
+          # the store is reachable first and abort with the database untouched.
+          if grep -qE '^(CACHE_STORE|SESSION_DRIVER|QUEUE_CONNECTION)=redis' .env; then
+            redis_host=$(sed -n 's/^REDIS_HOST=//p' .env | head -1 | tr -d '"'"'"' ')
+            redis_port=$(sed -n 's/^REDIS_PORT=//p' .env | head -1 | tr -d '"'"'"' ')
+            redis_host=${redis_host:-127.0.0.1}
+            redis_port=${redis_port:-6379}
+
+            if ! "$php_bin" -r 'exit(@fsockopen($argv[1], (int) $argv[2], $e, $s, 3) ? 0 : 1);' \
+                 "$redis_host" "$redis_port"; then
+              echo "The .env asks for redis but nothing is listening on $redis_host:$redis_port,"
+              echo "so those drivers cannot work on this host. Rewriting them to 'database' --"
+              echo "the cache, sessions and jobs tables are already in the migration set."
+
+              backup=".env.backup-$(date +%Y%m%d%H%M%S)"
+              cp .env "$backup"
+
+              # Anchored to a whole value, so `REDIS_HOST=...` and a commented
+              # line are both left alone, and every duplicate of a key is
+              # rewritten rather than just the first -- a stale line further
+              # down the file is exactly how an edit appears not to have taken.
+              sed -i -E 's/^([[:space:]]*)(CACHE_STORE|SESSION_DRIVER|QUEUE_CONNECTION)=redis([[:space:]]*(#.*)?)$/\1\2=database\3/' .env
+
+              echo "Backed up the original to $(pwd)/$backup. Now:"
+              grep -nE '^[[:space:]]*(CACHE_STORE|SESSION_DRIVER|QUEUE_CONNECTION)=' .env
+
+              if grep -qE '^[[:space:]]*(CACHE_STORE|SESSION_DRIVER|QUEUE_CONNECTION)=redis([[:space:]]|#|$)' .env; then
+                echo "A redis driver survived the rewrite -- the line is shaped in a way this"
+                echo "does not match. Edit $(pwd)/.env by hand; docs/09 section 4 has the values."
+                exit 1
+              fi
+            fi
+          fi
+
+          # migrate:fresh only on an explicit manual dispatch with the box
+          # ticked -- never on a push. It exists because a migration that fails
+          # partway leaves behind tables MySQL will not roll back (DDL is not
+          # transactional) and no migrations row recording them, so every retry
+          # dies on "table already exists" and the only way forward is dropping
+          # them. That needs a shell on the host, which whoever is reading a
+          # failed deploy may not have.
+          if [ "$reset_database" = "true" ]; then
+            echo "reset_database was requested: dropping every table and re-migrating."
+            "$php_bin" artisan migrate:fresh --force
+          elif ! "$php_bin" artisan migrate --force; then
+            echo
+            echo "----------------------------------------------------------------"
+            echo "If that says \"table ... already exists\", an earlier migration run"
+            echo "created its tables and then threw before recording itself. MySQL"
+            echo "does not roll DDL back, so the tables are there with no migrations"
+            echo "row naming them, and every retry will fail here from now on."
+            echo
+            echo "Recover without a shell: Actions -> Backend CI -> Run workflow, tick"
+            echo "reset_database, Run. It drops every table and migrates cleanly, so"
+            echo "only do it while the database holds no real registrations, and"
+            echo "re-run the seeders afterwards (docs/09 section 6)."
+            echo "----------------------------------------------------------------"
+            exit 1
+          fi
+
+          "$php_bin" artisan storage:link || true
+          "$php_bin" artisan config:cache
+          "$php_bin" artisan route:cache
+          "$php_bin" artisan view:cache
+
+          # First Super Admin, from SUPER_ADMIN_EMAIL/SUPER_ADMIN_PASSWORD in the
+          # host's own .env -- nothing sensitive passes through this workflow or
+          # the ssh command line. Creates the account only when it does not
+          # already exist, skips silently when those vars are unset, and never
+          # modifies an account that is already there. After config:cache
+          # deliberately: that is the point at which config reflects the .env
+          # this release runs against.
+          "$php_bin" artisan admin:create-super-admin --if-missing --no-interaction
+
+          "$php_bin" artisan horizon:terminate || true
+          REMOTE

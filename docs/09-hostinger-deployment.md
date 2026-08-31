@@ -97,6 +97,40 @@ web-served directory and exposes `.env`.
 
 **Verify:** `curl -sI https://100potal.nsbatihighschool.edu.bd/.env` must return 403 or 404, never 200.
 
+### Server-only files and `rsync --delete`
+
+The deploy syncs with `--delete`, so **anything on the host that this repo does not track is
+removed on every deploy** unless the workflow names it. That is what `.env`, `storage/` and
+`public/storage` are excluded for — and, since 2026-08-31, what these protect:
+
+```
+--filter='protect .htaccess'
+--filter='protect .well-known/***'
+--filter='protect .user.ini'
+```
+
+`protect` is not the same as `exclude`, and the difference is the whole point. An exclude
+skips sending a path *and* spares it from deletion; `protect` spares it from deletion while
+still letting the repo's own copy be sent. `.htaccess` needs exactly that split:
+
+| File | Where it comes from | What must happen |
+|---|---|---|
+| `public/.htaccess` | tracked in this repo — Laravel's front-controller rewrite | keep deploying it |
+| the document root's `.htaccess` | the host (Hostinger's PHP handler block, and the rewrite into `public/` if the document root could not be moved) | never delete it |
+
+`--exclude=".htaccess"` would have protected the second by breaking the first, and a deploy
+that stops shipping `public/.htaccess` takes the site down a different way.
+
+**This mattered most in the shape where `HOSTINGER_DEPLOY_PATH` is the document root.** There
+the host's `.htaccess` is the only thing rewriting requests into `public/`, so deleting it did
+not merely break routing — it left `.env`, `vendor/`, `app/` and `storage/` sitting in a
+directory Apache was serving directly. Moving the document root to `…/app/public` (above) is
+the real fix for that; the protect filters stop the deploy from causing it.
+
+`.well-known` is the same failure with a slower fuse: ACME challenge files live there during a
+certificate renewal, so deleting them surfaces weeks later as an expired certificate rather
+than as a failed deploy.
+
 ---
 
 ## 2. PHP version and extensions
