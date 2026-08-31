@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Domain\Shared\Models\ActivityLog;
 use App\Domain\Shared\Models\User;
+use App\Domain\Shared\Support\PasswordHash;
 use Database\Seeders\RbacSeeder;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Validator;
@@ -61,6 +62,11 @@ use Throwable;
  * - Account exists      -> report and exit 0. Re-granting the role here
  *   would silently restore full authority to an account somebody demoted on
  *   purpose, once per deploy, which is the worst possible cadence for it.
+ *   The one exception is an account whose stored password the configured
+ *   hasher cannot read: that one cannot authenticate anybody, so it is not
+ *   an account in use whose settings deserve protecting, it is a broken row
+ *   -- typically one pasted straight into a database client. Leaving it
+ *   alone locks the only administrator out permanently, so it is repaired.
  * - Configured but wrong (unparseable email, password under the minimum)
  *   -> fail. A blank setting is a decision; a malformed one is a mistake,
  *   and a green deploy that quietly created no administrator is exactly the
@@ -285,6 +291,10 @@ class CreateSuperAdmin extends Command
             return self::SUCCESS;
         }
 
+        if (! PasswordHash::isUsable($user->password)) {
+            return $this->repairUnusableAccount($user);
+        }
+
         $this->components->info("{$user->email} already exists — nothing to do.");
 
         if (! $user->hasRole(self::ROLE)) {
@@ -297,6 +307,67 @@ class CreateSuperAdmin extends Command
         if (! $user->isActive()) {
             $this->components->warn("Status is \"{$user->status}\", so login returns 403.");
         }
+
+        return self::SUCCESS;
+    }
+
+    /**
+     * The account exists and cannot be logged into: its stored password is
+     * not something the configured hasher can read, so every attempt against
+     * it raises an exception instead of returning a verdict. Nothing can
+     * recover the intended password from such a value, so the only way out
+     * is a new one.
+     *
+     * The role is set here too, which the ordinary "already exists" branch
+     * deliberately will not do. The guard there protects an account somebody
+     * demoted on purpose and is still using — and an account nobody can log
+     * into is not that. Both halves of the repair are gated on the same
+     * proof, so a working account is never touched by either.
+     */
+    private function repairUnusableAccount(User $user): int
+    {
+        $this->components->warn(
+            "{$user->email} exists but its stored password is not readable by the ".
+            config('hashing.driver').' hasher, so no one can sign in as it. Repairing it.'
+        );
+
+        $password = $this->resolvePassword();
+
+        if ($password === null) {
+            $this->components->warn(
+                'No password available to repair it with. Re-run with --generate-password, or set '
+                .'SUPER_ADMIN_PASSWORD, or run without --if-missing to be prompted.'
+            );
+
+            // Not a deploy failure: the account was already broken before this
+            // ran, and failing here would replace a bad login with a red
+            // release without fixing either.
+            return self::SUCCESS;
+        }
+
+        $before = [
+            'roles' => $user->roles()->pluck('name')->all(),
+            'status' => $user->status,
+            'password_readable' => false,
+        ];
+
+        $user->forceFill([
+            'password' => $password,
+            'status' => 'active',
+            'locked_until' => null,
+            'failed_login_attempts' => 0,
+        ])->save();
+
+        $user->syncRoles([self::ROLE]);
+
+        $this->audit($user, 'credentials_reset', 'Unusable password hash repaired from the console', [
+            'before' => $before,
+            'after' => ['roles' => [self::ROLE], 'status' => 'active', 'password_readable' => true],
+        ]);
+
+        $this->components->info("Repaired {$user->email} and confirmed the ".self::ROLE.' role.');
+        $this->announceGeneratedPassword($user);
+        $this->printNextSteps($user);
 
         return self::SUCCESS;
     }

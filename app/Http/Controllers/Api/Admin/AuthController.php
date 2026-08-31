@@ -4,12 +4,13 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Domain\Shared\Models\User;
 use App\Domain\Shared\Services\TwoFactorAuthenticationService;
+use App\Domain\Shared\Support\PasswordHash;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\EnsureRecentlyReauthenticated;
 use App\Http\Requests\Admin\LoginRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OAT;
 
@@ -123,7 +124,23 @@ class AuthController extends Controller
             return response()->json(['message' => 'Account is not active.'], 403);
         }
 
-        if (! Hash::check($request->string('password'), $user->password)) {
+        if (! PasswordHash::isUsable($user->password)) {
+            // Not a failed attempt: nobody guessed anything, and counting it
+            // would lock the account after five tries and replace this with a
+            // 423, moving the message even further from the cause. The log
+            // line is the only place the real reason surfaces, since the
+            // caller is told exactly what a wrong password is told.
+            Log::warning('Staff account has a password hash the configured hasher cannot read; login is impossible until it is reset.', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'hasher' => config('hashing.driver'),
+                'fix' => 'php artisan admin:create-super-admin --email='.$user->email.' --force',
+            ]);
+
+            return response()->json(['message' => 'Invalid credentials.'], 401);
+        }
+
+        if (! PasswordHash::matches((string) $request->string('password'), $user->password)) {
             $this->registerFailedAttempt($user);
 
             return response()->json(['message' => 'Invalid credentials.'], 401);
@@ -296,7 +313,7 @@ class AuthController extends Controller
         // already authenticated, and letting a mistyped confirmation lock
         // the account would turn a fumbled re-auth into a lockout in the
         // middle of the very incident the operator is responding to.
-        if (! Hash::check($request->string('password'), $user->password)) {
+        if (! PasswordHash::matches((string) $request->string('password'), $user->password)) {
             throw ValidationException::withMessages([
                 'password' => ['The password is incorrect.'],
             ]);

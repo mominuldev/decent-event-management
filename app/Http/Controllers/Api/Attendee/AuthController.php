@@ -5,10 +5,10 @@ namespace App\Http\Controllers\Api\Attendee;
 use App\Domain\Notification\Actions\QueueNotification;
 use App\Domain\Registration\Models\Attendee;
 use App\Domain\Registration\Support\AttendeeIdentity;
+use App\Domain\Shared\Support\PasswordHash;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OAT;
@@ -344,7 +344,7 @@ class AuthController extends Controller
         // costs a full bcrypt verify, and that difference is measurable —
         // account existence would be discoverable with a stopwatch despite
         // the identical response body.
-        $passwordCorrect = Hash::check(
+        $passwordCorrect = PasswordHash::matches(
             $request->string('password')->value(),
             $hasPassword ? (string) $attendee->password : self::TIMING_DUMMY_HASH,
         );
@@ -406,7 +406,7 @@ class AuthController extends Controller
         ]);
 
         if ($attendee->hasPassword()
-            && ! Hash::check($request->string('current_password')->value(), (string) $attendee->password)) {
+            && ! PasswordHash::matches($request->string('current_password')->value(), (string) $attendee->password)) {
             throw ValidationException::withMessages([
                 'current_password' => 'That is not your current password.',
             ]);

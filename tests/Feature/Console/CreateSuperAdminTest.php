@@ -7,6 +7,7 @@ use App\Domain\Shared\Models\User;
 use Database\Seeders\RbacSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -477,6 +478,62 @@ class CreateSuperAdminTest extends TestCase
 
         $user = User::where('email', 'boss@example.com')->firstOrFail();
         $this->assertTrue(Hash::check(self::PASSWORD, $user->password));
+    }
+
+    /**
+     * The live failure this was written for: a users row that exists but whose
+     * password was never hashed by the app, so `Hash::check` throws and nobody
+     * can sign in. --if-missing normally leaves an existing account alone;
+     * this one it must not, because nobody is using it and nobody can.
+     */
+    public function test_if_missing_repairs_an_account_whose_stored_password_cannot_be_read(): void
+    {
+        $this->seed(RbacSeeder::class);
+
+        $user = User::factory()->create(['email' => 'boss@example.com', 'status' => 'suspended']);
+        $user->syncRoles([]);
+
+        // Straight to the column, bypassing the `hashed` cast — which is how a
+        // row pasted into a database client arrives.
+        DB::table('users')->where('id', $user->id)->update(['password' => 'plaintext-not-a-hash']);
+
+        config()->set('admin.super_admin.email', 'boss@example.com');
+        config()->set('admin.super_admin.password', null);
+
+        Artisan::call('admin:create-super-admin --if-missing --generate-password --no-interaction');
+        $printed = $this->passwordFrom(Artisan::output());
+
+        $this->assertNotNull($printed, 'a repaired account must get a printed password');
+
+        $user->refresh();
+
+        $this->assertTrue(Hash::check($printed, $user->password), 'the printed password must now work');
+        $this->assertTrue($user->hasRole('Super Admin'));
+        $this->assertSame('active', $user->status);
+        $this->assertDatabaseHas('activity_logs', [
+            'subject_id' => $user->id,
+            'event' => 'credentials_reset',
+        ]);
+    }
+
+    /** The repaired account is a normal one afterwards — it can actually log in. */
+    public function test_the_repaired_account_can_log_in(): void
+    {
+        $this->seed(RbacSeeder::class);
+
+        $user = User::factory()->create(['email' => 'boss@example.com']);
+        DB::table('users')->where('id', $user->id)->update(['password' => 'plaintext-not-a-hash']);
+
+        config()->set('admin.super_admin.email', 'boss@example.com');
+        config()->set('admin.super_admin.password', null);
+
+        Artisan::call('admin:create-super-admin --if-missing --generate-password --no-interaction');
+        $printed = $this->passwordFrom(Artisan::output());
+
+        $this->postJson(route('api.v1.admin.auth.login'), [
+            'email' => 'boss@example.com',
+            'password' => (string) $printed,
+        ])->assertOk()->assertJsonStructure(['token']);
     }
 
     /** The value on the line after the banner's headline, or null if none was printed. */
