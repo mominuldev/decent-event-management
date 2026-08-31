@@ -88,6 +88,13 @@ jobs:
             docker compose exec -T app php artisan config:cache
             docker compose exec -T app php artisan route:cache
             docker compose exec -T app php artisan view:cache
+            # First Super Admin, from SUPER_ADMIN_EMAIL/SUPER_ADMIN_PASSWORD in this
+            # host's own .env — nothing sensitive passes through the workflow file or
+            # this command line. Creates the account only when it does not already
+            # exist, skips silently when those vars are unset, and never modifies an
+            # account that is already there. After config:cache deliberately: that is
+            # the point at which config reflects the .env this release runs against.
+            docker compose exec -T app php artisan admin:create-super-admin --if-missing --no-interaction
             docker compose exec -T horizon php artisan horizon:terminate
 
       - name: Skipped — no staging host configured
@@ -128,6 +135,13 @@ jobs:
             docker compose exec -T app php artisan config:cache
             docker compose exec -T app php artisan route:cache
             docker compose exec -T app php artisan view:cache
+            # First Super Admin, from SUPER_ADMIN_EMAIL/SUPER_ADMIN_PASSWORD in this
+            # host's own .env — nothing sensitive passes through the workflow file or
+            # this command line. Creates the account only when it does not already
+            # exist, skips silently when those vars are unset, and never modifies an
+            # account that is already there. After config:cache deliberately: that is
+            # the point at which config reflects the .env this release runs against.
+            docker compose exec -T app php artisan admin:create-super-admin --if-missing --no-interaction
             docker compose exec -T horizon php artisan horizon:terminate
 
       - name: Skipped — no production host configured

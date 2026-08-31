@@ -964,7 +964,7 @@ Phase 4A shipped `SslCommerzClient` in full but explicitly never called a live s
 
 ## Repository layout
 
-A single Laravel application at the repo root, which serves **both** the API and the admin dashboard SPA. `.github/workflows/backend-ci.yml` runs lint/static-analysis/tests against the repo root; `.github/workflows/deploy.yml` (Phase 9) gates on migrations, builds, boot-checks and publishes the production image on push to `main`, then deploys it to staging — and to production on an approved manual dispatch.
+A single Laravel application at the repo root, which serves **both** the API and the admin dashboard SPA. `.github/workflows/backend-ci.yml` runs lint/static-analysis/tests against the repo root; `.github/workflows/deploy.yml` (Phase 9) gates on migrations, builds, boot-checks and publishes the production image on push to `main`, then deploys it to staging — and to production on an approved manual dispatch. Each deploy also runs `admin:create-super-admin --if-missing`, which creates the first staff account when one is configured and absent and does nothing otherwise (see [§First Super Admin](#commands)).
 
 | Path | What lives there |
 |---|---|
@@ -1049,6 +1049,24 @@ php artisan db:seed                              # RBAC, settings, ticket types,
 php artisan db:seed --class=DummyDataSeeder      # demo registrations/payments/tickets for local dev
 php artisan db:seed --class=LoadTestSeeder       # bulk volume for performance work
 ```
+⚠️ **`php artisan db:seed` is a local-only command.** `DatabaseSeeder` calls `DummyDataSeeder` (fake registrations, payments and tickets) *and* creates a hardcoded super admin whose password is literally `password`. On a live database, run the individual seeders you actually want — `RbacSeeder`, `EventSettingSeeder`, `TicketTypeSeeder`, `NotificationTemplateSeeder` — and make the first staff account with `admin:create-super-admin` below.
+
+**First Super Admin on a new environment:**
+```bash
+php artisan admin:create-super-admin                       # prompts for email and password
+php artisan admin:create-super-admin --email=you@example.com --password=... --no-interaction
+php artisan admin:create-super-admin --email=you@example.com --force   # reset the password, reactivate, clear the lockout
+php artisan admin:create-super-admin --if-missing --no-interaction     # the deploy path — see below
+```
+There is no HTTP path for this and deliberately isn't one: `routes/api/admin.php` exposes users index/show and `assign-role` only, so every staff account is created by somebody who already has one — which leaves the first one to the console. The command seeds `RbacSeeder` itself when the `Super Admin` role is missing, because on a `migrate --force`-only database it always is and `syncRoles()` would otherwise throw `RoleDoesNotExist`. Re-running it **without** `--force` never touches the password or the status: it only assigns the missing role, which is the repair path for an account that exists but can't do anything. It writes an `activity_logs` row with a null causer and `source: console:admin:create-super-admin` — shell access to the host is the only provenance such an account has.
+
+**`--if-missing` is the deploy path**, run by both jobs in `.github/workflows/deploy.yml` after `config:cache` (which is the point at which config reflects the `.env` the release is running against). It reads `SUPER_ADMIN_EMAIL`/`SUPER_ADMIN_PASSWORD`/`SUPER_ADMIN_NAME`/`SUPER_ADMIN_PHONE` from the host's own `.env` via `config/admin.php`, so no credential passes through the workflow file, the SSH command line, or `ps`. Three behaviours, each deliberate:
+
+- **Nothing configured → skip, exit 0.** Both halves must be set. An environment that provisions its admin by hand must not have one invented for it on every release, and this is also what makes deleting `SUPER_ADMIN_PASSWORD` from `.env` after first use the intended end state rather than a loose end — it is a plaintext credential for exactly as long as it sits there.
+- **The account already exists → report, exit 0, write nothing.** Not even the missing-role repair a plain re-run performs. This step runs on *every* deploy, so assigning the role here would hand full system authority back to an account somebody deliberately demoted, once per release; the repair stays a decision an operator makes by running the command without `--if-missing`. A later password change, rename or suspension likewise survives every deploy.
+- **Configured but malformed (unparseable email, password under 12 characters) → fail the deploy.** A blank setting is a decision; a malformed one is a mistake, and a green deploy that quietly created no administrator is the exact failure this command exists to end.
+
+`--if-missing` and `--force` are refused together, and it never prompts, so it cannot block a deploy on a question nothing can answer.
 
 **PDF rendering** — ticket and directory PDFs render through headless Chrome (`config/pdf.php`), not a PHP library, because mpdf silently dropped Bengali conjuncts from the extractable text layer. Install Chromium (or Chrome) locally; `CHROME_BINARY` overrides the auto-detected path. `pdftotext` (poppler-utils) is needed only to run the PDF text-layer tests, which skip themselves without it.
 
