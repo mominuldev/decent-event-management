@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Award, BarChart3, Bell, BellRing, CalendarClock, ChevronDown, ChevronRight, ClipboardList, Compass, FileText, Globe, HelpCircle, Image as ImageIcon, Images, KeyRound, LayoutDashboard, LogOut, Menu, Moon, QrCode, Search, Settings, Sun, Ticket, Users, Wallet, X } from 'lucide-react';
+import { Award, BarChart3, Bell, BellRing, CalendarClock, ChevronDown, ChevronRight, ClipboardList, Compass, FileText, Globe, HelpCircle, Image as ImageIcon, Images, KeyRound, LayoutDashboard, LogOut, Menu, Moon, QrCode, Search, Settings, Sun, Ticket, UserRound, Users, Wallet, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useTheme } from '@/app/theme';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -63,6 +63,8 @@ const NAV: Group[] = [
         items: [
             { to: '/settings', label: 'Settings', icon: Settings, permission: 'settings.view' },
             { to: '/security/signing-keys', label: 'Signing keys', icon: KeyRound, permission: 'qr.rotate_signing_key' },
+            // No permission — your own account is not something a role grants.
+            { to: '/account', label: 'My account', icon: UserRound },
         ],
     },
 ];
@@ -198,13 +200,17 @@ function UserFooter() {
     return (
         <div className="border-t border-border px-3 py-3">
             <div className="flex items-center gap-3 rounded-xl px-2 py-2">
-                <div className="grid h-9 w-9 place-items-center rounded-lg bg-brand-100 text-[12px] font-bold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
-                    {session ? initials(session.name) : '—'}
-                </div>
-                <div className="min-w-0 flex-1 leading-tight">
-                    <div className="truncate text-[13px] font-semibold text-text">{session?.name ?? 'Staff'}</div>
-                    <div className="truncate text-[11.5px] text-text-faint">{session?.roles.join(', ') ?? 'Member'}</div>
-                </div>
+                {/* The name is where people look for their own settings first, so it
+                    is the link rather than only the nav item. */}
+                <NavLink to="/account" className="flex min-w-0 flex-1 items-center gap-3 rounded-lg hover:opacity-80">
+                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-100 text-[12px] font-bold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
+                        {session ? initials(session.name) : '—'}
+                    </div>
+                    <div className="min-w-0 flex-1 leading-tight">
+                        <div className="truncate text-[13px] font-semibold text-text">{session?.name ?? 'Staff'}</div>
+                        <div className="truncate text-[11.5px] text-text-faint">{session?.roles.join(', ') ?? 'Member'}</div>
+                    </div>
+                </NavLink>
                 <IconButton aria-label="Sign out" onClick={() => void logout()}>
                     <LogOut size={17} />
                 </IconButton>

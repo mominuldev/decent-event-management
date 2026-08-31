@@ -13,6 +13,10 @@ interface AuthCtx {
     completeTwoFactorSetup: (token: string) => Promise<void>;
     logout: () => Promise<void>;
     can: (permission: string) => boolean;
+    /** Re-read /admin/auth/me — after the signed-in user edits their own profile. */
+    refreshSession: () => Promise<void>;
+    /** Replace the session with one the caller already has, skipping the round trip. */
+    applySession: (session: Session) => void;
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
@@ -82,13 +86,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     }, []);
 
+    const applySession = useCallback((next: Session) => {
+        setSession(next);
+    }, []);
+
     const can = useCallback(
         (permission: string) => session?.permissions.includes(permission) ?? false,
         [session],
     );
 
     return (
-        <Ctx.Provider value={{ status, session, pendingUser, login, completeTwoFactorSetup, logout, can }}>
+        <Ctx.Provider value={{ status, session, pendingUser, login, completeTwoFactorSetup, logout, can, refreshSession: loadSession, applySession }}>
             {children}
         </Ctx.Provider>
     );

@@ -18,6 +18,7 @@ export interface Session {
     ulid: string;
     name: string;
     email: string;
+    phone: string | null;
     roles: string[];
     permissions: string[];
 }

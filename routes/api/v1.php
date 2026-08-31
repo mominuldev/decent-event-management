@@ -40,6 +40,12 @@ Route::prefix('admin')->name('admin.')->middleware(['auth:web-admin', 'ability:a
 Route::prefix('admin')->name('admin.')->middleware(['auth:web-admin', 'abilities:admin'])->group(function (): void {
     Route::post('auth/2fa/disable', [TwoFactorController::class, 'disable'])->name('auth.2fa.disable');
 
+    // Your own account. Fully authenticated rather than in the group above:
+    // a 2fa-setup token exists only to finish setting 2FA up, and must not be
+    // able to change the email you sign in with or the password it protects.
+    Route::patch('auth/me', [AdminAuthController::class, 'updateProfile'])->name('auth.me.update');
+    Route::post('auth/password', [AdminAuthController::class, 'changePassword'])->name('auth.password');
+
     Route::group([], base_path('routes/api/admin.php'));
 });
 

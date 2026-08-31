@@ -16,6 +16,7 @@ import NotificationsPage from '@/features/notifications/NotificationsPage';
 import ReportsPage from '@/features/reports/ReportsPage';
 import SettingsPage from '@/features/settings/SettingsPage';
 import SigningKeysPage from '@/features/security/SigningKeysPage';
+import AccountPage from '@/features/account/AccountPage';
 import Placeholder from '@/features/misc/Placeholder';
 
 // Protected page = auth gate + dashboard chrome.
@@ -50,6 +51,9 @@ export const router = createBrowserRouter([
     { path: '/reports', element: page(<ReportsPage />) },
     { path: '/settings', element: page(<SettingsPage />) },
     { path: '/security/signing-keys', element: page(<SigningKeysPage />) },
+
+    // No permission gate: every signed-in staff member owns their own account.
+    { path: '/account', element: page(<AccountPage />) },
 
     { path: '*', element: page(<Placeholder title="Page not found" note="Check the URL or use the navigation on the left." />) },
 ]);

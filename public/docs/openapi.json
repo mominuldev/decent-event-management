@@ -865,6 +865,96 @@
                         "bearerAuth": []
                     }
                 ]
+            },
+            "patch": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Update your own name, email address and phone number",
+                "operationId": "2a0fab8e3103b455fc049ce27ffd765e",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "name",
+                                    "email"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "maxLength": 150
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "maxLength": 190
+                                    },
+                                    "phone": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 20
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "The updated account"
+                    },
+                    "422": {
+                        "description": "Validation failed — the email may belong to another staff account"
+                    }
+                }
+            }
+        },
+        "/admin/auth/password": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Change your own password",
+                "description": "Requires the current password. Every other session is revoked on success.",
+                "operationId": "e8d94a299e697f3aaf9251e170531c31",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "current_password",
+                                    "password",
+                                    "password_confirmation"
+                                ],
+                                "properties": {
+                                    "current_password": {
+                                        "type": "string"
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "minLength": 12
+                                    },
+                                    "password_confirmation": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Password changed; other sessions revoked"
+                    },
+                    "422": {
+                        "description": "The current password is wrong, or the new one fails the policy"
+                    }
+                }
             }
         },
         "/admin/auth/logout": {

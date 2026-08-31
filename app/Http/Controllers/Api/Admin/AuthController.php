@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Domain\Shared\Actions\ChangeStaffPassword;
+use App\Domain\Shared\Actions\UpdateStaffProfile;
 use App\Domain\Shared\Models\User;
 use App\Domain\Shared\Services\TwoFactorAuthenticationService;
 use App\Domain\Shared\Support\PasswordHash;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\EnsureRecentlyReauthenticated;
+use App\Http\Requests\Admin\ChangePasswordRequest;
 use App\Http\Requests\Admin\LoginRequest;
+use App\Http\Requests\Admin\UpdateProfileRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -225,13 +229,120 @@ class AuthController extends Controller
         /** @var User $user */
         $user = $request->user();
 
+        return response()->json($this->accountPayload($user));
+    }
+
+    #[OAT\Patch(
+        path: '/admin/auth/me',
+        summary: 'Update your own name, email address and phone number',
+        tags: ['Authentication'],
+        requestBody: new OAT\RequestBody(
+            required: true,
+            content: new OAT\MediaType(
+                mediaType: 'application/json',
+                schema: new OAT\Schema(
+                    required: ['name', 'email'],
+                    properties: [
+                        new OAT\Property(property: 'name', type: 'string', maxLength: 150),
+                        new OAT\Property(property: 'email', type: 'string', format: 'email', maxLength: 190),
+                        new OAT\Property(property: 'phone', type: 'string', maxLength: 20, nullable: true),
+                    ]
+                )
+            )
+        ),
+        responses: [
+            new OAT\Response(response: 200, description: 'The updated account'),
+            new OAT\Response(response: 422, description: 'Validation failed — the email may belong to another staff account'),
+        ]
+    )]
+    public function updateProfile(UpdateProfileRequest $request, UpdateStaffProfile $action): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        $action->execute(
+            $user,
+            $request->validated(),
+            $request->ip(),
+            $request->header('X-Request-Id'),
+        );
+
+        return response()->json($this->accountPayload($user->refresh()));
+    }
+
+    #[OAT\Post(
+        path: '/admin/auth/password',
+        summary: 'Change your own password',
+        description: 'Requires the current password. Every other session is revoked on success.',
+        tags: ['Authentication'],
+        requestBody: new OAT\RequestBody(
+            required: true,
+            content: new OAT\MediaType(
+                mediaType: 'application/json',
+                schema: new OAT\Schema(
+                    required: ['current_password', 'password', 'password_confirmation'],
+                    properties: [
+                        new OAT\Property(property: 'current_password', type: 'string'),
+                        new OAT\Property(property: 'password', type: 'string', minLength: ChangePasswordRequest::MIN_LENGTH),
+                        new OAT\Property(property: 'password_confirmation', type: 'string'),
+                    ]
+                )
+            )
+        ),
+        responses: [
+            new OAT\Response(response: 200, description: 'Password changed; other sessions revoked'),
+            new OAT\Response(response: 422, description: 'The current password is wrong, or the new one fails the policy'),
+        ]
+    )]
+    public function changePassword(ChangePasswordRequest $request, ChangeStaffPassword $action): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        // PasswordHash rather than Hash::check or the `current_password` rule:
+        // both of those throw instead of failing when the stored value is not
+        // readable by the configured hasher, which would turn a wrong answer
+        // here into a 500.
+        if (! PasswordHash::matches($request->string('current_password')->value(), $user->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => ['That is not your current password.'],
+            ]);
+        }
+
+        // The session doing the changing, which survives while every other one
+        // is revoked. Read the same way logout() reads it: these routes are
+        // behind the Sanctum guard, so a bearer token model is always what is
+        // there.
+        $revoked = $action->execute(
+            $user,
+            $request->string('password')->value(),
+            $user->currentAccessToken()->getKey(),
+            $request->ip(),
+            $request->header('X-Request-Id'),
+        );
+
         return response()->json([
+            'message' => 'Password changed.',
+            'other_sessions_revoked' => $revoked,
+        ]);
+    }
+
+    /**
+     * The one definition of what this app tells you about your own account,
+     * so `me` and the response to editing it cannot drift apart.
+     *
+     * @return array<string, mixed>
+     */
+    private function accountPayload(User $user): array
+    {
+        return [
             'ulid' => $user->ulid,
             'name' => $user->name,
             'email' => $user->email,
+            'phone' => $user->phone,
             'roles' => $user->getRoleNames(),
             'permissions' => $user->getAllPermissions()->pluck('name'),
-        ]);
+        ];
     }
 
     #[OAT\Post(
@@ -343,7 +454,16 @@ class AuthController extends Controller
 
     private function registerFailedAttempt(User $user): void
     {
-        $attempts = $user->failed_login_attempts + 1;
+        // A lockout that has elapsed has been served, so the count that caused
+        // it starts again. Without this the counter stays at MAX_FAILED_ATTEMPTS
+        // for ever and the first mistype after every cooldown re-locks
+        // immediately -- one attempt per LOCKOUT_MINUTES, indefinitely, which
+        // is not "five tries then a pause" but a permanent one-try account.
+        $previous = $user->locked_until !== null && $user->locked_until->isPast()
+            ? 0
+            : $user->failed_login_attempts;
+
+        $attempts = $previous + 1;
 
         $user->forceFill([
             'failed_login_attempts' => $attempts,

@@ -81,6 +81,37 @@ class AdminAuthTest extends TestCase
         $this->assertSame(1, $user->refresh()->failed_login_attempts);
     }
 
+    /**
+     * Five tries then a pause, not one try for ever. The counter used to
+     * survive the lockout it caused, so the first mistype after every cooldown
+     * re-locked the account immediately.
+     */
+    public function test_the_attempt_counter_starts_again_once_a_lockout_has_elapsed(): void
+    {
+        $user = User::factory()->create(['password' => bcrypt('correct-password')]);
+
+        foreach (range(1, 5) as $ignored) {
+            $this->postJson('/api/v1/admin/auth/login', [
+                'email' => $user->email,
+                'password' => 'wrong',
+            ]);
+        }
+
+        $this->assertNotNull($user->refresh()->locked_until, 'five wrong tries must lock it');
+
+        $this->travel(16)->minutes();
+
+        $this->postJson('/api/v1/admin/auth/login', [
+            'email' => $user->email,
+            'password' => 'wrong-again',
+        ])->assertStatus(401);
+
+        $user->refresh();
+
+        $this->assertSame(1, $user->failed_login_attempts, 'the served lockout resets the count');
+        $this->assertNull($user->locked_until, 'one mistype after a cooldown must not re-lock');
+    }
+
     public function test_login_with_correct_password_and_no_2fa_returns_setup_only_token(): void
     {
         $user = User::factory()->create(['password' => bcrypt('correct-password')]);
