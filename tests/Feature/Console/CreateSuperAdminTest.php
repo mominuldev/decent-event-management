@@ -6,6 +6,7 @@ use App\Domain\Shared\Models\ActivityLog;
 use App\Domain\Shared\Models\User;
 use Database\Seeders\RbacSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -390,6 +391,112 @@ class CreateSuperAdminTest extends TestCase
 
         $this->assertDatabaseCount('users', 1);
         $this->assertSame(1, ActivityLog::where('event', 'created')->count());
+    }
+
+    /**
+     * The zero-configuration deploy path. Nothing is set anywhere: the email
+     * falls back to config/admin.php's default and the password is invented,
+     * so a first deploy produces a usable account with no prior setup.
+     */
+    public function test_generate_password_creates_the_account_with_nothing_configured(): void
+    {
+        config()->set('admin.super_admin.password', null);
+
+        $this->assertDatabaseCount('users', 0);
+
+        $this->artisan('admin:create-super-admin --if-missing --generate-password --no-interaction')
+            ->assertSuccessful();
+
+        $user = User::where('email', config('admin.super_admin.email'))->firstOrFail();
+
+        $this->assertTrue($user->hasRole('Super Admin'));
+        $this->assertSame('active', $user->status);
+        $this->assertNotNull($user->password);
+    }
+
+    /**
+     * The load-bearing assertion: the password printed in the deploy log is
+     * the one that was actually hashed. Nothing can recover it afterwards, so
+     * if the printed value and the stored hash ever disagreed the account
+     * would be unreachable with no way to notice.
+     */
+    public function test_the_generated_password_is_printed_once_and_actually_works(): void
+    {
+        config()->set('admin.super_admin.password', null);
+
+        Artisan::call('admin:create-super-admin --if-missing --generate-password --no-interaction');
+        $printed = $this->passwordFrom(Artisan::output());
+
+        $this->assertNotNull($printed, 'the generated password must be printed');
+        $this->assertGreaterThanOrEqual(12, strlen($printed));
+
+        $user = User::where('email', config('admin.super_admin.email'))->firstOrFail();
+
+        $this->assertTrue(Hash::check($printed, $user->password));
+        $this->assertNotSame($printed, $user->password, 'it must be stored hashed, not in the clear');
+    }
+
+    /**
+     * "Once on deploy, never again" is the whole requirement: every later
+     * release must find the account and leave it entirely alone, including
+     * a password the owner has since changed.
+     */
+    public function test_a_second_deploy_neither_recreates_the_account_nor_prints_anything(): void
+    {
+        config()->set('admin.super_admin.password', null);
+
+        Artisan::call('admin:create-super-admin --if-missing --generate-password --no-interaction');
+        $first = $this->passwordFrom(Artisan::output());
+        $this->assertNotNull($first);
+
+        // The owner signs in and changes it, as the printed warning tells them to.
+        $user = User::where('email', config('admin.super_admin.email'))->firstOrFail();
+        $user->forceFill(['password' => 'a-password-they-chose'])->save();
+
+        Artisan::call('admin:create-super-admin --if-missing --generate-password --no-interaction');
+        $second = Artisan::output();
+
+        $this->assertNull($this->passwordFrom($second), 'a later deploy must not print a new password');
+        $this->assertStringContainsString('already exists', $second);
+
+        $this->assertDatabaseCount('users', 1);
+        $user->refresh();
+        $this->assertTrue(Hash::check('a-password-they-chose', $user->password), 'their password must survive');
+        $this->assertFalse(Hash::check($first, $user->password));
+    }
+
+    public function test_a_configured_password_wins_over_generating_one(): void
+    {
+        config()->set('admin.super_admin.email', 'boss@example.com');
+        config()->set('admin.super_admin.password', self::PASSWORD);
+
+        Artisan::call('admin:create-super-admin --if-missing --generate-password --no-interaction');
+        $output = Artisan::output();
+
+        $this->assertNull($this->passwordFrom($output), 'nothing was generated, so nothing may be printed');
+
+        $user = User::where('email', 'boss@example.com')->firstOrFail();
+        $this->assertTrue(Hash::check(self::PASSWORD, $user->password));
+    }
+
+    /** The value on the line after the banner's headline, or null if none was printed. */
+    private function passwordFrom(string $output): ?string
+    {
+        $lines = preg_split('/\R/', $output) ?: [];
+
+        foreach ($lines as $i => $line) {
+            if (! str_contains($line, 'Generated password for')) {
+                continue;
+            }
+
+            foreach (array_slice($lines, $i + 1) as $candidate) {
+                if (trim($candidate) !== '') {
+                    return trim($candidate);
+                }
+            }
+        }
+
+        return null;
     }
 
     public function test_the_created_account_can_actually_log_in(): void

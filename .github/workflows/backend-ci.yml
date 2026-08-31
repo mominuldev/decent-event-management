@@ -516,14 +516,23 @@ jobs:
           "$php_bin" artisan route:cache
           "$php_bin" artisan view:cache
 
-          # First Super Admin, from SUPER_ADMIN_EMAIL/SUPER_ADMIN_PASSWORD in the
-          # host's own .env -- nothing sensitive passes through this workflow or
-          # the ssh command line. Creates the account only when it does not
-          # already exist, skips silently when those vars are unset, and never
-          # modifies an account that is already there. After config:cache
-          # deliberately: that is the point at which config reflects the .env
-          # this release runs against.
-          "$php_bin" artisan admin:create-super-admin --if-missing --no-interaction
+          # First Super Admin. Runs on every deploy and creates an account on
+          # exactly one of them -- the first, where none exists yet. Every
+          # later run finds it and reports "already exists -- nothing to do",
+          # so a password changed afterwards, a rename, or a deliberate
+          # suspension all survive being deployed over.
+          #
+          # --generate-password means this needs no configuration to work: with
+          # no SUPER_ADMIN_PASSWORD set it invents a strong one and prints it
+          # in this log, once, because only a bcrypt hash is stored and nothing
+          # can print it again. THAT PASSWORD IS VISIBLE TO ANYONE WHO CAN READ
+          # THIS LOG -- sign in and change it. Setting SUPER_ADMIN_PASSWORD in
+          # the host's .env takes precedence and prints nothing, which is the
+          # better option if you have shell access.
+          #
+          # After config:cache deliberately: that is the point at which config
+          # reflects the .env this release runs against.
+          "$php_bin" artisan admin:create-super-admin --if-missing --generate-password --no-interaction
 
           "$php_bin" artisan horizon:terminate || true
           REMOTE

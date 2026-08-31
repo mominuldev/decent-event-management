@@ -43,6 +43,11 @@ use Throwable;
  * The password is prompted for rather than passed as an option by default:
  * an option lands in shell history and is visible in `ps` for the life of
  * the process, on a box that by definition has other people on it.
+ * `--generate-password` is the third way: nobody types it, nothing stores
+ * it but a bcrypt hash, and it is printed once at creation because after
+ * that no code path can recover it. The cost is that it lands in whatever
+ * log the command ran in, which is why the output says so in as many words
+ * rather than leaving it to be inferred.
  *
  * `--if-missing` is the deploy path (wired into .github/workflows/deploy.yml),
  * and takes its credentials from config/admin.php — i.e. the host's own .env
@@ -50,8 +55,9 @@ use Throwable;
  * SSH command line, or `ps`. It is the narrowest of the three modes and
  * mutates nothing it did not create:
  *
- * - Nothing configured  -> skip, exit 0. An environment that provisions its
- *   admin by hand must not have one invented for it on every release.
+ * - Nothing configured  -> skip, exit 0, unless --generate-password. An
+ *   environment that provisions its admin by hand must not have one invented
+ *   for it on every release; one that asked for a generated password has.
  * - Account exists      -> report and exit 0. Re-granting the role here
  *   would silently restore full authority to an account somebody demoted on
  *   purpose, once per deploy, which is the worst possible cadence for it.
@@ -68,7 +74,8 @@ class CreateSuperAdmin extends Command
         {--phone= : Contact number, optional}
         {--password= : Skip the prompt. Avoid — this lands in shell history and ps}
         {--force : Reset the password and reactivate the account if the email already exists}
-        {--if-missing : Deploy mode: create the account configured in config/admin.php only if it does not exist, and skip quietly when nothing is configured}';
+        {--if-missing : Deploy mode: create the account configured in config/admin.php only if it does not exist, and skip quietly when nothing is configured}
+        {--generate-password : Invent a strong password instead of asking for one, and print it once. Removes the need to configure a password at all}';
 
     protected $description = 'Create (or repair) the first Super Admin account';
 
@@ -76,6 +83,9 @@ class CreateSuperAdmin extends Command
     private const int MIN_PASSWORD_LENGTH = 12;
 
     private const string ROLE = 'Super Admin';
+
+    /** Set only when --generate-password invented one, so it can be printed once. */
+    private ?string $generatedPassword = null;
 
     public function handle(): int
     {
@@ -231,7 +241,8 @@ class CreateSuperAdmin extends Command
             || $this->configuredString('admin.super_admin.email') !== '';
 
         $hasPassword = (string) ($this->option('password') ?? '') !== ''
-            || $this->configuredPassword() !== '';
+            || $this->configuredPassword() !== ''
+            || (bool) $this->option('generate-password');
 
         return $hasEmail && $hasPassword;
     }
@@ -346,6 +357,11 @@ class CreateSuperAdmin extends Command
             $password = $this->configuredPassword();
         }
 
+        if ($password === '' && $this->option('generate-password')) {
+            $password = Str::password(20);
+            $this->generatedPassword = $password;
+        }
+
         if ($password === '') {
             if (! $this->input->isInteractive() || $this->option('if-missing')) {
                 $this->components->error(
@@ -398,6 +414,7 @@ class CreateSuperAdmin extends Command
         ]);
 
         $this->components->info("Created {$user->email} as ".self::ROLE.'.');
+        $this->announceGeneratedPassword($user);
         $this->printNextSteps($user);
 
         return self::SUCCESS;
@@ -444,6 +461,7 @@ class CreateSuperAdmin extends Command
         ]);
 
         $this->components->info("Reset {$user->email} and confirmed the ".self::ROLE.' role.');
+        $this->announceGeneratedPassword($user);
         $this->printNextSteps($user);
 
         return self::SUCCESS;
@@ -490,6 +508,32 @@ class CreateSuperAdmin extends Command
             'request_id' => substr((string) Str::ulid(), 0, 26),
             'severity' => 'warning',
         ]);
+    }
+
+    /**
+     * Printed exactly once, at creation, because nothing can recover it
+     * afterwards -- only a bcrypt hash is stored. Deliberately NOT masked:
+     * a masked one-time password is no password at all. That does mean it
+     * sits in whatever log this ran in, so the warning is part of the
+     * output rather than something to remember from a README.
+     */
+    private function announceGeneratedPassword(User $user): void
+    {
+        if ($this->generatedPassword === null) {
+            return;
+        }
+
+        $this->newLine();
+        $this->line('  ****************************************************************');
+        $this->line("  Generated password for {$user->email}:");
+        $this->newLine();
+        $this->line('      '.$this->generatedPassword);
+        $this->newLine();
+        $this->line('  Shown once. Only a bcrypt hash is kept, so nothing can print it');
+        $this->line('  again. Anyone who can read this log can read it too -- sign in');
+        $this->line('  and change it now.');
+        $this->line('  ****************************************************************');
+        $this->newLine();
     }
 
     private function printNextSteps(User $user): void
