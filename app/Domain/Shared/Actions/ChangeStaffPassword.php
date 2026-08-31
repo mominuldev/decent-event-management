@@ -30,6 +30,9 @@ use Illuminate\Support\Str;
 class ChangeStaffPassword
 {
     /**
+     * The signed-in path: the person knew their current password, and the
+     * session they used to prove it survives.
+     *
      * @param  string|int|null  $keepTokenId  the session performing the change, which survives
      */
     public function execute(
@@ -38,6 +41,35 @@ class ChangeStaffPassword
         string|int|null $keepTokenId = null,
         ?string $ip = null,
         ?string $requestId = null,
+    ): int {
+        return $this->apply($user, $newPassword, $keepTokenId, $ip, $requestId, 'password_changed', 'changed their own password');
+    }
+
+    /**
+     * The forgotten-password path. Keeps nothing: whoever asked for the reset
+     * proved only that they can read the mailbox, so every existing session is
+     * revoked rather than one being trusted — including, if the account was
+     * taken over, the attacker's. It is a distinct audit event for the same
+     * reason: "changed while signed in" and "reset from an emailed link" are
+     * different facts about how a credential moved.
+     */
+    public function afterReset(
+        User $user,
+        #[\SensitiveParameter] string $newPassword,
+        ?string $ip = null,
+        ?string $requestId = null,
+    ): int {
+        return $this->apply($user, $newPassword, null, $ip, $requestId, 'password_reset', 'reset their password from an emailed link');
+    }
+
+    private function apply(
+        User $user,
+        #[\SensitiveParameter] string $newPassword,
+        string|int|null $keepTokenId,
+        ?string $ip,
+        ?string $requestId,
+        string $event,
+        string $description,
     ): int {
         $user->forceFill([
             'password' => $newPassword,
@@ -55,8 +87,8 @@ class ChangeStaffPassword
 
         ActivityLog::create([
             'log_name' => 'user',
-            'event' => 'password_changed',
-            'description' => "{$user->email} changed their own password",
+            'event' => $event,
+            'description' => "{$user->email} {$description}",
             'causer_type' => $user->getMorphClass(),
             'causer_id' => $user->id,
             'subject_type' => $user->getMorphClass(),

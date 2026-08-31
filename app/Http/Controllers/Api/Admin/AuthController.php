@@ -10,13 +10,17 @@ use App\Domain\Shared\Support\PasswordHash;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\EnsureRecentlyReauthenticated;
 use App\Http\Requests\Admin\ChangePasswordRequest;
+use App\Http\Requests\Admin\ForgotPasswordRequest;
 use App\Http\Requests\Admin\LoginRequest;
+use App\Http\Requests\Admin\ResetPasswordRequest;
 use App\Http\Requests\Admin\UpdateProfileRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OAT;
+use Throwable;
 
 /**
  * Password + mandatory TOTP 2FA for Super Admin / Event Manager — docs/02
@@ -230,6 +234,116 @@ class AuthController extends Controller
         $user = $request->user();
 
         return response()->json($this->accountPayload($user));
+    }
+
+    #[OAT\Post(
+        path: '/admin/auth/forgot-password',
+        summary: 'Email yourself a password reset link',
+        description: 'Always answers 200 with the same body, whether or not the address belongs to an account.',
+        tags: ['Authentication'],
+        requestBody: new OAT\RequestBody(
+            required: true,
+            content: new OAT\MediaType(
+                mediaType: 'application/json',
+                schema: new OAT\Schema(
+                    required: ['email'],
+                    properties: [new OAT\Property(property: 'email', type: 'string', format: 'email')]
+                )
+            )
+        ),
+        responses: [
+            new OAT\Response(response: 200, description: 'Accepted — a link is sent only if the address belongs to an active account'),
+            new OAT\Response(response: 429, description: 'Too many requests for this address or from this IP'),
+        ]
+    )]
+    public function forgotPassword(ForgotPasswordRequest $request): JsonResponse
+    {
+        $email = $request->string('email')->value();
+
+        $user = User::where('email', $email)->first();
+
+        // Suspended and soft-deleted accounts are silently skipped rather than
+        // refused: a different answer for them would say which addresses
+        // belong to somebody who used to work here.
+        if ($user !== null && $user->isActive()) {
+            try {
+                Password::broker()->sendResetLink(['email' => $email]);
+            } catch (Throwable $e) {
+                // A transport failure must not change the answer. Letting it
+                // escape would 500 for an address that has an account and 200
+                // for one that does not — turning a misconfigured mailer into
+                // a way to enumerate staff, on the one endpoint most carefully
+                // written not to be. The operator finds out here instead.
+                Log::error('Could not send a staff password reset email.', [
+                    'email' => $email,
+                    'mailer' => config('mail.default'),
+                    'exception' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        // One body, always. Whether an address has an account is not something
+        // an unauthenticated caller gets to find out — the whole point of the
+        // rest of this flow being careful is lost if this line branches.
+        return response()->json([
+            'message' => 'If that address belongs to a staff account, a reset link is on its way.',
+        ]);
+    }
+
+    #[OAT\Post(
+        path: '/admin/auth/reset-password',
+        summary: 'Set a new password using an emailed reset token',
+        description: 'Revokes every existing session. Does not sign you in — 2FA still applies at the next login.',
+        tags: ['Authentication'],
+        requestBody: new OAT\RequestBody(
+            required: true,
+            content: new OAT\MediaType(
+                mediaType: 'application/json',
+                schema: new OAT\Schema(
+                    required: ['token', 'email', 'password', 'password_confirmation'],
+                    properties: [
+                        new OAT\Property(property: 'token', type: 'string'),
+                        new OAT\Property(property: 'email', type: 'string', format: 'email'),
+                        new OAT\Property(property: 'password', type: 'string', minLength: ChangePasswordRequest::MIN_LENGTH),
+                        new OAT\Property(property: 'password_confirmation', type: 'string'),
+                    ]
+                )
+            )
+        ),
+        responses: [
+            new OAT\Response(response: 200, description: 'Password set; sign in with it'),
+            new OAT\Response(response: 422, description: 'The link is invalid or expired, or the password fails the policy'),
+        ]
+    )]
+    public function resetPassword(ResetPasswordRequest $request, ChangeStaffPassword $action): JsonResponse
+    {
+        $status = Password::broker()->reset(
+            $request->only('email', 'password', 'password_confirmation', 'token'),
+            function (User $user, string $password) use ($action, $request): void {
+                $action->afterReset(
+                    $user,
+                    $password,
+                    $request->ip(),
+                    $request->header('X-Request-Id'),
+                );
+            }
+        );
+
+        if ($status !== Password::PASSWORD_RESET) {
+            // One message for an expired token, a wrong token and an address
+            // with no account alike: distinguishing them would confirm who
+            // holds an account to anyone who can guess a token format.
+            throw ValidationException::withMessages([
+                'token' => ['This reset link is invalid or has expired. Request a new one.'],
+            ]);
+        }
+
+        // Deliberately no token issued. A reset proves someone can read the
+        // mailbox, which is not the second factor — signing in still requires
+        // the authenticator code where 2FA is confirmed.
+        return response()->json([
+            'message' => 'Password set. Sign in with your new password.',
+        ]);
     }
 
     #[OAT\Patch(

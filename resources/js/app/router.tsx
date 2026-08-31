@@ -4,6 +4,8 @@ import { DashboardLayout } from '@/layouts/DashboardLayout';
 import { ProtectedRoute, GuestRoute, TwoFactorSetupRoute } from '@/app/ProtectedRoute';
 import LoginPage from '@/features/auth/LoginPage';
 import TwoFactorSetupPage from '@/features/auth/TwoFactorSetupPage';
+import ForgotPasswordPage from '@/features/auth/ForgotPasswordPage';
+import ResetPasswordPage from '@/features/auth/ResetPasswordPage';
 import DashboardPage from '@/features/dashboard/DashboardPage';
 import AttendeesPage from '@/features/attendees/AttendeesPage';
 import RegistrationsPage from '@/features/registrations/RegistrationsPage';
@@ -29,6 +31,12 @@ const page = (el: ReactNode) => (
 export const router = createBrowserRouter([
     { path: '/login', element: <GuestRoute><LoginPage /></GuestRoute> },
     { path: '/setup-2fa', element: <TwoFactorSetupRoute><TwoFactorSetupPage /></TwoFactorSetupRoute> },
+
+    // GuestRoute, like /login: somebody already signed in has no use for
+    // either, and /reset-password must stay reachable while signed out —
+    // which is the only state the person following the emailed link is in.
+    { path: '/forgot-password', element: <GuestRoute><ForgotPasswordPage /></GuestRoute> },
+    { path: '/reset-password', element: <GuestRoute><ResetPasswordPage /></GuestRoute> },
 
     { path: '/', element: page(<DashboardPage />) },
     { path: '/attendees', element: page(<AttendeesPage />) },

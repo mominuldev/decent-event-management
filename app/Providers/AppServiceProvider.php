@@ -39,6 +39,7 @@ use Illuminate\Foundation\Events\DiagnosingHealth;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -149,6 +150,17 @@ class AppServiceProvider extends ServiceProvider
         // after five wrong guesses and says so clearly, which is a far
         // better answer to a mistyped digit than a bare 429. The limiter is
         // here to stop a script, not to punish someone squinting at an SMS.
+        // Staff password reset. Cheap to send and expensive to be on the
+        // receiving end of: without a per-address bucket, one caller can fill
+        // a staff member's inbox and train them to ignore the one email that
+        // matters. The per-IP bucket is what stops the same script walking a
+        // list of addresses to find out who works here — which the identical
+        // success response is otherwise carefully hiding.
+        RateLimiter::for('staff-password-reset', fn ($request) => [
+            Limit::perHour(3)->by('email:'.Str::lower(trim((string) $request->input('email')))),
+            Limit::perHour(20)->by('ip:'.$request->ip()),
+        ]);
+
         RateLimiter::for('attendee-login', fn ($request) => [
             Limit::perMinute(10)->by('mobile:'.$request->input('mobile')),
             Limit::perMinute(30)->by('ip:'.$request->ip()),

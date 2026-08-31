@@ -912,6 +912,93 @@
                 }
             }
         },
+        "/admin/auth/forgot-password": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Email yourself a password reset link",
+                "description": "Always answers 200 with the same body, whether or not the address belongs to an account.",
+                "operationId": "c598e7af60ac3614b1899c957d8e681f",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "email"
+                                ],
+                                "properties": {
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Accepted — a link is sent only if the address belongs to an active account"
+                    },
+                    "429": {
+                        "description": "Too many requests for this address or from this IP"
+                    }
+                }
+            }
+        },
+        "/admin/auth/reset-password": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Set a new password using an emailed reset token",
+                "description": "Revokes every existing session. Does not sign you in — 2FA still applies at the next login.",
+                "operationId": "cb0bab9b93534f4b1c2aece9f625a69a",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "token",
+                                    "email",
+                                    "password",
+                                    "password_confirmation"
+                                ],
+                                "properties": {
+                                    "token": {
+                                        "type": "string"
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email"
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "minLength": 12
+                                    },
+                                    "password_confirmation": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Password set; sign in with it"
+                    },
+                    "422": {
+                        "description": "The link is invalid or expired, or the password fails the policy"
+                    }
+                }
+            }
+        },
         "/admin/auth/password": {
             "post": {
                 "tags": [

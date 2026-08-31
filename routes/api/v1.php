@@ -24,6 +24,19 @@ Route::get('media/{mediaFile:ulid}', [SignedMediaController::class, 'show'])
 // Admin console — unauthenticated
 Route::prefix('admin')->name('admin.')->group(function (): void {
     Route::post('auth/login', [AdminAuthController::class, 'login'])->name('auth.login');
+
+    // Forgotten password. Unauthenticated by necessity — the whole point is
+    // that the caller cannot sign in — so `forgot-password` carries its own
+    // strict limiter: it puts mail in somebody else's inbox on request, and
+    // is the one route here that could be used to enumerate staff addresses.
+    // `reset-password` stays on the shared api bucket; its token is 64 random
+    // characters, so guessing is not the threat.
+    Route::post('auth/forgot-password', [AdminAuthController::class, 'forgotPassword'])
+        ->middleware('throttle:staff-password-reset')
+        ->name('auth.forgot-password');
+
+    Route::post('auth/reset-password', [AdminAuthController::class, 'resetPassword'])
+        ->name('auth.reset-password');
 });
 
 // Admin console — authenticated, but not necessarily past 2FA yet
