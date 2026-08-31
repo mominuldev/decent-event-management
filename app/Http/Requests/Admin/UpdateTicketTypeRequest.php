@@ -14,6 +14,20 @@ class UpdateTicketTypeRequest extends FormRequest
     }
 
     /**
+     * An explicit null means "open to everyone", the same as an empty list —
+     * the column is NOT NULL, so passing the null straight through swaps a
+     * 1364 for a 1048 rather than fixing anything. Absent is left absent: on
+     * a create the model's own default applies, and on an update it has to
+     * keep meaning "leave this alone".
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->exists('allowed_participant_types') && $this->input('allowed_participant_types') === null) {
+            $this->merge(['allowed_participant_types' => []]);
+        }
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function rules(): array

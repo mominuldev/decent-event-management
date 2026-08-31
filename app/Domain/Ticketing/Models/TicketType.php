@@ -48,6 +48,25 @@ class TicketType extends Model
         'sort_order',
     ];
 
+    /**
+     * `allowed_participant_types` is `json NOT NULL` with no default, and
+     * MySQL rejects an insert that omits it (1364). Every write path has to
+     * supply one, so the model supplies it rather than each caller
+     * remembering: the admin console's create form did not send the key at
+     * all, and creating a ticket type through it failed outright.
+     *
+     * `[]` is the right default because it already means something — an empty
+     * list is "open to every participant type", which is how
+     * CreateRegistration::assertParticipantTypeAllowed() and the public site
+     * both read it. A raw JSON string, because $attributes holds pre-cast
+     * database values.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'allowed_participant_types' => '[]',
+    ];
+
     protected function casts(): array
     {
         return [

@@ -64,6 +64,9 @@ export interface TicketTypePayload {
     base_admits: number;
     max_admits: number;
     quantity_total?: number | null;
+    /** Empty = open to every participant type. The column is NOT NULL, so this
+     *  is always sent as a list, never omitted and never null. */
+    allowed_participant_types?: string[];
     requires_approval?: boolean;
     includes_tshirt?: boolean;
     includes_meal?: boolean;

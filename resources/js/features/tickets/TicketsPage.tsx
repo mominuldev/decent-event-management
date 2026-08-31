@@ -10,6 +10,7 @@ import { useToast } from '@/components/Toast';
 import { cn, money, num } from '@/lib/cn';
 import { totalOf } from '@/lib/pagination';
 import { shortDate } from '@/lib/format';
+import { PARTICIPANT_TYPES } from '@/features/attendees/types';
 import { useTableSorting } from '@/lib/sorting';
 import * as ticketsApi from './api';
 import type { Ticket, TicketType, TicketTypePayload } from './types';
@@ -253,6 +254,7 @@ function emptyTicketTypeForm(): TicketTypePayload {
         base_admits: 1,
         max_admits: 1,
         quantity_total: null,
+        allowed_participant_types: [],
         requires_approval: false,
         includes_tshirt: false,
         includes_meal: false,
@@ -276,6 +278,7 @@ function ticketTypeToForm(t: TicketType): TicketTypePayload {
         base_admits: t.base_admits,
         max_admits: t.max_admits,
         quantity_total: t.quantity_total,
+        allowed_participant_types: t.allowed_participant_types ?? [],
         requires_approval: t.requires_approval,
         includes_tshirt: t.includes_tshirt,
         includes_meal: t.includes_meal,
@@ -413,6 +416,44 @@ function TicketTypeFormDialog({ existing, onClose }: { existing: TicketType | nu
                             onChange={(e) => setForm({ ...form, quantity_total: e.target.value ? Number(e.target.value) : null })}
                         />
                     </div>
+                </div>
+
+                <div>
+                    <Label>Who may buy this</Label>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {PARTICIPANT_TYPES.map(({ value, label }) => {
+                            const selected = (form.allowed_participant_types ?? []).includes(value);
+                            return (
+                                <button
+                                    key={value}
+                                    type="button"
+                                    aria-pressed={selected}
+                                    onClick={() => {
+                                        const current = form.allowed_participant_types ?? [];
+                                        setForm({
+                                            ...form,
+                                            allowed_participant_types: selected
+                                                ? current.filter((v) => v !== value)
+                                                : [...current, value],
+                                        });
+                                    }}
+                                    className={cn(
+                                        'rounded-lg px-2.5 py-1 text-[12.5px] font-medium ring-1 transition',
+                                        selected
+                                            ? 'bg-brand-50 text-accent ring-brand-200 dark:bg-brand-500/10 dark:ring-brand-500/25'
+                                            : 'bg-surface-2 text-text-muted ring-border hover:text-text',
+                                    )}
+                                >
+                                    {label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <p className="mt-1 text-[11.5px] text-text-faint">
+                        {(form.allowed_participant_types ?? []).length === 0
+                            ? 'None selected — open to everyone. Registration refuses anyone outside this list, so leave it empty unless the ticket is genuinely restricted.'
+                            : 'Only these participant types may register for this ticket. Everyone else is refused at checkout.'}
+                    </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
