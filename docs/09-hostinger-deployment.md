@@ -141,6 +141,61 @@ same unreachable store, `CACHE_STORE=array` applies the migration normally.
 half-created schema — and still drops every table, so it is a last resort on a database holding
 real registrations.
 
+### Email that reaches the inbox, not the spam folder
+
+Mail sending and mail *arriving* are different problems. Once `MAIL_MAILER=smtp` works
+(`php artisan mail:test you@example.com` succeeds), everything below is DNS and identity — no
+amount of application code substitutes for it, and until it is in place a reset link landing in
+junk is the expected outcome rather than a fault.
+
+**1. The From address must belong to the site's own domain, and to the mailbox that
+authenticates.** Two separate rules that are easy to satisfy by halves:
+
+```dotenv
+MAIL_USERNAME=no-reply@nsbatihighschool.edu.bd     # the mailbox that authenticates
+MAIL_FROM_ADDRESS=no-reply@nsbatihighschool.edu.bd  # must be the same address
+MAIL_FROM_NAME="NHS Centennial"
+```
+
+Hostinger rejects a `From` the authenticated mailbox does not own, so a mismatch fails at send
+time and is easy to notice. The subtler failure is a `From` on *some other* domain — a personal
+one, or the default `hello@example.com` — which sends fine and then fails DMARC alignment at the
+recipient, because the domain being authenticated is not the domain in the `From` header. That
+one is invisible from this side and lands in spam every time.
+
+**2. Publish SPF, DKIM and DMARC for that domain.** All three are DNS TXT records; two of them
+Hostinger generates for you (*hPanel → Emails → the domain → DNS / Email deliverability*, names
+vary).
+
+| Record | Where | What it does |
+|---|---|---|
+| SPF | `@` | Names the servers allowed to send as this domain. One SPF record only — merge, never add a second |
+| DKIM | the selector host Hostinger gives you | Signs each message so the recipient can prove it was not altered |
+| DMARC | `_dmarc` | Tells the recipient what to do when SPF/DKIM fail, and asks for reports |
+
+Start DMARC at `p=none` while you check the reports, then tighten:
+
+```
+v=DMARC1; p=none; rua=mailto:dmarc@nsbatihighschool.edu.bd; fo=1
+```
+
+**3. Verify rather than assume.** Send to a Gmail address, open the message, *Show original*: SPF,
+DKIM and DMARC must all read **PASS**. <https://www.mail-tester.com> scores the same things out of
+10 and names what is missing — a fresh domain with all three records typically lands 8–10, and
+without them 4–5, which is squarely in spam territory.
+
+**4. A brand-new sending domain has no reputation.** The first bulk run — 12,000 ticket
+confirmations — from a domain that has never sent anything is itself a spam signal, whatever the
+DNS says. Send staff mail through it for a few days first, and if the event blast matters more
+than the cost, a transactional provider (Postmark, SES, Resend — all already scaffolded in
+`config/services.php`) carries its own reputation and is what those services are for.
+
+**5. What the application already does about it.** `StaffPasswordResetMail` sends
+`multipart/alternative` — HTML *and* a real plain-text part — because an HTML-only message is a
+long-standing spam signal. ⚠️ **`NotificationMail` (the shell every attendee email uses,
+including the ticket confirmation) is still HTML-only.** That is the same defect at 12,000 times
+the volume, and it wants a text alternative before the ticket blast goes out.
+
 ### Server-only files and `rsync --delete`
 
 The deploy syncs with `--delete`, so **anything on the host that this repo does not track is

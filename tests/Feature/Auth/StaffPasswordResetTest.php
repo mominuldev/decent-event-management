@@ -8,6 +8,7 @@ use App\Mail\StaffPasswordResetMail;
 use Database\Seeders\RbacSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Testing\TestResponse;
@@ -149,6 +150,72 @@ class StaffPasswordResetTest extends TestCase
         $known->assertOk();
         $unknown->assertOk();
         $this->assertSame($known->getContent(), $unknown->getContent());
+    }
+
+    /**
+     * The broker refuses a second link inside its own throttle window and
+     * sends nothing, which from outside is indistinguishable from a mail
+     * failure — the response is the same 200 either way. The log is the only
+     * place that difference can surface, so it has to.
+     */
+    public function test_a_link_the_broker_declined_to_send_is_logged(): void
+    {
+        Mail::fake();
+        Log::spy();
+
+        $this->forgot(['email' => 'staff@example.com'])->assertOk();
+        // Inside auth.passwords.users.throttle, so the broker sends nothing.
+        $this->forgot(['email' => 'staff@example.com'])->assertOk();
+
+        Mail::assertSentCount(1);
+
+        Log::shouldHaveReceived('warning')->withArgs(
+            fn (string $message, array $context = []): bool => str_contains($message, 'was not sent')
+                && ($context['status'] ?? null) === Password::RESET_THROTTLED
+        )->once();
+    }
+
+    public function test_an_inactive_account_says_so_in_the_log(): void
+    {
+        Mail::fake();
+        Log::spy();
+        $this->user->forceFill(['status' => 'suspended'])->save();
+
+        $this->forgot(['email' => 'staff@example.com'])->assertOk();
+
+        Log::shouldHaveReceived('warning')->withArgs(
+            fn (string $message, array $context = []): bool => str_contains($message, 'not active')
+                && ($context['status'] ?? null) === 'suspended'
+        )->once();
+    }
+
+    /**
+     * Sent through the real mailer on the array transport rather than
+     * Mail::fake(), because what matters is the MIME a provider receives —
+     * a faked mailer never builds one. An HTML-only message is a spam signal,
+     * and a reset email in a junk folder is a recovery path that does not
+     * exist.
+     */
+    public function test_the_message_carries_both_a_text_and_an_html_part(): void
+    {
+        config(['mail.default' => 'array']);
+
+        $this->forgot(['email' => 'staff@example.com'])->assertOk();
+
+        $messages = Mail::getSymfonyTransport()->messages();
+        $this->assertNotEmpty($messages, 'no message reached the array transport');
+
+        $email = $messages->last()->getOriginalMessage();
+        $text = (string) $email->getTextBody();
+        $html = (string) $email->getHtmlBody();
+
+        $this->assertNotSame('', $text, 'the message must carry a plain-text alternative');
+        $this->assertNotSame('', $html);
+
+        // The link has to be usable from the text part on its own — somebody
+        // reading it there cannot click a button.
+        $this->assertStringContainsString('/reset-password?token=', $text);
+        $this->assertStringNotContainsString('<div', $text, 'the text part must not be markup');
     }
 
     // ---- using the link ----

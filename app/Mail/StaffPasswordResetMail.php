@@ -46,6 +46,14 @@ class StaffPasswordResetMail extends Mailable
 
     public function content(): Content
     {
-        return new Content(view: 'emails.staff-password-reset');
+        // Both parts, deliberately. An HTML-only message is one of the
+        // oldest and most reliable spam signals there is, and a reset email
+        // that lands in a junk folder is a recovery path that does not exist.
+        // The text part is not a fallback nobody reads — it is half of what
+        // decides whether the HTML one is seen at all.
+        return new Content(
+            view: 'emails.staff-password-reset',
+            text: 'emails.staff-password-reset-text',
+        );
     }
 }

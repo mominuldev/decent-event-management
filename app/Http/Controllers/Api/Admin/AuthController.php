@@ -265,9 +265,42 @@ class AuthController extends Controller
         // Suspended and soft-deleted accounts are silently skipped rather than
         // refused: a different answer for them would say which addresses
         // belong to somebody who used to work here.
+        // Every outcome is logged, because every one of them looks identical
+        // from outside: the response cannot say what happened without telling
+        // an anonymous caller who holds an account, so the log is the only
+        // place an operator can find out why an expected email did not
+        // arrive. Silence here previously meant "no exception", which is not
+        // the same as "sent" — the broker declines quietly when its own
+        // 60-second throttle is still running.
+        if ($user === null) {
+            Log::info('Staff password reset asked for an address with no account.', ['email' => $email]);
+        } elseif (! $user->isActive()) {
+            Log::warning('Staff password reset skipped: the account is not active.', [
+                'email' => $email,
+                'status' => $user->status,
+            ]);
+        }
+
         if ($user !== null && $user->isActive()) {
             try {
-                Password::broker()->sendResetLink(['email' => $email]);
+                $status = Password::broker()->sendResetLink(['email' => $email]);
+
+                if ($status === Password::RESET_LINK_SENT) {
+                    Log::info('Staff password reset link sent.', [
+                        'email' => $email,
+                        'mailer' => config('mail.default'),
+                    ]);
+                } else {
+                    // passwords.throttled is the common one: the broker
+                    // refuses a second link within
+                    // auth.passwords.users.throttle seconds and sends nothing,
+                    // which reads from outside exactly like a mail failure.
+                    Log::warning('Staff password reset link was not sent.', [
+                        'email' => $email,
+                        'status' => $status,
+                        'mailer' => config('mail.default'),
+                    ]);
+                }
             } catch (Throwable $e) {
                 // A transport failure must not change the answer. Letting it
                 // escape would 500 for an address that has an account and 200
