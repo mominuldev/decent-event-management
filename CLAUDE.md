@@ -1051,6 +1051,13 @@ php artisan db:seed --class=LoadTestSeeder       # bulk volume for performance w
 ```
 ⚠️ **`php artisan db:seed` is a local-only command.** `DatabaseSeeder` calls `DummyDataSeeder` (fake registrations, payments and tickets) *and* creates a hardcoded super admin whose password is literally `password`. On a live database, run the individual seeders you actually want — `RbacSeeder`, `EventSettingSeeder`, `TicketTypeSeeder`, `NotificationTemplateSeeder` — and make the first staff account with `admin:create-super-admin` below.
 
+**A deploy that dies on `1050 Table 'permissions' already exists`:**
+```bash
+php artisan migrate:repair-permission-tables            # no-op unless the database is half-applied
+php artisan migrate:repair-permission-tables --dry-run
+```
+Spatie's permission migration ends its `up()` with a cache flush, *after* its five `Schema::create` calls, so an unreachable cache store (`CACHE_STORE=redis` on a host with no redis) throws with every table already created. MySQL does not roll DDL back and Laravel records a migration only after `up()` returns, so the tables survive unrecorded and every later `migrate` dies re-creating `permissions`. The command records the migration rather than dropping anything — reaching the flush at all means every create succeeded — and **refuses when only some of the tables exist**, since declaring a partial schema applied moves the eventual failure further from its cause. The deploy runs it before `migrate`, and runs `migrate` itself with `CACHE_STORE=array` so the flush can no longer reach anything able to fail. See [docs/09](docs/09-hostinger-deployment.md).
+
 **First Super Admin on a new environment:**
 ```bash
 php artisan admin:create-super-admin                       # prompts for email and password

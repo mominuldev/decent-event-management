@@ -97,6 +97,50 @@ web-served directory and exposes `.env`.
 
 **Verify:** `curl -sI https://100potal.nsbatihighschool.edu.bd/.env` must return 403 or 404, never 200.
 
+### "Base table or view already exists: 1050"
+
+If a deploy dies on
+
+```
+2026_08_02_195127_create_permission_tables ... FAIL
+SQLSTATE[42S01]: Base table or view already exists: 1050 Table 'permissions' already exists
+```
+
+the database is **half-applied**, and it happened on an earlier run than the one reporting it.
+
+Spatie's permission migration ends its `up()` with a cache flush, *after* all five of its
+`Schema::create` calls:
+
+```php
+app('cache')->store(...)->forget(config('permission.cache.key'));
+```
+
+On a host whose `.env` names a cache store that is not reachable — `CACHE_STORE=redis` on
+shared hosting, which is the default this repo ships — that throws. MySQL does not roll DDL
+back and Laravel records a migration only after `up()` returns, so the five tables survive with
+no `migrations` row naming them. Every run from then on dies re-creating `permissions`.
+
+**Both halves are handled by the deploy now, and neither needs a shell:**
+
+- **Prevention.** `migrate` runs with `CACHE_STORE=array`, so that last statement flushes an
+  in-memory store and can no longer reach anything able to fail. It applies to the migrate
+  commands only — `config:cache` afterwards uses the host's real values.
+- **Repair.** `php artisan migrate:repair-permission-tables` runs before `migrate` on every
+  deploy and is a no-op on a healthy database. Where the tables exist and the migration is
+  unrecorded, it records it — reaching the cache flush at all means every create succeeded, so
+  the schema is complete and there is nothing to rebuild. It records nothing and fails loudly
+  if only *some* of the tables exist, because declaring a partial schema applied moves the
+  eventual error further from its cause.
+
+Verified against a real MySQL rather than reasoned about: with an unreachable cache store the
+migration leaves `permissions` present and unrecorded and the next run reproduces the 1050
+above; the repair records it and migrations run to completion; and on a clean database with the
+same unreachable store, `CACHE_STORE=array` applies the migration normally.
+
+`reset_database` remains for what the repair deliberately will not touch — a genuinely
+half-created schema — and still drops every table, so it is a last resort on a database holding
+real registrations.
+
 ### Server-only files and `rsync --delete`
 
 The deploy syncs with `--delete`, so **anything on the host that this repo does not track is

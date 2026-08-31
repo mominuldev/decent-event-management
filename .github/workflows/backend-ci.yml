@@ -463,23 +463,45 @@ jobs:
             fi
           fi
 
+          # Prevention, and CACHE_STORE=array is the whole of it. Spatie's
+          # permission migration ends its up() with a cache flush, after all
+          # five of its Schema::create calls -- so a .env naming a cache store
+          # the host cannot reach (redis on shared hosting) throws there, with
+          # every table already created and MySQL unable to roll DDL back. An
+          # in-memory store makes that last statement incapable of reaching
+          # anything that can fail. Dotenv does not override a real environment
+          # variable, so this beats whatever .env says, and only for these
+          # commands: config:cache below runs with the host's real values.
+          #
+          # No-op on a healthy database. Records the permission migration when
+          # its tables exist but it was never recorded -- the state a pre-fix
+          # deploy leaves behind, and the reason every run after one dies on
+          # "Base table or view already exists: 1050". It refuses, loudly,
+          # if only some of the tables are there.
+          CACHE_STORE=array "$php_bin" artisan migrate:repair-permission-tables
+
           # migrate:fresh only on an explicit manual dispatch with the box
-          # ticked -- never on a push. It exists because a migration that fails
-          # partway leaves behind tables MySQL will not roll back (DDL is not
-          # transactional) and no migrations row recording them, so every retry
-          # dies on "table already exists" and the only way forward is dropping
-          # them. That needs a shell on the host, which whoever is reading a
-          # failed deploy may not have.
+          # ticked -- never on a push. It exists for corruption the repair
+          # above deliberately will not touch: a half-created schema, where
+          # recording the migration would declare applied something that is
+          # not, and the only way forward is dropping the tables. That needs a
+          # shell on the host, which whoever is reading a failed deploy may
+          # not have.
           if [ "$reset_database" = "true" ]; then
             echo "reset_database was requested: dropping every table and re-migrating."
-            "$php_bin" artisan migrate:fresh --force
-          elif ! "$php_bin" artisan migrate --force; then
+            CACHE_STORE=array "$php_bin" artisan migrate:fresh --force
+          elif ! CACHE_STORE=array "$php_bin" artisan migrate --force; then
             echo
             echo "----------------------------------------------------------------"
             echo "If that says \"table ... already exists\", an earlier migration run"
             echo "created its tables and then threw before recording itself. MySQL"
             echo "does not roll DDL back, so the tables are there with no migrations"
             echo "row naming them, and every retry will fail here from now on."
+            echo
+            echo "migrate:repair-permission-tables already ran above and did not fix"
+            echo "it, so this is NOT the permission-tables case it repairs -- either"
+            echo "a different migration, or a genuinely half-created schema it"
+            echo "refuses to declare applied. Read its output above first."
             echo
             echo "Recover without a shell: Actions -> Backend CI -> Run workflow, tick"
             echo "reset_database, Run. It drops every table and migrates cleanly, so"
