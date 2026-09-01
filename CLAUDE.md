@@ -907,6 +907,33 @@ QR ticket sent to your email. Keep it for entry.
 
 **Still open:** no host is configured, so both jobs are no-ops — that is the unpicked hosting provider in External Dependencies, unchanged. **Rollback is untested**: the sha-tagged images make it a `docker compose pull` of the previous tag, but nothing rehearses it and nothing reverts a migration. ~~And the deploy runs no seeders on purpose — `NotificationTemplateSeeder` would silently revert dashboard edits.~~ **Fixed 2026-08-22**: that seeder now follows the same admin-owns-the-value rule as `EventSettingSeeder`, so `subject`, `body`, `is_active` and `whatsapp_template_status` are seeded only for a row that does not exist yet. `variables` is deliberately still refreshed on every run — which placeholders exist is decided by the dispatching listener, and a stale list is worse than none because the editor shows it as the set that is safe to use — and `estimated_segments` is recomputed from the body the row actually holds, so an edited template does not report the cost of the copy it replaced. Three tests pin it, each confirmed to fail against the previous `updateOrCreate`. The deploy still runs no seeders, but re-running them by hand is now safe.
 
+### ✅ A settled payment can no longer be rolled back by ticket issuance — 2026-09-01
+
+A completed SSLCommerz payment left the public return page spinning on **পেমেন্ট নিশ্চিত করা হচ্ছে** for ever, with the money taken. Reported from production; reproduced, fixed and verified against a real sandbox transaction the same day.
+
+**The gateway was never the problem — the payment settled and was then rolled back.** `VerifyPayment::handle()` dispatches `PaymentSucceeded` from *inside* its own transaction, and `IssueTicketForSucceededPayment` ran synchronously off that event, so ticket issuance sat inside the transaction that settles the money. `QrSigner::sign()` throws whenever the active key has no usable private half, the throw propagated out of `DB::transaction()`, and everything unwound:
+
+```
+>>> THREW: RuntimeException: QrSigner has no private key configured for the active signing key 'key-1'.
+>>> payment status after: initiated
+>>> registration status after: pending_payment
+```
+
+The payer is charged at the gateway, the payment reverts to `initiated`, the registration to `pending_payment` — and `PaymentStatusPoller` re-runs verify every 3 seconds, **repeating the rollback each time**. Nothing is logged as a payment failure, because from the database's point of view the payment never succeeded.
+
+- **Issuance is now `App\Jobs\IssueTicketForRegistrationJob` on the `tickets` lane**, dispatched `->afterCommit()` from a listener that is a thin dispatcher, matching `GenerateTicketAssets` exactly. Settlement is durable the moment the gateway confirms it; a failure to issue is a retryable job that ends in `failed_jobs` where it can be seen and replayed, instead of silently unwinding a sale. The job carries the duplicate guard, so a retry never mints a second ticket.
+- **`VerifyManualPayment` had the identical hazard** — `IssueTicket` called directly inside its transaction — so an Event Manager approving a personal-wallet payment lost the approval the same way, with nothing on screen to say so. Same fix. (This does *not* close D6: it still settles the payment itself rather than dispatching an event.)
+- **The deploy now provisions the signing key.** `.github/workflows/backend-ci.yml` ran migrations, caches and `admin:create-super-admin` but never `qr-signing:generate-key`, which docs/09 §6 left as a manual post-deploy step. It now runs `--if-missing` before `config:cache`, so it acts on exactly one deploy and never touches an existing key.
+- **⚠️ A set `QR_SIGNING_PRIVATE_KEY` is not proof the key works, and the deploy check does not catch this.** `--if-missing` only tests whether that one line is non-empty. Two other states produce the *identical* throw: a blank `QR_SIGNING_KEY_ID` (dotenv returns `''` for `KEY=`, not the `'key-1'` default, so `env('QR_SIGNING_KEY_ID', 'key-1')` is `''` and `QrSigner` registers nothing), and key material that does not base64-decode to 64 bytes, which the constructor skips in silence. Verify with `dump(config('services.qr_signing.active_key_id'), strlen((string) base64_decode((string) config('services.qr_signing.active_private_key'), true)))` — the id must be non-empty and the length exactly 64.
+
+**`php artisan payments:stuck`** finds payments the payer believes they made and this system does not. Read-only by default (no gateway call, no write); `--check` asks each gateway what really happened; `--recover` settles the confirmed ones through `VerifyPayment`, so the val_id and amount re-checks still apply. The scheduled `ExpirePaymentIntents` sweeper already recovers these, but only once a payment is past `expires_at` and only where the scheduler cron actually runs — and note that before this fix the sweeper **died on the first stuck payment**, since `VerifyPayment` threw inside its `chunkById` closure, so every payment behind it in the sweep was left unswept too.
+
+**Verified end to end against the real SSLCommerz sandbox, with Playwright** — the first completed sandbox transaction this repository has run. A card payment driven through the hosted EasyCheckOut page and its OTP step, returning through the real success leg: payment `succeeded` at 250000 paisa with `bank_tran_id 260901192408gm3ENijpowlkjlz`, registration `confirmed`, ticket issued by the queued job, and the success banner rendered in the browser. Test data removed and the `CEN` sold count restored afterwards.
+
+Two environment notes that cost time and will again: a second `next dev` **cannot** be started from the same source directory (Next refuses, and the running one has `NEXT_PUBLIC_API_URL` inlined at compile time, so it cannot be repointed without a restart) — copy the source to a scratch dir and `cp -Rc` its `node_modules`, because Turbopack rejects a symlink that points outside the project root. And run the second backend with `FRONTEND_URL`/`APP_URL` as **real environment variables** rather than editing `.env`; dotenv will not override them, so the running valet site is untouched.
+
+6 new tests (2 in `VerifyPaymentTest`, 4 in `FindStuckPaymentsTest`). The first runs against the `database` queue driver rather than the suite's `sync` default, because that is what the deployment target uses and because queuing is the whole point of the fix. Full suite green, Pint and PHPStan level 8 clean.
+
 ### 💳 Payments — development environment
 
 Development runs against the **SSLCommerz sandbox** (<https://developer.sslcommerz.com/doc/v4/>). Credentials are self-service — no merchant onboarding — so the full money path is live in development. **`sslcommerz` is the public checkout's default gateway** (`services.payment.default_method`, `PAYMENT_DEFAULT_METHOD`); `bkash`/`nagad`/`rocket` still resolve to `FakeGateway` pending Phase 4B, so never make one of them the default.
@@ -949,9 +976,11 @@ Phase 4A shipped `SslCommerzClient` in full but explicitly never called a live s
 
 `POST /public/registrations/{registration}/payment/verify` (`PaymentController::verify`, throttled 20/min) fixes the second: it re-runs the same server-to-server `VerifyPayment` the IPN path uses (`val_id`, falling back to `tran_id`) and re-checks the amount before anything settles. **It accepts no request body**, so the browser's arrival is only a prompt to go ask the gateway — never evidence of payment, and `PaymentVerifyEndpointTest` asserts a caller-supplied `status`/`amount_paid_paisa` changes nothing. Already-settled payments short-circuit without a gateway round trip, so polling is cheap. 4 tests; spec now **106 paths**.
 
-**Found while fixing this, not fixed — flagged:** `VerifyPayment::handle()` dispatches `PaymentSucceeded` inside its own DB transaction, and `IssueTicketForSucceededPayment` runs synchronously. A throw in ticket issuance therefore **rolls back the payment's success** — observed here for real when a missing `QR_SIGNING_PRIVATE_KEY` made `QrSigner::sign()` throw and the verified payment silently reverted to `pending`. In production that means money taken at the gateway with the payment left unsettled until reconciliation. The dev trigger was just the documented `qr-signing:generate-key --if-missing` setup step, but the coupling is the real hazard: issuance belongs on the `tickets` queue lane (`->afterCommit()`), the way `GenerateTicketAssetsJob` already is.
+**Found while fixing this, flagged then, fixed 2026-09-01:** `VerifyPayment::handle()` dispatches `PaymentSucceeded` inside its own DB transaction, and `IssueTicketForSucceededPayment` ran synchronously, so a throw in ticket issuance **rolled back the payment's success**. It went on to do exactly that in production. See [§A settled payment can no longer be rolled back](#-a-settled-payment-can-no-longer-be-rolled-back-by-ticket-issuance--2026-09-01).
 
-**Still open:** a *completed* sandbox payment (driving the hosted checkout to a `VALID` transaction) has not been run — that needs a browser on the EasyCheckOut page, so `verify()`'s success branch and `refund()` are still exercised only against fakes. `SSLCOMMERZ_IPN_IP_ALLOWLIST` remains an intentional no-op until someone supplies SSLCommerz's real IPN ranges.
+**A *completed* sandbox payment was finally run 2026-09-01** — Playwright through the real EasyCheckOut page and its OTP step, returning through the real success leg. `verify()`'s success branch is no longer fake-only; it settled a real transaction (`bank_tran_id 260901192408gm3ENijpowlkjlz`, ৳2,500). See the section below for the recipe, which is worth reusing.
+
+**Still open:** `refund()` is still exercised only against fakes. `SSLCOMMERZ_IPN_IP_ALLOWLIST` remains an intentional no-op until someone supplies SSLCommerz's real IPN ranges.
 
 ### 🚨 External Dependencies (start during Phase 2!)
 - [ ] Payment gateway merchant applications (bKash, Nagad, Rocket, SSLCommerz) — **2-6 weeks lead time**. Blocks Phase 4B (live cutover) only; sandbox work is unblocked. Sequence SSLCommerz first.
@@ -964,7 +993,7 @@ Phase 4A shipped `SslCommerzClient` in full but explicitly never called a live s
 
 ## Repository layout
 
-A single Laravel application at the repo root, which serves **both** the API and the admin dashboard SPA. **`.github/workflows/backend-ci.yml` is the one that actually deploys** — lint, static analysis and `composer audit` on every push, the test suite on pull requests, then a `deploy` job that rsyncs the release to Hostinger over SSH and runs migrations, caches and `admin:create-super-admin --if-missing` on the host (see [docs/09](docs/09-hostinger-deployment.md), and [§First Super Admin](#commands) for the bootstrap). That rsync uses `--delete`, so **anything living only on the server is removed unless the workflow names it** — `.env`, `storage/` and `public/storage` are excluded, and `.htaccess`, `.well-known/` and `.user.ini` are `protect`ed from deletion while still letting the repo's own `public/.htaccess` deploy. `.github/workflows/deploy.yml` (Phase 9) is the **Docker/GHCR path and is not wired to a real host** — it builds and publishes the production image and carries staging/production deploy jobs that are no-ops until `STAGING_HOST`/`PRODUCTION_HOST` are set.
+A single Laravel application at the repo root, which serves **both** the API and the admin dashboard SPA. **`.github/workflows/backend-ci.yml` is the one that actually deploys** — lint, static analysis and `composer audit` on every push, the test suite on pull requests, then a `deploy` job that rsyncs the release to Hostinger over SSH and runs migrations, `qr-signing:generate-key --if-missing`, caches and `admin:create-super-admin --if-missing` on the host (see [docs/09](docs/09-hostinger-deployment.md), and [§First Super Admin](#commands) for the bootstrap). That rsync uses `--delete`, so **anything living only on the server is removed unless the workflow names it** — `.env`, `storage/` and `public/storage` are excluded, and `.htaccess`, `.well-known/` and `.user.ini` are `protect`ed from deletion while still letting the repo's own `public/.htaccess` deploy. `.github/workflows/deploy.yml` (Phase 9) is the **Docker/GHCR path and is not wired to a real host** — it builds and publishes the production image and carries staging/production deploy jobs that are no-ops until `STAGING_HOST`/`PRODUCTION_HOST` are set.
 
 | Path | What lives there |
 |---|---|
@@ -1112,6 +1141,14 @@ php artisan sms:test --balance              # prepaid balance
 php artisan sms:poll-dlr                    # settle sent messages from delivery receipts; scheduled every 5m
 ```
 Unset `REVESMS_API_KEY` and the `sms` channel stays on `FakeSmsDriver` — a checkout with no REVE account still drains its outbox.
+
+**Stuck payments** — a payer charged at the gateway whose payment never settled here (see [§A settled payment can no longer be rolled back](#-a-settled-payment-can-no-longer-be-rolled-back-by-ticket-issuance--2026-09-01)):
+```bash
+php artisan payments:stuck                 # list only — asks no gateway anything, writes nothing
+php artisan payments:stuck --check         # + ask each gateway what really happened (read-only)
+php artisan payments:stuck --recover       # settle the confirmed ones, through VerifyPayment
+```
+`--recover` issues their tickets and notifies the payers, so it is not a dry run. Manual-channel payments are excluded throughout: they have no gateway to ask.
 
 **Backup / restore** (Phase 9 — see CLAUDE.md's Phase 9 section for what this does and doesn't cover):
 ```bash
