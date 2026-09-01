@@ -511,6 +511,21 @@ jobs:
             exit 1
           fi
 
+          # Ticket signing key, before config:cache so the cached config
+          # picks it up. --if-missing writes a fresh Ed25519 keypair into the
+          # host's .env only when QR_SIGNING_PRIVATE_KEY is blank, so it runs
+          # on exactly one deploy and never touches an existing key -- same
+          # shape as admin:create-super-admin --if-missing below.
+          #
+          # docs/09 section 6 asks for this by hand, and skipping it is not a
+          # quiet degradation: QrSigner::sign() throws on every issuance, and
+          # ticket issuance used to sit inside the transaction that settles a
+          # payment, so a real gateway payment was taken and then rolled back.
+          # Issuance is a queued job now (IssueTicketForRegistrationJob), so
+          # the money is safe either way -- but with no key the job just fails
+          # on every retry and nobody gets a ticket.
+          "$php_bin" artisan qr-signing:generate-key --if-missing
+
           "$php_bin" artisan storage:link || true
           "$php_bin" artisan config:cache
           "$php_bin" artisan route:cache

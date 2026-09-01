@@ -6,10 +6,13 @@ use App\Domain\Payment\Actions\VerifyPayment;
 use App\Domain\Payment\Models\Payment;
 use App\Domain\Registration\Models\Attendee;
 use App\Domain\Registration\Models\Registration;
+use App\Domain\Ticketing\Actions\IssueTicket;
 use App\Domain\Ticketing\Models\Ticket;
 use App\Domain\Ticketing\Models\TicketType;
+use App\Jobs\IssueTicketForRegistrationJob;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use RuntimeException;
 use Tests\TestCase;
 
 class VerifyPaymentTest extends TestCase
@@ -216,6 +219,108 @@ class VerifyPaymentTest extends TestCase
             'id' => $this->ticketType->id,
             'quantity_reserved' => 0,
             'quantity_sold' => 1,
+        ]);
+    }
+
+    /**
+     * The money invariant: a payment the gateway has confirmed stays
+     * confirmed, whatever happens downstream of it.
+     *
+     * Ticket issuance used to run synchronously off `PaymentSucceeded`,
+     * which `VerifyPayment` dispatches from inside its own transaction —
+     * so a throw in issuance rolled the settlement back and left the payer
+     * charged at the gateway with the registration still `pending_payment`
+     * and the return page polling a spinner for ever. The commonest cause
+     * is the one set up here: a deployment where `qr-signing:generate-key`
+     * was never run, so `QrSigner::sign()` throws on every issuance.
+     *
+     * Runs against the `database` queue driver rather than the suite's
+     * `sync` default because that is what the deployment target uses
+     * (docs/09 section 5) — and because it is the whole point of the test:
+     * issuance must be a queued job, not something the settlement
+     * transaction is waiting on.
+     */
+    public function test_a_gateway_confirmed_payment_settles_even_when_ticket_issuance_cannot_run(): void
+    {
+        config([
+            'queue.default' => 'database',
+            'services.qr_signing.active_key_id' => 'key-1',
+            'services.qr_signing.active_private_key' => null,
+            'services.qr_signing.private_keys' => [],
+            'services.qr_signing.retired_public_keys' => [],
+        ]);
+
+        $gatewayReference = 'FAKE-VERIFY-'.strtoupper(bin2hex(random_bytes(10)));
+
+        Cache::put("fake_gateway:session:{$gatewayReference}", [
+            'status' => 'succeeded',
+            'amount_paisa' => 50000,
+            'gateway_transaction_id' => 'FAKETXN123',
+        ]);
+
+        $this->payment->update(['gateway_reference' => $gatewayReference]);
+
+        $outcome = $this->verifyPayment->handle($this->payment);
+
+        $this->assertEquals(VerifyPayment::OUTCOME_SUCCEEDED, $outcome);
+
+        $this->assertDatabaseHas('payments', [
+            'ulid' => $this->payment->ulid,
+            'status' => 'succeeded',
+            'amount_paid_paisa' => 50000,
+        ]);
+
+        $this->assertDatabaseHas('registrations', [
+            'ulid' => $this->registration->ulid,
+            'status' => 'paid',
+        ]);
+
+        // Queued, not run inline — so nothing it does can reach back into
+        // the transaction that settled the money.
+        $this->assertDatabaseHas('jobs', ['queue' => 'tickets']);
+        $this->assertDatabaseMissing('tickets', ['registration_id' => $this->registration->id]);
+    }
+
+    /**
+     * And when that queued job does run without a signing key, it fails as
+     * a job — loudly, retryably, and with the settled payment untouched.
+     */
+    public function test_a_failing_issuance_job_leaves_the_settled_payment_alone(): void
+    {
+        config([
+            'services.qr_signing.active_key_id' => 'key-1',
+            'services.qr_signing.active_private_key' => null,
+            'services.qr_signing.private_keys' => [],
+            'services.qr_signing.retired_public_keys' => [],
+        ]);
+
+        $this->payment->update([
+            'status' => 'succeeded',
+            'amount_paid_paisa' => 50000,
+            'net_paisa' => 50000,
+        ]);
+        $this->registration->update(['status' => 'paid']);
+
+        $threw = false;
+
+        try {
+            app(IssueTicketForRegistrationJob::class, ['registrationId' => $this->registration->id])
+                ->handle(app(IssueTicket::class));
+        } catch (RuntimeException $e) {
+            $threw = true;
+            $this->assertStringContainsString('no private key', $e->getMessage());
+        }
+
+        $this->assertTrue($threw, 'Expected issuance to fail without a signing key.');
+
+        $this->assertDatabaseHas('payments', [
+            'ulid' => $this->payment->ulid,
+            'status' => 'succeeded',
+        ]);
+
+        $this->assertDatabaseHas('registrations', [
+            'ulid' => $this->registration->ulid,
+            'status' => 'paid',
         ]);
     }
 }

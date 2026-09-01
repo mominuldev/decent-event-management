@@ -5,7 +5,7 @@ namespace App\Domain\Payment\Actions;
 use App\Domain\Payment\Events\ManualPaymentVerified;
 use App\Domain\Payment\Models\Payment;
 use App\Domain\Shared\Models\User;
-use App\Domain\Ticketing\Actions\IssueTicket;
+use App\Jobs\IssueTicketForRegistrationJob;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -62,8 +62,14 @@ class VerifyManualPayment
                 'amount_paisa' => $payment->amount_due_paisa,
             ]);
 
+            // Queued, not issued here, for the same reason the gateway path
+            // queues it ({@see \App\Jobs\IssueTicketForRegistrationJob}):
+            // this whole method is one transaction, so a throw in issuance —
+            // a missing QR signing key being the commonest — would roll back
+            // the approval an Event Manager just gave a payment that really
+            // was received. The job carries its own duplicate guard.
             if ($registration !== null) {
-                app(IssueTicket::class)->execute($registration);
+                IssueTicketForRegistrationJob::dispatch($registration->id)->afterCommit();
             }
 
             ManualPaymentVerified::dispatch($payment, $verifiedBy);

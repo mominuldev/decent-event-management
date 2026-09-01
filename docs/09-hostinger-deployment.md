@@ -311,8 +311,15 @@ DB_PASSWORD=
 
 FILESYSTEM_DISK=local
 
-# Ticket signing. Generate ON THE SERVER (step 6) — never reuse a
-# development key, and never commit one.
+# Ticket signing. Leave both blank: the deploy runs
+# `qr-signing:generate-key --if-missing`, which fills them in on the server
+# on the first deploy that finds them empty and never touches them again.
+# Never reuse a development key, and never commit one.
+#
+# If they are somehow blank at runtime, QrSigner::sign() throws and no
+# ticket can be issued for any paid registration — the issuance job just
+# fails and retries. The payment itself is safe; issuance runs on the
+# `tickets` queue, off the transaction that settles the money.
 QR_SIGNING_KEY_ID=
 QR_SIGNING_PRIVATE_KEY=
 
@@ -433,7 +440,7 @@ mkdir -p storage/app/public storage/app/private \
 chmod -R 775 storage bootstrap/cache
 
 php artisan key:generate            # only if APP_KEY is still blank
-php artisan qr-signing:generate-key --if-missing   # writes its own keypair into .env
+php artisan qr-signing:generate-key --if-missing   # the deploy now does this too; harmless to repeat
 php artisan migrate --force
 php artisan storage:link
 
