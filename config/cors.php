@@ -18,7 +18,7 @@ return [
     | redirect (config/services.php) — reused here so there's one source of
     | truth for "what origin is the frontend." Falls back to just the local
     | dev origin when unset, e.g. in review/CI environments with no frontend
-    | deployed yet. Production value: https://101.nsbatihighschool.edu.bd — set
+    | deployed yet. Production value: https://100.nsbatihighschool.edu.bd — set
     | via FRONTEND_URL in the production env, not hardcoded here.
     |
     */
