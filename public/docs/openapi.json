@@ -6468,7 +6468,7 @@
                         "description": "Missing settings.update permission"
                     },
                     "404": {
-                        "description": "No setting exists with that key"
+                        "description": "The key is neither a stored setting nor one defined in config/event_settings.php"
                     }
                 },
                 "security": [

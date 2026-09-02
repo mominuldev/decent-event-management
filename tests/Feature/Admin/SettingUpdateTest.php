@@ -54,12 +54,17 @@ class SettingUpdateTest extends TestCase
             'updated_by_user_id' => $this->admin->id,
         ]);
 
-        $this->getJson(route('api.v1.admin.settings.index'))
-            ->assertStatus(200)
-            ->assertJsonPath('data.event.0.key', $setting->key)
-            ->assertJsonPath('data.event.0.type', 'datetime')
-            ->assertJsonPath('data.event.0.is_public', true)
-            ->assertJsonPath('data.event.0.updated_by', 'Ayesha Rahman');
+        $response = $this->getJson(route('api.v1.admin.settings.index'))->assertStatus(200);
+
+        // Located by key, not by position: the index renders the whole
+        // catalogue in its declared order, so this row's index moves whenever
+        // a setting is added to the `event` group.
+        $row = collect($response->json('data.event'))->firstWhere('key', $setting->key);
+
+        $this->assertNotNull($row);
+        $this->assertSame('datetime', $row['type']);
+        $this->assertTrue($row['is_public']);
+        $this->assertSame('Ayesha Rahman', $row['updated_by']);
     }
 
     public function test_public_endpoint_never_names_the_staff_member_who_last_edited(): void

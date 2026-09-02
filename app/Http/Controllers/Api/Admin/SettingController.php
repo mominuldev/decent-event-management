@@ -5,12 +5,13 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Domain\Notification\Support\SmsGatewayConfig;
 use App\Domain\Shared\Models\ActivityLog;
 use App\Domain\Shared\Models\EventSetting;
+use App\Domain\Shared\Support\EventSettingCatalogue;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateSettingRequest;
 use App\Http\Resources\EventSettingResource;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use OpenApi\Attributes as OAT;
 use Symfony\Component\HttpFoundation\Response;
@@ -65,10 +66,16 @@ class SettingController extends Controller
     {
         abort_unless((bool) $request->user()?->can('settings.view'), Response::HTTP_FORBIDDEN);
 
-        $settings = EventSetting::with('updatedBy')->get()->groupBy('group');
-        $data = $settings->map(function (Collection $group) {
-            return EventSettingResource::collection($group);
-        });
+        // The catalogue, not the table. A setting is listed because
+        // `config/event_settings.php` defines it, so a key added in a release
+        // is on screen the moment that release deploys — the deploy runs
+        // migrations and no seeders, and before this a new setting stayed
+        // invisible until somebody remembered to re-run `EventSettingSeeder`
+        // on that environment. Rows that exist supply their values; the rest
+        // render their catalogue default and become real rows when saved.
+        $data = EventSettingCatalogue::all()
+            ->groupBy('group')
+            ->map(fn (Collection $group) => EventSettingResource::collection($group->values()));
 
         return response()->json(['data' => $data]);
     }
@@ -125,20 +132,29 @@ class SettingController extends Controller
                 )
             ),
             new OAT\Response(response: 403, description: 'Missing settings.update permission'),
-            new OAT\Response(response: 404, description: 'No setting exists with that key'),
+            new OAT\Response(response: 404, description: 'The key is neither a stored setting nor one defined in config/event_settings.php'),
         ]
     )]
-    public function update(UpdateSettingRequest $request, string $key): EventSettingResource
+    public function update(UpdateSettingRequest $request, string $key): JsonResponse
     {
-        /** @var EventSetting $setting */
-        $setting = EventSetting::where('key', $key)->firstOrFail();
+        // Resolved from the catalogue, so a setting that has never been
+        // saved on this environment can be saved for the first time here.
+        // 404 is now reserved for a key that is neither stored nor defined,
+        // rather than being the answer for every un-seeded setting.
+        $setting = EventSettingCatalogue::resolve($key);
 
-        $oldData = $this->loggable($setting);
+        abort_if($setting === null, Response::HTTP_NOT_FOUND);
 
-        $setting->update([
+        $oldData = $setting->exists ? $this->loggable($setting) : null;
+
+        // `castForStorage()` branches on `is_encrypted`, and for a row being
+        // created here that flag arrives with the catalogue metadata
+        // `resolve()` has already filled in — so the cast must come after it,
+        // never before, or the first save of a credential writes plaintext.
+        $setting->fill([
             'value' => $setting->castForStorage($request->input('value')),
             'updated_by_user_id' => $request->user()?->id,
-        ]);
+        ])->save();
 
         // The gateway credentials are memoised for the life of this
         // process; without this the very next send would still use the old
@@ -162,7 +178,14 @@ class SettingController extends Controller
             'request_id' => $requestId,
         ]);
 
-        return new EventSettingResource($setting->refresh()->load('updatedBy'));
+        // Pinned to 200. A resource wrapping a model that was just inserted
+        // answers 201 on its own, and whether this save materialised the row
+        // or overwrote one is an implementation detail — from the caller's
+        // side a setting was updated either way, which is what the endpoint
+        // documents and what the SPA is written against.
+        return (new EventSettingResource($setting->refresh()->load('updatedBy')))
+            ->response()
+            ->setStatusCode(Response::HTTP_OK);
     }
 
     /**

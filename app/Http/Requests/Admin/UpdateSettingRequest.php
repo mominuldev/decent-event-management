@@ -5,6 +5,7 @@ namespace App\Http\Requests\Admin;
 use App\Domain\Notification\Support\SmsGatewayConfig;
 use App\Domain\Notification\Support\SmsSenderId;
 use App\Domain\Shared\Models\EventSetting;
+use App\Domain\Shared\Support\EventSettingCatalogue;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -89,11 +90,19 @@ class UpdateSettingRequest extends FormRequest
     }
 
     /**
-     * The row being edited, or null when the key does not exist — in which
-     * case the controller's `firstOrFail()` is what answers, with a 404.
+     * The row being edited — the stored one, or an unsaved row built from
+     * `config/event_settings.php` for a setting this environment has never
+     * saved. Resolving through the catalogue rather than the table is what
+     * makes the rules above right for a first save: without it a `bool` or a
+     * `datetime` with no row yet would fall through to the `default` arm and
+     * be validated as plain text, and a credential would miss `isSecret()`
+     * and so be stored unencrypted.
+     *
+     * Null only when the key is neither stored nor defined, which is the
+     * controller's 404.
      */
     public function setting(): ?EventSetting
     {
-        return once(fn () => EventSetting::where('key', (string) $this->route('key'))->first());
+        return once(fn () => EventSettingCatalogue::resolve((string) $this->route('key')));
     }
 }
