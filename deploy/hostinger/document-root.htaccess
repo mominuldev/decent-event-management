@@ -1,0 +1,33 @@
+# decent-event-management — document-root .htaccess
+#
+# Needed only in the shape docs/09 §1 calls the fallback, where
+# HOSTINGER_DEPLOY_PATH is the document root itself (…/public_html). Laravel's
+# front controller lives in public/, so without this file every request lands
+# on the project root and the framework is served instead of the site.
+#
+# It is not tracked as `.htaccess` in this repo because it belongs one level
+# above everything the deploy uploads. rsync's `--filter='protect .htaccess'`
+# stops the deploy from deleting a copy that is already there; the deploy's
+# "Restore the document-root .htaccess" step writes this one when the file has
+# gone missing for any other reason. That step never overwrites an existing
+# file, so a hand-tuned host copy — an hPanel PHP handler block, extra security
+# rules — survives untouched.
+#
+# Inert when the document root has been moved to …/public: Apache only reads
+# .htaccess files from the document root downwards, so a copy sitting above it
+# is never parsed.
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # A per-directory substitution restarts the ruleset with the new path, so
+    # without this the rule below would rewrite its own output forever.
+    RewriteRule ^public/ - [L]
+
+    # Everything is served out of public/ — including /build/… and the
+    # /storage/… symlink. A path with no counterpart there (composer.json,
+    # artisan, vendor/, app/, .env) reaches public/.htaccess, which hands it to
+    # index.php, and Laravel answers 404. That is the point: the project root
+    # is never served directly, even though it is the document root.
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>

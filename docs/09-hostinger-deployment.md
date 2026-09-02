@@ -226,6 +226,31 @@ not merely break routing — it left `.env`, `vendor/`, `app/` and `storage/` si
 directory Apache was serving directly. Moving the document root to `…/app/public` (above) is
 the real fix for that; the protect filters stop the deploy from causing it.
 
+**And since 2026-09-02 the deploy puts one back.** `protect` only stops *this* workflow
+deleting the file — the run logs show it has not deleted one since the filters landed — so a
+document root that keeps losing its `.htaccess` is losing it to something else: hPanel, an
+FTP client, a file manager, another deploy mechanism. The remote script therefore copies
+`deploy/hostinger/document-root.htaccess` into place **when the file is absent**, and never
+touches one that is already there, so an hPanel-generated PHP handler block or a hand-added
+rule survives every deploy.
+
+That tracked copy sends *everything* into `public/`:
+
+```apache
+RewriteRule ^public/ - [L]
+RewriteRule ^(.*)$ public/$1 [L]
+```
+
+which is stricter than the usual `!-f`/`!-d` recipe on purpose. With the document root set to
+the project root, a rewrite that serves existing files first serves `composer.json`,
+`artisan`, `vendor/` and `app/` to anyone who asks for them — verified against the live host,
+where all four answered **200**. Under this rule they resolve to a path that does not exist
+under `public/`, reach `public/.htaccess`, and come back as Laravel's 404.
+
+It is a mitigation, not the fix. **The fix is still moving the document root to `…/public`**
+(§1): a rewrite protects the source tree only for as long as the rewrite is there, which is
+precisely the thing that keeps disappearing.
+
 `.well-known` is the same failure with a slower fuse: ACME challenge files live there during a
 certificate renewal, so deleting them surfaces weeks later as an expired certificate rather
 than as a failed deploy.

@@ -394,6 +394,25 @@ jobs:
           [ -n "$deploy_path" ] || { echo "HOSTINGER_DEPLOY_PATH missing"; exit 1; }
           cd "$deploy_path"
 
+          # The document root's .htaccess is the only thing rewriting requests
+          # into public/, so losing it does not merely break routing -- it
+          # leaves .env, vendor/, app/ and storage/ sitting in a directory
+          # Apache is serving directly. rsync's --filter='protect .htaccess'
+          # above stops *this* deploy deleting it, and the run logs confirm it
+          # no longer does; this puts a copy back when something else did.
+          #
+          # Only when the file is absent. An existing one is left exactly as it
+          # is, so an hPanel-generated PHP handler block or a hand-added rule
+          # is never clobbered by a deploy.
+          #
+          # Harmless in the shape docs/09 section 1 prefers, where the document
+          # root is .../public: Apache reads .htaccess from the document root
+          # downwards, so a copy above it is never parsed.
+          if [ ! -f .htaccess ] && [ -f deploy/hostinger/document-root.htaccess ]; then
+            cp deploy/hostinger/document-root.htaccess .htaccess
+            echo "Document-root .htaccess was missing; restored it from deploy/hostinger/document-root.htaccess."
+          fi
+
           php_bin=""
           for candidate in "$php_override" \
             /opt/alt/php84/usr/bin/php /opt/alt/php83/usr/bin/php \
