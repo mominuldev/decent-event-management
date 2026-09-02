@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Domain\Shared\Models\User;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -26,17 +25,9 @@ class DatabaseSeeder extends Seeder
             ContentSeeder::class,
             NotificationTemplateSeeder::class,
             DummyDataSeeder::class,
+            // Last, and its own class so `db:seed --class=SuperAdminSeeder`
+            // creates the account without the demo data above it.
+            SuperAdminSeeder::class,
         ]);
-
-        $superAdmin = User::firstOrCreate(
-            ['email' => 'mominulfed@gmail.com'],
-            [
-                'name' => 'Super Admin',
-                'phone' => '+8801711022299',
-                'password' => 'password',
-                'status' => 'active',
-            ]
-        );
-        $superAdmin->syncRoles(['Super Admin']);
     }
 }
