@@ -64,6 +64,13 @@ export default function SettingsPage() {
     // Search spans every group — otherwise a reader has to already know which
     // section a setting lives in to find it, which is the thing they came here
     // to look up.
+    //
+    // The box itself carries autofill opt-outs (see the input below) because a
+    // filled search term is destructive here, not cosmetic: it removes rows from
+    // the page, including one that is mid-edit. A browser password manager, on
+    // opening the encrypted SMS key editor, decided this was the username field
+    // and wrote the staff member's own email into it — every group went to zero
+    // hits and the editor they had just opened vanished under them.
     const filtered = useMemo<SettingsByGroup>(() => {
         if (!data) return {};
         if (!searching) return data;
@@ -94,6 +101,10 @@ export default function SettingsPage() {
                     <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-faint" />
                     <Input
                         type="search"
+                        name="settings-search"
+                        autoComplete="off"
+                        data-1p-ignore
+                        data-lpignore="true"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         placeholder="Search settings…"

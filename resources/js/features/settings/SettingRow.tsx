@@ -76,6 +76,19 @@ export default function SettingRow({ setting, canEdit }: { setting: EventSetting
     });
 
     const isBool = setting.type === 'bool';
+    // A secret renders as type="password", and Chrome ignores autocomplete="off"
+    // on one: it treats the page as a sign-in form, fills the password from its
+    // store, and fills the *account name* into whatever text input it decides is
+    // the username field. The only other one on this screen is the search box at
+    // the top — so opening this editor pasted the staff member's own email into
+    // the search, filtered every group to zero hits, and unmounted the row they
+    // had just clicked Set on. It reads as "the SMS settings are missing" and as
+    // "the Set button does nothing", and it is one bug.
+    //
+    // `new-password` is what stops it: Chrome classifies the field as a password
+    // being *created* rather than recalled, so it offers no credential fill and
+    // looks for no username field. The data-* pair is the equivalent opt-out for
+    // 1Password and LastPass, which have their own heuristics.
     const isSecret = setting.is_secret;
     const isWide = WIDE_TYPES.has(setting.type);
     // For a secret the editor always opens blank, so "unchanged" cannot mean
@@ -142,7 +155,9 @@ export default function SettingRow({ setting, canEdit }: { setting: EventSetting
                                                 : setting.type === 'int' || setting.type === 'money' ? 'number'
                                                     : 'text'
                                     }
-                                    autoComplete="off"
+                                    autoComplete={isSecret ? 'new-password' : 'off'}
+                                    data-1p-ignore
+                                    data-lpignore="true"
                                     spellCheck={false}
                                     placeholder={isSecret ? (setting.is_set ? 'Enter a new key to replace it' : 'Paste the key from your REVE account') : undefined}
                                     value={draft}
