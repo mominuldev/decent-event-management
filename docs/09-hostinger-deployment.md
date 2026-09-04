@@ -82,20 +82,82 @@ run Horizon under systemd, install chromium, and only §1–§4 still apply.
 Laravel serves from `public/`, not the project root. Everything above it — `.env`,
 `storage/`, `vendor/` — must not be reachable over HTTP.
 
-Two workable shapes:
+### The layout this deploy is built for
 
-- **Preferred:** deploy to `~/domains/100potal.nsbatihighschool.edu.bd/app`, then point the domain's document root
-  at `~/domains/100potal.nsbatihighschool.edu.bd/app/public` (hPanel: *Websites → Manage → Advanced*, look for a
-  document-root or website-root setting).
-- **If the plan will not let you move the document root:** deploy to `~/domains/100potal.nsbatihighschool.edu.bd/app`
-  and symlink `ln -s ~/domains/100potal.nsbatihighschool.edu.bd/app/public ~/domains/100potal.nsbatihighschool.edu.bd/public_html`. Delete
-  the existing `public_html` first — a symlink cannot replace a non-empty directory.
+```
+/home/u804311556/domains/100potal.nsbatihighschool.edu.bd/
+├── laravel/                 <- HOSTINGER_DEPLOY_PATH. Never served by Apache.
+│   ├── .env
+│   ├── artisan
+│   ├── app/
+│   ├── vendor/
+│   ├── storage/
+│   └── public/              <- source of what gets published below
+└── public_html/             <- HOSTINGER_PUBLIC_PATH. The document root.
+    ├── index.php
+    ├── .htaccess
+    ├── build/               <- Vite assets
+    └── storage -> ../laravel/storage/app/public
+```
 
-Whichever you pick, `HOSTINGER_DEPLOY_PATH` (repo secret) is the **project root**, not the
-document root. Pointing it at `public_html` uploads the whole framework into a
-web-served directory and exposes `.env`.
+The framework is outside the web root **as a matter of filesystem layout**, not because a
+rewrite rule says so. That is the point of it: the previous shape put the project root *at*
+the document root and relied on a single `.htaccess` to keep `.env`, `vendor/`, `app/` and
+`artisan` from being served directly — and that file kept disappearing, at which point all
+four answered **200** to anyone who asked.
+
+Two repo secrets drive it:
+
+| Secret | Value | What it is |
+|---|---|---|
+| `HOSTINGER_DEPLOY_PATH` | `/home/u804311556/domains/100potal.nsbatihighschool.edu.bd/laravel` | the Laravel project root — the directory holding `artisan` and `.env` |
+| `HOSTINGER_PUBLIC_PATH` | `/home/u804311556/domains/100potal.nsbatihighschool.edu.bd/public_html` | the document root, left exactly where hPanel expects it |
+
+`HOSTINGER_PUBLIC_PATH` may equally be a repository *variable* rather than a secret (it is a
+path, not a credential); the workflow reads the secret first and falls back to the variable.
+
+The deploy then does two rsyncs. The first uploads the repository into `laravel/`. The
+second runs **on the host**, between two local directories, and copies only the contents of
+`laravel/public/` into `public_html/` — so nothing is uploaded twice, and no part of the
+framework ever lands in a directory Apache serves.
+
+**Setting up an existing host that currently has the app in `public_html`:**
+
+```bash
+cd ~/domains/100potal.nsbatihighschool.edu.bd
+mkdir -p laravel
+mv public_html/.env laravel/.env          # the only file you cannot get back from git
+mv public_html/storage laravel/storage    # uploaded media, ticket PDFs, logs
+chmod 600 laravel/.env
+```
+
+Then set both secrets and push. The first deploy uploads the tree into `laravel/`, migrates,
+and publishes `public/` over `public_html/` — which **deletes everything else in there**,
+including the old copy of the application. Take a `db:backup` first, and confirm
+`laravel/.env` is in place before you start, because the migrate step refuses without it and
+that refusal is what stops a misconfigured run from reaching the delete.
+
+### The two older shapes still work
+
+Leave `HOSTINGER_PUBLIC_PATH` unset and the publish step skips entirely, so nothing about an
+existing deployment changes:
+
+- **Document root moved:** deploy to `.../app`, point the domain's document root at
+  `.../app/public` (hPanel: *Websites → Manage → Advanced*, look for a document-root or
+  website-root setting). Cleanest of the three, and unavailable on some plans.
+- **`public_html` symlinked:** `ln -s .../app/public .../public_html`. Delete the existing
+  `public_html` first — a symlink cannot replace a non-empty directory.
+
+Both serve `public/` directly, so there is nothing to publish; if `HOSTINGER_PUBLIC_PATH`
+is set anyway the step notices the two paths resolve to the same directory and skips rather
+than syncing a directory over itself.
+
+What is **not** a supported shape is `HOSTINGER_DEPLOY_PATH` pointing at `public_html`. It
+uploads the whole framework into a web-served directory, and the publish step refuses to run
+at all in that case rather than `--delete`-ing the application it would be publishing from.
 
 **Verify:** `curl -sI https://100potal.nsbatihighschool.edu.bd/.env` must return 403 or 404, never 200.
+Under the split layout there is no `.env` under the document root to serve at all.
 
 ### "Base table or view already exists: 1050"
 
@@ -255,6 +317,32 @@ precisely the thing that keeps disappearing.
 certificate renewal, so deleting them surfaces weeks later as an expired certificate rather
 than as a failed deploy.
 
+**The second rsync — publishing `public/` — deletes too, and in the directory Apache serves.**
+It runs on the host between two local directories and excludes the same three paths, for the
+same reasons:
+
+```
+--exclude='.htaccess'        # usually the host's, carrying an hPanel PHP handler block
+--exclude='.well-known/'     # ACME challenges
+--exclude='.user.ini'        # per-directory PHP settings hPanel may write
+```
+
+Everything else in the document root that `laravel/public/` does not carry is removed on every
+deploy. That is deliberate — a stale asset from three releases ago being served is a real
+failure mode — but it means **the document root is not a place to keep anything**. A file you
+put there by hand is gone on the next push.
+
+Two things the publish step does around the excluded `.htaccess`, because excluding it
+outright would leave the site broken in one direction or the other:
+
+- **No `.htaccess` at all** → it copies Laravel's `public/.htaccess` in.
+- **An `.htaccess` with no front-controller rewrite** (an hPanel default, typically just a PHP
+  handler block) → it *appends* Laravel's rules, keeping what was there. Idempotent: a second
+  deploy sees the rewrite and does nothing.
+- **An `.htaccess` still carrying the old `RewriteRule ^(.*)$ public/$1`** → it fails the
+  deploy and says so. Under this layout the document root *is* `public/`, so that rule points
+  every request at a directory which no longer exists there and the whole site answers 404.
+
 ---
 
 ## 2. PHP version and extensions
@@ -305,7 +393,34 @@ everything on it.
 
 **The deploy never uploads one** — `.env` is excluded from the rsync on purpose, because
 it holds credentials and because `--delete` would otherwise destroy the server's copy.
-Create it once, by hand, in the project root.
+Create it once, by hand, at:
+
+```
+/home/u804311556/domains/100potal.nsbatihighschool.edu.bd/laravel/.env
+```
+
+That is `HOSTINGER_DEPLOY_PATH/.env` — the directory holding `artisan`, one level *above*
+the document root. Nothing serves it, and the migrate step aborts the deploy if it is not
+there, so a missing `.env` fails loudly rather than half-deploying.
+
+> **After every `.env` edit, clear and rebuild the config cache**, or the change does
+> nothing: `config:cache` writes `bootstrap/cache/config.php` and every later `artisan` and
+> every request reads *that*, not the file you edited.
+>
+> ```bash
+> cd /home/u804311556/domains/100potal.nsbatihighschool.edu.bd/laravel
+> /opt/alt/php84/usr/bin/php artisan optimize:clear
+> /opt/alt/php84/usr/bin/php artisan config:cache
+> ```
+>
+> The deploy does this itself on every release (`optimize:clear`, then `config:cache`,
+> `route:cache`, `view:cache`), so this is only for an edit made between deploys.
+>
+> This is also why application code must read `config('app.url')` and never
+> `env('APP_URL')`: `env()` returns `null` once the config is cached, because the cached
+> file is loaded *instead of* the `.env`. There are currently **no `env()` calls anywhere in
+> `app/`, `routes/` or `database/`** — only in `config/`, where they belong, and in two
+> tests, which never run cached. Keep it that way.
 
 ```dotenv
 APP_NAME="Decent Event Management"
@@ -395,7 +510,7 @@ intended state.
 **a. The scheduler** — one entry runs everything in `routes/console.php`:
 
 ```
-* * * * * /opt/alt/php83/usr/bin/php /home/uXXXXXXXX/domains/100potal.nsbatihighschool.edu.bd/app/artisan schedule:run >> /dev/null 2>&1
+* * * * * /opt/alt/php83/usr/bin/php /home/u804311556/domains/100potal.nsbatihighschool.edu.bd/laravel/artisan schedule:run >> /dev/null 2>&1
 ```
 
 This drives: payment-intent expiry (every 5 min — without it, abandoned checkouts hold
@@ -413,7 +528,7 @@ database backup (03:00).
 the outbox:
 
 ```
-* * * * * /opt/alt/php83/usr/bin/php /home/uXXXXXXXX/domains/100potal.nsbatihighschool.edu.bd/app/artisan queue:work --queue=payments,tickets,notifications,reports --stop-when-empty --max-time=55 --tries=3 >> /dev/null 2>&1
+* * * * * /opt/alt/php83/usr/bin/php /home/u804311556/domains/100potal.nsbatihighschool.edu.bd/laravel/artisan queue:work --queue=payments,tickets,notifications,reports --stop-when-empty --max-time=55 --tries=3 >> /dev/null 2>&1
 ```
 
 - Queue order **is** priority under the database driver — payments first, reports last,
@@ -439,7 +554,7 @@ permission cache, which failed against a Redis that was not there.
 Clearing it needs the tables dropped. If you have SSH:
 
 ```bash
-cd ~/domains/100potal.nsbatihighschool.edu.bd/app
+cd ~/domains/100potal.nsbatihighschool.edu.bd/laravel
 <php-binary> artisan migrate:fresh --force
 ```
 
@@ -459,7 +574,7 @@ The rsync excludes `storage/`, so on a fresh host that tree does not exist and L
 cannot boot. Create it once:
 
 ```bash
-cd ~/domains/100potal.nsbatihighschool.edu.bd/app
+cd ~/domains/100potal.nsbatihighschool.edu.bd/laravel
 mkdir -p storage/app/public storage/app/private \
          storage/framework/{cache/data,sessions,views} storage/logs
 chmod -R 775 storage bootstrap/cache
@@ -483,6 +598,41 @@ php artisan db:seed --class=NotificationTemplateSeeder
 - **Do not** run `DummyDataSeeder` or `LoadTestSeeder` on production.
 - Re-running the four above is safe: both seeders that own admin-editable values
   (`EventSettingSeeder`, `NotificationTemplateSeeder`) only fill rows that do not exist yet.
+
+### The first Super Admin
+
+The deploy runs `admin:create-super-admin --if-missing --no-interaction` on every release, and
+with nothing configured that **skips and exits 0** — no account is created and the deploy is
+not blocked. It used to pass `--generate-password`, which invented one and printed it into the
+build log; that flag is gone, because a build log is readable by everyone with access to this
+repository and is retained long after the account is forgotten.
+
+Two ways to get the first account, pick one:
+
+**a. Let the deploy do it** — set both in the host's `.env`, then push:
+
+```dotenv
+SUPER_ADMIN_EMAIL=you@example.com
+SUPER_ADMIN_PASSWORD=a-long-password-of-12-characters-or-more
+```
+
+Delete `SUPER_ADMIN_PASSWORD` once the account exists. It is a plaintext credential for as
+long as it sits there, and every later deploy takes the "already exists" branch and never
+reads it again — a password you change afterwards, a rename, or a suspension all survive
+being deployed over.
+
+**b. Create it by hand**, which needs nothing in `.env` at all:
+
+```bash
+cd ~/domains/100potal.nsbatihighschool.edu.bd/laravel
+<php-binary> artisan admin:create-super-admin
+```
+
+It prompts for the email and password and prints neither.
+
+A malformed `SUPER_ADMIN_*` pair (unparseable email, password under 12 characters) **fails the
+deploy** rather than skipping — a blank setting is a decision, a malformed one is a mistake,
+and a green deploy that quietly created no administrator is the failure this guards against.
 
 ---
 
@@ -519,6 +669,10 @@ periodically. Neither is automated.
 ## 8. Verification checklist after the first green deploy
 
 - [ ] `curl -sI https://100potal.nsbatihighschool.edu.bd/.env` → 403/404, not 200
+- [ ] So do `/artisan`, `/composer.json`, `/vendor/autoload.php` and `/app/Providers/AppServiceProvider.php` — under the split layout none of them exist below the document root at all
+- [ ] `ls ~/domains/100potal.nsbatihighschool.edu.bd/public_html` shows `index.php`, `.htaccess`, `build/`, `storage` — and **no** `app/`, `vendor/`, `artisan` or `.env`
+- [ ] The admin console's JS and CSS load (the Vite `build/` directory published, not 404ing)
+- [ ] An attendee photo loads over `/storage/...` (the published `storage` symlink resolves)
 - [ ] `curl -s https://100potal.nsbatihighschool.edu.bd/api/v1/public/ticket-types` → JSON with the `CEN` type
 - [ ] Admin console loads at `/login` and a seeded Super Admin can sign in
 - [ ] A test registration reaches `pending_payment` and returns a real SSLCommerz redirect URL

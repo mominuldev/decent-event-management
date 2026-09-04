@@ -377,6 +377,7 @@ jobs:
       - name: Migrate and refresh caches
         env:
           DEPLOY_PATH: ${{ secrets.HOSTINGER_DEPLOY_PATH }}
+          PUBLIC_PATH: ${{ secrets.HOSTINGER_PUBLIC_PATH || vars.HOSTINGER_PUBLIC_PATH }}
           PHP_BIN_OVERRIDE: ${{ vars.HOSTINGER_PHP_BIN }}
           RESET_DATABASE: ${{ inputs.reset_database }}
         run: |
@@ -384,12 +385,13 @@ jobs:
 
           ssh -i ~/.ssh/id_rsa -p "$DEPLOY_SSH_PORT" -o StrictHostKeyChecking=no \
             "$DEPLOY_SSH_USER@$DEPLOY_SSH_HOST" \
-            bash -s -- "$DEPLOY_PATH" "$PHP_BIN_OVERRIDE" "$RESET_DATABASE" <<'REMOTE'
+            bash -s -- "$DEPLOY_PATH" "$PHP_BIN_OVERRIDE" "$RESET_DATABASE" "$PUBLIC_PATH" <<'REMOTE'
           set -e
 
           deploy_path=$1
           php_override=$2
           reset_database=$3
+          public_path=$4
 
           [ -n "$deploy_path" ] || { echo "HOSTINGER_DEPLOY_PATH missing"; exit 1; }
           cd "$deploy_path"
@@ -405,10 +407,16 @@ jobs:
           # is, so an hPanel-generated PHP handler block or a hand-added rule
           # is never clobbered by a deploy.
           #
-          # Harmless in the shape docs/09 section 1 prefers, where the document
-          # root is .../public: Apache reads .htaccess from the document root
-          # downwards, so a copy above it is never parsed.
-          if [ ! -f .htaccess ] && [ -f deploy/hostinger/document-root.htaccess ]; then
+          # Skipped entirely once HOSTINGER_PUBLIC_PATH is set (docs/09 section
+          # 1's split layout). There this directory is .../laravel, which Apache
+          # never serves -- the served directory is public_html, published from
+          # public/ by the step after this one. Writing a rewrite-into-public/
+          # rule here would be inert at best, and actively misleading to anyone
+          # reading it later as evidence the source tree is protected.
+          if [ -n "$public_path" ]; then
+            echo "Split layout (HOSTINGER_PUBLIC_PATH is set): this directory is not web-served,"
+            echo "so no document-root .htaccess is written here."
+          elif [ ! -f .htaccess ] && [ -f deploy/hostinger/document-root.htaccess ]; then
             cp deploy/hostinger/document-root.htaccess .htaccess
             echo "Document-root .htaccess was missing; restored it from deploy/hostinger/document-root.htaccess."
           fi
@@ -546,6 +554,26 @@ jobs:
           "$php_bin" artisan qr-signing:generate-key --if-missing
 
           "$php_bin" artisan storage:link || true
+
+          # Clear before re-caching, not just re-cache. config:cache overwrites
+          # bootstrap/cache/config.php, but a stale route or view cache from the
+          # previous release is not overwritten by anything below -- and a
+          # cached config file left behind by a *failed* earlier deploy makes
+          # every later `artisan` read values the .env no longer holds, which is
+          # the failure mode that looks like "my .env edit did nothing".
+          #
+          # optimize:clear also runs cache:clear, which reaches the real cache
+          # store. On a host whose store is unreachable that throws, so the
+          # fallback clears exactly the compiled files that matter and leaves
+          # the application cache alone.
+          "$php_bin" artisan optimize:clear || {
+            echo "optimize:clear failed (usually an unreachable cache store); clearing compiled files individually."
+            "$php_bin" artisan config:clear
+            "$php_bin" artisan route:clear
+            "$php_bin" artisan view:clear
+            "$php_bin" artisan event:clear || true
+          }
+
           "$php_bin" artisan config:cache
           "$php_bin" artisan route:cache
           "$php_bin" artisan view:cache
@@ -556,17 +584,176 @@ jobs:
           # so a password changed afterwards, a rename, or a deliberate
           # suspension all survive being deployed over.
           #
-          # --generate-password means this needs no configuration to work: with
-          # no SUPER_ADMIN_PASSWORD set it invents a strong one and prints it
-          # in this log, once, because only a bcrypt hash is stored and nothing
-          # can print it again. THAT PASSWORD IS VISIBLE TO ANYONE WHO CAN READ
-          # THIS LOG -- sign in and change it. Setting SUPER_ADMIN_PASSWORD in
-          # the host's .env takes precedence and prints nothing, which is the
-          # better option if you have shell access.
+          # NO --generate-password. That flag invented a password when none was
+          # configured and printed it here, in a build log that anybody with
+          # read access to this repository can open -- and which is retained
+          # long after the account has been forgotten about. The credential now
+          # only ever comes from the host's own .env:
+          #
+          #   SUPER_ADMIN_EMAIL=you@example.com
+          #   SUPER_ADMIN_PASSWORD=...        # 12 characters or more
+          #
+          # With neither set this step reports that it skipped and exits 0, so a
+          # deploy is never blocked by it; create the account by hand instead
+          # (docs/09 section 6). Delete SUPER_ADMIN_PASSWORD from .env once the
+          # account exists -- it is a plaintext credential for as long as it
+          # sits there, and every later deploy takes the "already exists" branch
+          # and never reads it again.
           #
           # After config:cache deliberately: that is the point at which config
           # reflects the .env this release runs against.
-          "$php_bin" artisan admin:create-super-admin --if-missing --generate-password --no-interaction
+          "$php_bin" artisan admin:create-super-admin --if-missing --no-interaction
 
           "$php_bin" artisan horizon:terminate || true
+          REMOTE
+
+      # Publishes ONLY the contents of the Laravel public/ directory into the
+      # directory Apache actually serves, so the framework itself -- .env,
+      # vendor/, app/, storage/ -- lives outside the web root entirely:
+      #
+      #   ~/domains/<domain>/laravel/       <- HOSTINGER_DEPLOY_PATH, never served
+      #   ~/domains/<domain>/public_html/   <- HOSTINGER_PUBLIC_PATH, the document root
+      #
+      # This is docs/09 section 1's preferred shape, made to work on a plan that
+      # will not let the document root be moved. It replaces the rewrite-into-
+      # public/ .htaccess trick, which protected the source tree only for as
+      # long as that one file survived -- and it kept not surviving.
+      #
+      # OPT-IN. With HOSTINGER_PUBLIC_PATH unset the step skips and the deploy
+      # behaves exactly as it did before, because the two older shapes (document
+      # root moved to .../public, or public_html symlinked at it) already serve
+      # public/ directly and must not have a second copy pushed over them.
+      #
+      # rsync runs ON the host, between two local directories -- nothing is
+      # uploaded twice. It runs after the migrate step deliberately: that step
+      # refuses when the host has no .env, so a misconfigured DEPLOY_PATH can
+      # never reach the --delete below, and `storage:link` has by then created
+      # public/storage for this to carry across.
+      - name: Publish Laravel public directory
+        env:
+          DEPLOY_PATH: ${{ secrets.HOSTINGER_DEPLOY_PATH }}
+          PUBLIC_PATH: ${{ secrets.HOSTINGER_PUBLIC_PATH || vars.HOSTINGER_PUBLIC_PATH }}
+        run: |
+          set -e
+
+          if [ -z "$PUBLIC_PATH" ]; then
+            echo "HOSTINGER_PUBLIC_PATH is not set, so the Laravel tree is assumed to be served"
+            echo "directly (document root moved to .../public, or public_html symlinked at it)."
+            echo "Nothing to publish. See docs/09-hostinger-deployment.md section 1."
+            exit 0
+          fi
+
+          ssh -i ~/.ssh/id_rsa -p "$DEPLOY_SSH_PORT" -o StrictHostKeyChecking=no \
+            "$DEPLOY_SSH_USER@$DEPLOY_SSH_HOST" \
+            bash -s -- "$DEPLOY_PATH" "$PUBLIC_PATH" <<'REMOTE'
+          set -e
+
+          deploy_path=${1%/}
+          public_path=${2%/}
+
+          [ -n "$deploy_path" ] || { echo "HOSTINGER_DEPLOY_PATH missing"; exit 1; }
+          [ -d "$deploy_path/public" ] || {
+            echo "$deploy_path/public does not exist, so HOSTINGER_DEPLOY_PATH is not a Laravel"
+            echo "project root. It must be the directory holding artisan and .env."
+            exit 1
+          }
+          [ -d "$public_path" ] || {
+            echo "$public_path does not exist. Create the document root first, or correct"
+            echo "HOSTINGER_PUBLIC_PATH -- this step will not create a web root it was pointed"
+            echo "at by mistake."
+            exit 1
+          }
+
+          # Resolve both through the filesystem before comparing them. A
+          # public_html that is a *symlink* to the Laravel public/ directory --
+          # docs/09 section 1's fallback shape -- compares as a different string
+          # and is the same directory, and rsync --delete from a directory into
+          # itself deletes as it goes.
+          app_root=$(cd "$deploy_path" && pwd -P)
+          src=$(cd "$deploy_path/public" && pwd -P)
+          dest=$(cd "$public_path" && pwd -P)
+
+          if [ "$src" = "$dest" ]; then
+            echo "$public_path already IS $deploy_path/public (moved document root, or a symlink)."
+            echo "There is nothing to copy -- skipping. Unset HOSTINGER_PUBLIC_PATH to silence this."
+            exit 0
+          fi
+
+          # --delete erases everything in $dest that public/ does not carry, so
+          # refuse the two targets where that is catastrophic rather than merely
+          # wrong: the filesystem root or the home directory, and any directory
+          # that contains the Laravel tree itself (which is what the OLD layout
+          # looks like -- deploy path inside public_html -- and would delete the
+          # entire application).
+          case "$dest" in
+            /|"$HOME") echo "Refusing to --delete inside $dest."; exit 1 ;;
+          esac
+          case "$app_root/" in
+            "$dest"/*)
+              echo "$app_root sits inside $dest, so publishing there with --delete would erase"
+              echo "the application. Move the Laravel tree out of the web root first:"
+              echo "  mkdir -p $(dirname "$dest")/laravel"
+              echo "and set HOSTINGER_DEPLOY_PATH to it. docs/09 section 1 has the full move."
+              exit 1
+              ;;
+          esac
+
+          # A .env inside the web root has been readable over HTTP for as long as
+          # it has been there -- the old layout put it one rewrite away from
+          # public. Keep a copy before --delete removes it, so a rotated
+          # credential is not lost along with the exposure.
+          if [ -f "$dest/.env" ]; then
+            backup="$app_root/.env.webroot-$(date +%Y%m%d%H%M%S)"
+            cp "$dest/.env" "$backup"
+            echo "WARNING: found $dest/.env inside the web root -- treat every credential in it as"
+            echo "compromised and rotate it. Copied to $backup; the sync below removes it from the"
+            echo "served directory."
+          fi
+
+          # .htaccess is excluded, which under rsync means both "do not send" and
+          # "do not delete": the served .htaccess is usually the host's, carrying
+          # an hPanel PHP handler block that a deploy must not overwrite. The two
+          # cases that leaves are handled explicitly below.
+          #
+          # .well-known holds ACME challenge files during a certificate renewal,
+          # and deleting them surfaces weeks later as an expired certificate
+          # rather than as a failed deploy.
+          rsync -a --delete \
+            --exclude='.htaccess' \
+            --exclude='.well-known/' \
+            --exclude='.user.ini' \
+            "$src/" "$dest/"
+
+          echo "Published $src/ -> $dest/"
+
+          if [ ! -f "$dest/.htaccess" ]; then
+            cp "$src/.htaccess" "$dest/.htaccess"
+            echo "No .htaccess in the web root; installed Laravel's own front-controller rewrite."
+          elif grep -qE '^[[:space:]]*RewriteRule[[:space:]]+\^\(\.\*\)\$[[:space:]]+public/' "$dest/.htaccess"; then
+            # The old layout's document-root rewrite. Under this one the web root
+            # IS public/, so it rewrites every request to a public/ directory that
+            # no longer exists there and the whole site answers 404.
+            echo
+            echo "$dest/.htaccess still carries the OLD document-root rewrite:"
+            echo "    RewriteRule ^(.*)\$ public/\$1 [L]"
+            echo
+            echo "That belonged to the layout where the project root was the document root."
+            echo "The web root is now the published public/ directory, so this rewrite sends"
+            echo "every request to a path that does not exist and the site answers 404."
+            echo
+            echo "Replace it with Laravel's own (keeping any hPanel PHP handler block):"
+            echo "    cp $src/.htaccess $dest/.htaccess"
+            exit 1
+          elif ! grep -qE 'RewriteRule.*index\.php' "$dest/.htaccess"; then
+            # An .htaccess the host put there -- typically nothing but an hPanel
+            # PHP handler block. Overwriting it would drop that block; leaving it
+            # alone means no request ever reaches index.php and the whole site
+            # answers 404. So append rather than replace, and only once: the
+            # grep above is what makes a second deploy a no-op.
+            printf '\n# BEGIN laravel-front-controller -- appended by the deploy, safe to edit\n' >> "$dest/.htaccess"
+            cat "$src/.htaccess" >> "$dest/.htaccess"
+            printf '# END laravel-front-controller\n' >> "$dest/.htaccess"
+            echo "The web root's .htaccess had no front-controller rewrite (an hPanel default, most"
+            echo "likely), so Laravel's rules were appended to it. The existing contents were kept."
+          fi
           REMOTE
