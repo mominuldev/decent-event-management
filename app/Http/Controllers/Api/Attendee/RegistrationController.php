@@ -73,7 +73,12 @@ class RegistrationController extends Controller
         /** @var Attendee $attendee */
         $attendee = $request->user();
 
-        $registrations = Registration::with(['guests', 'ticketType', 'eventSession', 'tickets'])
+        // `attendee` included because RegistrationResource exposes it through
+        // `whenLoaded()`: without it the key is omitted entirely, and the
+        // dashboard's "primary attendee" panel renders a label, an icon and
+        // two blank lines. It is the caller's own record, so this loads
+        // nothing they are not already entitled to see.
+        $registrations = Registration::with(['attendee', 'guests', 'ticketType', 'eventSession', 'tickets'])
             ->where('attendee_id', $attendee->id)
             ->get();
 
