@@ -24,6 +24,9 @@ class PdfExportBenchmarkTest extends TestCase
     // transaction deadlocks against the audit-log write at the end.
     use DatabaseMigrations;
 
+    /** Reads the rendered bytes, so this one really does need Chrome. */
+    protected bool $rendersRealPdfs = true;
+
     public function test_measure_pdf_export(): void
     {
         if (env('EXPORT_BENCHMARK') !== '1') {

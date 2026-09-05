@@ -12,6 +12,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
+use Symfony\Component\Console\Output\OutputInterface;
 use Throwable;
 
 /**
@@ -429,7 +430,7 @@ class CreateSuperAdmin extends Command
         }
 
         if ($password === '' && $this->option('generate-password')) {
-            $password = Str::password(20);
+            $password = $this->generatePassword();
             $this->generatedPassword = $password;
         }
 
@@ -588,6 +589,20 @@ class CreateSuperAdmin extends Command
      * sits in whatever log this ran in, so the warning is part of the
      * output rather than something to remember from a README.
      */
+    /**
+     * The invented password used by --generate-password.
+     *
+     * Protected rather than inlined so a test can pin the one case that is
+     * otherwise unreachable on purpose: a password carrying characters the
+     * console formatter treats as markup. It is a 0.5% event with the real
+     * generator, which is exactly often enough to reach a production deploy
+     * and exactly rare enough to look like a flaky test.
+     */
+    protected function generatePassword(): string
+    {
+        return Str::password(20);
+    }
+
     private function announceGeneratedPassword(User $user): void
     {
         if ($this->generatedPassword === null) {
@@ -598,7 +613,17 @@ class CreateSuperAdmin extends Command
         $this->line('  ****************************************************************');
         $this->line("  Generated password for {$user->email}:");
         $this->newLine();
-        $this->line('      '.$this->generatedPassword);
+
+        // OUTPUT_RAW, not $this->line(). Symfony's OutputFormatter reads its
+        // argument as markup: it treats `\<` and `\>` as escaped angle
+        // brackets and prints them *without* the backslash, and it removes a
+        // recognised style tag outright. Str::password()'s symbol set contains
+        // `\`, `<` and `>`, so roughly one generated password in 200 printed
+        // as something that is not the password that was hashed -- and nothing
+        // can recover the real one afterwards, so the account would simply be
+        // unreachable with no sign that anything had gone wrong.
+        $this->output->writeln('      '.$this->generatedPassword, OutputInterface::OUTPUT_RAW);
+
         $this->newLine();
         $this->line('  Shown once. Only a bcrypt hash is kept, so nothing can print it');
         $this->line('  again. Anyone who can read this log can read it too -- sign in');
@@ -617,9 +642,10 @@ class CreateSuperAdmin extends Command
 
         if ($user->two_factor_confirmed_at === null) {
             $this->components->warn(
-                'No 2FA on this account yet, so the first login needs no TOTP code. Set it up immediately '
-                .'from the admin console — the local-only 2FA bypass in AuthController is inert outside '
-                .'a dev box, and this account has every permission in the catalogue.'
+                'No 2FA on this account yet, and staff 2FA is off by default, so a password is the whole '
+                .'login. This account holds every permission in the catalogue: switch on Settings -> '
+                .'Security -> "Require two-factor authentication for staff", then sign in again and the '
+                .'console will walk you through setting up an authenticator before it lets you anywhere.'
             );
         }
     }

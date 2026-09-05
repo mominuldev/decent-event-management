@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Console;
 
+use App\Console\Commands\CreateSuperAdmin;
 use App\Domain\Shared\Models\ActivityLog;
 use App\Domain\Shared\Models\User;
 use Database\Seeders\RbacSeeder;
@@ -534,6 +535,63 @@ class CreateSuperAdminTest extends TestCase
             'email' => 'boss@example.com',
             'password' => (string) $printed,
         ])->assertOk()->assertJsonStructure(['token']);
+    }
+
+    /**
+     * The password printed in a deploy log has to be the one that was
+     * hashed, and for roughly one generated password in 200 it was not:
+     * `Str::password()`'s symbol set contains `\`, `<` and `>`, and
+     * Symfony's OutputFormatter reads its argument as markup — it treats
+     * `\<` and `\>` as escaped angle brackets and prints them without the
+     * backslash. Nothing can recover the real password afterwards, so the
+     * account was simply unreachable, with a deploy log confidently showing
+     * a password that had never worked.
+     *
+     * The generator is stubbed because the real one reaches this case too
+     * rarely to test and often enough to ship: as a random failure it read
+     * as a flaky test rather than as the product bug it was.
+     */
+    public function test_a_generated_password_carrying_console_markup_is_printed_verbatim(): void
+    {
+        // Every character class the formatter reacts to, in one string:
+        // an escaped `<`, an escaped `>`, and a well-formed style tag.
+        $password = 'aA1\<x\>y<info>z!';
+
+        $this->stubGeneratedPassword($password);
+
+        config()->set('admin.super_admin.password', null);
+
+        Artisan::call('admin:create-super-admin --if-missing --generate-password --no-interaction');
+
+        $printed = $this->passwordFrom(Artisan::output());
+
+        // Asserted before the whole-string compare, because PHPUnit's diff
+        // renders `\<` and `<` identically and the failure would read as two
+        // matching strings that are not the same.
+        $this->assertStringContainsString('\\<', (string) $printed, 'the backslash before < must survive');
+        $this->assertStringContainsString('<info>', (string) $printed, 'a style tag must not be swallowed');
+
+        $this->assertSame($password, $printed, 'the printed password must be the password, byte for byte');
+
+        $user = User::where('email', config('admin.super_admin.email'))->firstOrFail();
+        $this->assertTrue(Hash::check($printed ?? '', $user->password), 'and it must be the one that was hashed');
+    }
+
+    /** Replaces the command's invented password with one this test chooses. */
+    private function stubGeneratedPassword(string $password): void
+    {
+        $this->app->bind(CreateSuperAdmin::class, fn () => new class($password) extends CreateSuperAdmin
+        {
+            public function __construct(private readonly string $stub)
+            {
+                parent::__construct();
+            }
+
+            protected function generatePassword(): string
+            {
+                return $this->stub;
+            }
+        });
     }
 
     /** The value on the line after the banner's headline, or null if none was printed. */

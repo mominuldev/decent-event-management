@@ -953,6 +953,33 @@ Two-factor authentication for staff used to be unconditional (docs/02 §2.2), wi
 **⚠️ Turn it on before launch.** Off is the right default for a system with no live staff traffic and it is what was asked for; it is not the right setting for a console holding gateway credentials, the attendee roster and key rotation. docs/06 §6.7's T8 mitigation is this switch.
 
 
+### ✅ Two flaky tests were one real bug and one wasteful suite — 2026-09-05
+
+`php artisan test --parallel` failed intermittently, differently each run: once `CreateSuperAdminTest`, once two payment tests with `PdfRenderingException: Chrome timed out after 120s`. Everything passed serially, which is the shape that gets a failure written off as "the parallel runner". Both had real causes.
+
+**1. The generated Super Admin password printed in the deploy log was not always the password that was hashed.**
+
+`--generate-password` prints its invented password with `$this->line()`, and Symfony's `OutputFormatter` reads that argument as **markup**: it treats `\<` and `\>` as escaped angle brackets and prints them *without* the backslash, and it removes a recognised style tag outright. `Str::password()`'s symbol set contains `\`, `<` and `>`.
+
+Measured: **100 in 20,000** generated passwords — 0.5% — printed as something other than themselves. Only a bcrypt hash is stored, so nothing can recover the real one: the account is simply unreachable, with a deploy log confidently showing a password that never worked. `CreateSuperAdminTest` already asserted the exact right thing (`Hash::check($printed, $stored)`) and had been catching it all along; as a 0.5% event it read as flakiness rather than as the product bug it was.
+
+- Fixed by writing that one line with `OutputInterface::OUTPUT_RAW`. **`OutputFormatter::escape()` is not a fix here** — it escapes a bare `<` but leaves an existing `\<` alone, which is the failing input.
+- `Str::password(20)` moved behind a `protected generatePassword()` seam purely so a test can pin the case: the real generator reaches it too rarely to test and often enough to ship. `test_a_generated_password_carrying_console_markup_is_printed_verbatim` stubs it with `aA1\<x\>y<info>z!` and was confirmed to fail against the old code. It asserts the escapes survive *before* comparing the whole string, because PHPUnit's diff renders `\<` and `<` identically and the failure otherwise reads as two matching strings that are not the same.
+- **The same trap applies to any literal printed from a console command** — a key, a token, a gateway response. `$this->line()` is a formatter, not a printer.
+
+**2. The suite rendered 32 real PDFs through headless Chrome, for about three tests that look at the bytes.**
+
+Issuing a ticket dispatches `GenerateTicketAssetsJob`, and the suite runs on the `sync` queue driver, so *every* test that puts a registration through payment paid for a full Chrome render. Instrumented (a wrapper on `CHROME_BINARY` logging every invocation): **32 renders**, never more than 3 concurrent, but one took **23.6s** against a 2.9s standalone baseline — Chrome was not contending with Chrome, it was contending with eight paratest workers and MySQL on eight cores. At 120s the timeout is only ~5x that worst case, which is how a webhook test came to fail with a Chrome timeout.
+
+- `Tests\Support\FakePdfRenderer` is bound over `HtmlToPdfRenderer` in `Tests\TestCase::setUp()` unless the class sets **`protected bool $rendersRealPdfs = true`**. Three files do: `AttendeeExportTest`, `GenerateTicketAssetsJobTest`, `PdfExportBenchmarkTest` — the ones that read rendered bytes, including the Bangla text-layer assertions, which is where the risk actually lives.
+- **Only the bytes are faked.** The job still runs, `media_files` rows are still written, signed URLs are still minted — so nothing about the issuance pipeline goes untested. The fake returns a real minimal one-page PDF, not a placeholder string, so anything that sniffs magic bytes or records a size behaves unchanged. It also keeps every HTML it was handed, so a test can still assert on the document without paying for layout.
+- Result: **32 renders → 11**, and the slowest single render fell from **23.6s to 7.7s** — timeout headroom ~5x → ~16x, which is the number that matters. Wall clock improved too, but this machine is noisy enough (observed 194s–348s across runs, depending on what else was running) that the render figure is the honest measurement and the suite total is not.
+
+Full suite **784 passing / 2 skipped** (the two benchmark harnesses, skipped unless `EXPORT_BENCHMARK=1`), Pint and PHPStan level 8 clean.
+
+**If a PDF timeout ever comes back**, do not raise `PDF_RENDER_TIMEOUT` — check first whether a test that does not assert on a PDF has started rendering one, which is what `$rendersRealPdfs` exists to keep honest.
+
+
 ### 💳 Payments — development environment
 
 Development runs against the **SSLCommerz sandbox** (<https://developer.sslcommerz.com/doc/v4/>). Credentials are self-service — no merchant onboarding — so the full money path is live in development. **`sslcommerz` is the public checkout's default gateway** (`services.payment.default_method`, `PAYMENT_DEFAULT_METHOD`); `bkash`/`nagad`/`rocket` still resolve to `FakeGateway` pending Phase 4B, so never make one of them the default.
@@ -1062,6 +1089,8 @@ Faster, and what CI runs (paratest, added 2026-08-22 — 674 tests go from ~307s
 php artisan test --parallel
 ```
 Each process gets **its own database** (`decent_event_testing_test_1`, `_test_2`, …), so anything that shells out to a second process must read its connection off the parent rather than naming a database literally — `tests/Feature/Concurrency/*Test.php`'s `runConcurrently()` is the worked example, and hardcoding it there made the race pass while proving nothing. `--parallel` takes no path argument; narrow with `--filter` or drop back to a serial run.
+
+**Tests do not render real PDFs unless they ask to.** `Tests\TestCase` binds `Tests\Support\FakePdfRenderer` over `HtmlToPdfRenderer` unless a class sets `protected bool $rendersRealPdfs = true` — issuing a ticket renders a PDF as a side effect on the `sync` queue, which had the suite spending most of its wall clock in headless Chrome and timing out under parallel load. The job, the media rows and the signed URLs are all still exercised; only the bytes are faked. See [§Two flaky tests](#-two-flaky-tests-were-one-real-bug-and-one-wasteful-suite--2026-09-05).
 
 Single test file / single test method:
 ```bash

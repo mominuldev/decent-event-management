@@ -24,6 +24,9 @@ class GenerateTicketAssetsJobTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** Reads the rendered bytes, so this one really does need Chrome. */
+    protected bool $rendersRealPdfs = true;
+
     public function test_issuing_a_ticket_generates_a_real_qr_image_and_pdf(): void
     {
         $ticketType = TicketType::factory()->create();

@@ -28,6 +28,9 @@ class AttendeeExportTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** Reads the rendered bytes, so this one really does need Chrome. */
+    protected bool $rendersRealPdfs = true;
+
     private User $eventManager;
 
     protected function setUp(): void
