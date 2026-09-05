@@ -980,6 +980,25 @@ Full suite **784 passing / 2 skipped** (the two benchmark harnesses, skipped unl
 **If a PDF timeout ever comes back**, do not raise `PDF_RENDER_TIMEOUT` — check first whether a test that does not assert on a PDF has started rendering one, which is what `$rendersRealPdfs` exists to keep honest.
 
 
+### 🚨 The live site answered a zero-byte 500 for a day — 2026-09-05
+
+Reported as "user login not working". The whole application was down, not the login: `/`, `/up`, `/login` and every API path answered **500 with an empty body**, while `/build/manifest.json` answered 200. Broken since the **2026-09-04** layout change, over two green deploys — this was not the 2FA work pushed the same morning.
+
+**Cause.** Laravel's `public/index.php` finds the framework relative to itself (`__DIR__.'/../vendor/autoload.php'`). That is correct while `public/` sits inside the project, and wrong the moment its contents are *copied* into a web root somewhere else: from `public_html/`, `..` is the directory above the web root and the framework is in `laravel/`. The `require` fails as a **PHP fatal before Laravel exists**, which is why there was no error page to read — an `APP_KEY`, database or config problem would have rendered one.
+
+**The diagnosis is the reusable part**, because every instinct points the wrong way here:
+
+- **Static 200 + dynamic zero-byte 500 is the signature.** It says the web root is being served correctly and PHP is dying before any framework code runs. Nothing about it is a Laravel fault, so reading Laravel logs, `APP_DEBUG` or the database is wasted time.
+- `/vendor/autoload.php` answering **500 rather than 404** confirmed the front-controller rewrite was working: the request was reaching `index.php`, which then fatally failed.
+- The deploy log's `Published .../public/ -> .../` was the whole story, and it was printed on a **successful** run.
+
+**Fixed in the publish step**, which now rewrites the three `__DIR__.'/../'` paths in the *published* copy of `index.php` — never the one in git, which must stay relative for local development — and then **refuses to finish** unless nothing unrewritten remains, every rewritten path names a file that exists on the host, and the result passes `php -l`. The rewrite is portable (`sed` through a temp file, not `sed -i`, whose in-place flag differs between GNU and BSD) specifically so it can be exercised off the host; it was, against a simulated layout, including both failure branches.
+
+**The real lesson is that the deploy reported success over a dead site.** Copying `public/` out of a Laravel project silently breaks its entry point, and nothing downstream noticed. `backend-ci.yml` still has **no post-deploy smoke check** — it never requests a single URL. Adding one needs the public URL, which lives only in the host's `.env`; until then the verification above is the substitute, and it only covers this one failure mode.
+
+**Also found, still open, and the answer to the original question:** even once the site is back, **there is no Super Admin account to log in as.** The 2026-09-02 deploy created `mominulfed@gmail.com` with a generated password printed into that build log; `--generate-password` was removed on 2026-09-04, and every deploy since prints `No SUPER_ADMIN_EMAIL / SUPER_ADMIN_PASSWORD configured — skipping`. So the account exists with a password nobody has to hand. Set both in the host `.env` and redeploy, or run `php artisan admin:create-super-admin --email=... --force` on the host. And the attendee OTP will not send either: `sms.api_key`/`sms.secret_key`/`sms.sender_id` are seeded empty, so `NotificationChannelResolver` hands back `FakeSmsDriver` and the outbox row records `provider: fake_sms` — which needs the Settings screen, which needs the login above.
+
+
 ### 💳 Payments — development environment
 
 Development runs against the **SSLCommerz sandbox** (<https://developer.sslcommerz.com/doc/v4/>). Credentials are self-service — no merchant onboarding — so the full money path is live in development. **`sslcommerz` is the public checkout's default gateway** (`services.payment.default_method`, `PAYMENT_DEFAULT_METHOD`); `bkash`/`nagad`/`rocket` still resolve to `FakeGateway` pending Phase 4B, so never make one of them the default.

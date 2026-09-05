@@ -726,6 +726,73 @@ jobs:
 
           echo "Published $src/ -> $dest/"
 
+          # Laravel's public/index.php resolves the framework relative to its
+          # own directory -- __DIR__.'/../vendor/autoload.php'. That holds
+          # while public/ sits inside the project, and stops holding the
+          # moment its contents are COPIED into a web root somewhere else:
+          # from $dest, `..` is the directory above the web root, and the
+          # framework is in $app_root. The require then fails as a PHP fatal
+          # before Laravel can render anything, so every dynamic request
+          # answers a zero-byte 500 while static files under build/ keep
+          # serving normally -- which is exactly how this shipped on
+          # 2026-09-04 and stayed unnoticed, because the deploy went green.
+          #
+          # Rewriting the published copy (never the one in the repo) is what
+          # makes the split layout work at all. rsync re-copies a pristine
+          # index.php on every deploy, so this runs against fresh input each
+          # time rather than compounding.
+          case "$app_root" in
+            *[\|\\\&]*) echo "Refusing to rewrite index.php: $app_root contains a character that would break the substitution."; exit 1 ;;
+          esac
+
+          # Written through a temporary file rather than `sed -i`, whose
+          # in-place flag takes a mandatory argument on BSD sed and none on
+          # GNU sed -- so the portable form is the one that can be exercised
+          # off the host as well as on it.
+          sed "s|__DIR__\.'/\.\./|'$app_root/|g" "$dest/index.php" > "$dest/index.php.publishing"
+          mv "$dest/index.php.publishing" "$dest/index.php"
+
+          # Verify rather than assume. A deploy that reports success over a
+          # site answering 500 is the failure this whole step just caused, so
+          # each of these is a hard stop: an unrewritten path, a path that
+          # does not resolve to a real file, or markup that is not valid PHP.
+          if grep -q "__DIR__\.'/\.\./" "$dest/index.php"; then
+            echo "index.php still resolves the framework relative to the web root after rewriting."
+            echo "Laravel's public/index.php has probably changed shape; fix this step before deploying."
+            exit 1
+          fi
+
+          for required in "$app_root/vendor/autoload.php" "$app_root/bootstrap/app.php"; do
+            if ! grep -qF "'$required'" "$dest/index.php"; then
+              echo "$dest/index.php does not require $required after rewriting."
+              exit 1
+            fi
+            if [ ! -f "$required" ]; then
+              echo "$dest/index.php requires $required, which does not exist on this host."
+              exit 1
+            fi
+          done
+
+          php -l "$dest/index.php" > /dev/null || {
+            echo "The rewritten $dest/index.php is not valid PHP."
+            exit 1
+          }
+
+          echo "Rewrote $dest/index.php to load the framework from $app_root."
+
+          # rsync cannot empty a directory whose only remaining contents are
+          # excluded from deletion, so a public/ left behind by the old
+          # "document root IS the project root" layout survives every deploy
+          # and prints `cannot delete non-empty directory: public` above.
+          # It is inert -- nothing routes to it -- but it looks like a failure.
+          if [ -d "$dest/public" ]; then
+            echo
+            echo "NOTE: $dest/public still exists. It is a leftover of the layout where the"
+            echo "project root was the document root, it is not served, and it is why rsync"
+            echo "reported 'cannot delete non-empty directory: public'. Remove it by hand once"
+            echo "you have confirmed it holds nothing you want:  rm -rf $dest/public"
+          fi
+
           if [ ! -f "$dest/.htaccess" ]; then
             cp "$src/.htaccess" "$dest/.htaccess"
             echo "No .htaccess in the web root; installed Laravel's own front-controller rewrite."

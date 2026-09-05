@@ -121,6 +121,27 @@ second runs **on the host**, between two local directories, and copies only the 
 `laravel/public/` into `public_html/` — so nothing is uploaded twice, and no part of the
 framework ever lands in a directory Apache serves.
 
+**It then rewrites the published `index.php`, and that step is not optional.** Laravel's
+`public/index.php` finds the framework relative to itself — `__DIR__.'/../vendor/autoload.php'`
+— which is correct while `public/` sits inside the project and wrong the moment its contents
+are *copied* somewhere else: from `public_html/`, `..` is the directory above the web root,
+and the framework is in `laravel/`. The `require` then fails as a PHP fatal **before Laravel
+can render anything**, so the whole site answers a **zero-byte 500** while static files under
+`build/` keep serving normally.
+
+That is not hypothetical — it is what this layout shipped as on 2026-09-04 and stayed as for
+a day, because the deploy went green over a site that was completely down. The publish step
+now repoints the three `__DIR__.'/../'` paths in the *published* copy (never the one in git,
+which stays correct for local development), and then refuses to finish unless every rewritten
+path names a file that actually exists on the host and the result passes `php -l`. If you see
+`Rewrote .../public_html/index.php to load the framework from .../laravel` in the deploy log,
+that step did its job.
+
+⚠️ **A zero-byte 500 on every dynamic URL, with `/build/manifest.json` still answering 200, is
+this failure.** It is not `APP_KEY`, not the database, and not `APP_DEBUG` — a Laravel-level
+error would render a page. Check `head -20 public_html/index.php` on the host: if it still
+says `__DIR__.'/../'`, the rewrite did not run.
+
 **Setting up an existing host that currently has the app in `public_html`:**
 
 ```bash
