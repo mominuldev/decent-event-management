@@ -453,6 +453,46 @@ jobs:
             exit 1
           }
 
+          # FRONTEND_URL is the single source of truth for every URL that
+          # leaves this system pointing at the public site: the CORS
+          # allowlist (config/cors.php reads it and hardcodes nothing, so a
+          # deploy cannot overwrite it), the SSLCommerz success/fail/cancel
+          # return legs, and the ticket email's CTA. It lives in the host's
+          # .env, which this deploy never uploads and never deletes -- so it
+          # is set once and survives every release.
+          #
+          # Reported rather than corrected: only the host knows its own
+          # domain, and a deploy that invented one would be guessing. What it
+          # can do is refuse to let a localhost value go unnoticed, because
+          # the symptoms are all somewhere nobody is looking -- a preflight
+          # refused in a visitor's browser console, a payer bounced to a dead
+          # link after paying, a sign-in link that does nothing on a phone.
+          frontend_url=$(sed -n 's/^[[:space:]]*FRONTEND_URL=//p' .env | tail -1 | tr -d '"'"'"' ' | tr -d '\r')
+          app_env=$(sed -n 's/^[[:space:]]*APP_ENV=//p' .env | tail -1 | tr -d '"'"'"' ' | tr -d '\r')
+
+          echo "FRONTEND_URL on this host: ${frontend_url:-(unset)}"
+
+          if [ "$app_env" != "local" ]; then
+            case "${frontend_url:-}" in
+              ''|*localhost*|*127.0.0.1*)
+                echo
+                echo "=================================================================="
+                echo "WARNING: FRONTEND_URL is unset or still points at localhost, and"
+                echo "APP_ENV is '${app_env:-unset}'. On this value:"
+                echo "  - no browser origin is allowed through CORS, so the public site's"
+                echo "    ticket form fails its preflight and disappears;"
+                echo "  - a payer is returned to a dead link after paying;"
+                echo "  - the ticket email's CTA points at a machine nobody has."
+                echo
+                echo "Fix it once, in $(pwd)/.env, and re-run this workflow:"
+                echo "  FRONTEND_URL=https://your-site.example"
+                echo "The deploy never uploads or deletes .env, so it stays set."
+                echo "=================================================================="
+                echo
+                ;;
+            esac
+          fi
+
           # Spatie's permission migration flushes the permission cache at the end
           # of its up(), so an unreachable cache store fails *after* five tables
           # already exist. MySQL DDL is not transactional, so nothing rolls back

@@ -46,8 +46,14 @@ itself, so a trailing `/api/v1` here produces `…/api/v1/api/v1` and a 404 on e
 `FRONTEND_URL` is the load-bearing one on this side, because five separate things read it
 and none of them accept a client-supplied alternative:
 
-- **CORS** (`config/cors.php`) allowlists exactly this origin. Wrong value and the public
-  site's every request fails in the browser with no server-side error to find.
+- **CORS** (`config/cors.php`) allowlists exactly this origin, and **nothing is hardcoded
+  in that file** — it builds its whole allowlist from `FRONTEND_URL` (plus `FRONTEND_URLS`,
+  a comma-separated list for the rare case one origin is not enough, e.g. a www/apex pair).
+  So this is set once in the host's `.env` and survives every deploy: `.env` is excluded
+  from the release rsync, and there is no localhost line in the repo to overwrite it with.
+  Wrong value and the public site's every request fails in the browser with no server-side
+  error to find. A trailing slash or a path is fine here — CORS reduces the value to a bare
+  origin, because a browser's `Origin` header carries neither.
 - **The SSLCommerz return legs** redirect the payer here after checkout, and
   `SslCommerzReturnController` refuses any `next` whose host does not match — deliberately,
   so a crafted request cannot turn the return into an open redirect.
@@ -56,6 +62,8 @@ and none of them accept a client-supplied alternative:
 - **CMS preview links** minted by the admin console.
 
 Set it wrong and payments still take money at the gateway while the payer lands nowhere.
+The deploy prints the value it found and warns loudly when a non-`local` host still carries
+a localhost one, since every symptom of that is somewhere nobody is watching.
 
 ---
 
