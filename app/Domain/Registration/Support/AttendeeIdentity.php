@@ -2,6 +2,8 @@
 
 namespace App\Domain\Registration\Support;
 
+use App\Domain\Registration\Models\Attendee;
+
 /**
  * The single definition of how an attendee's two unique identifiers —
  * mobile number and email address — are normalised before they are
@@ -88,5 +90,34 @@ final class AttendeeIdentity
         }
 
         return array_values(array_unique($candidates));
+    }
+
+    /**
+     * The one attendee a sign-in identifier names, or null.
+     *
+     * Exactly one of the two is expected; `mobile` wins if both arrive, so
+     * a caller cannot widen the search by sending a second field. Mobile
+     * goes through {@see self::mobileLookupCandidates()} for the reasons
+     * given there; email is matched on the normalised value, which is what
+     * the unique index is built on, so it can only ever name one row.
+     *
+     * Soft-deleted attendees are excluded: a removed account must not be
+     * signed into, and `withTrashed()` here would do exactly that.
+     */
+    public static function resolveAttendee(?string $mobile, ?string $email): ?Attendee
+    {
+        $candidates = self::mobileLookupCandidates($mobile);
+
+        if ($candidates !== []) {
+            return Attendee::whereIn('mobile', $candidates)->first();
+        }
+
+        $normalisedEmail = self::normaliseEmail($email);
+
+        if ($normalisedEmail === null) {
+            return null;
+        }
+
+        return Attendee::where('email', $normalisedEmail)->first();
     }
 }

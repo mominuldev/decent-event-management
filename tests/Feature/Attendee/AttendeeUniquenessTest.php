@@ -3,6 +3,7 @@
 namespace Tests\Feature\Attendee;
 
 use App\Domain\Registration\Models\Attendee;
+use App\Domain\Registration\Models\Registration;
 use App\Domain\Shared\Models\User;
 use App\Domain\Ticketing\Models\TicketType;
 use Database\Seeders\RbacSeeder;
@@ -303,15 +304,79 @@ class AttendeeUniquenessTest extends TestCase
      * The counterpart, and the reason the public path cannot simply carry a
      * `unique` rule: a returning registrant arrives with both identifiers
      * already on file and must be matched, not rejected.
+     *
+     * They are matched to their existing attendee row, not given a second
+     * one — which is what the `unique` rule would have cost. The first
+     * registration is cancelled here because one live registration per
+     * attendee is the event's rule; see the test below.
      */
     public function test_a_returning_registrant_may_reuse_their_own_mobile_and_email(): void
     {
         $ticketType = $this->centennialType();
 
         $this->register($this->registrationPayload($ticketType))->assertStatus(201);
+        $this->cancelExistingRegistrations();
         $this->register($this->registrationPayload($ticketType))->assertStatus(201);
 
         $this->assertSame(1, Attendee::where('mobile', '+8801712345678')->count());
+        $this->assertDatabaseCount('registrations', 2);
+    }
+
+    /**
+     * One live registration per attendee. A registration already admits a
+     * whole party through its guests, so a second is a duplicate rather
+     * than a bigger booking — and duplicates overbook a fixed-capacity
+     * event.
+     */
+    public function test_a_second_live_registration_on_the_same_number_is_refused(): void
+    {
+        $ticketType = $this->centennialType();
+
+        $this->register($this->registrationPayload($ticketType))->assertStatus(201);
+
+        $soldAfterFirst = $ticketType->refresh()->sold_count;
+
+        $this->register($this->registrationPayload($ticketType))
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'already_registered');
+
+        // Refused before reserving, so the rejected attempt holds no seat.
+        $this->assertSame($soldAfterFirst, $ticketType->refresh()->sold_count);
+        $this->assertDatabaseCount('registrations', 1);
+    }
+
+    /**
+     * The same number written the other way round is the same person. The
+     * guard has to see that, or it is trivially side-stepped by typing
+     * `01…` instead of `+8801…`.
+     */
+    public function test_the_guard_matches_a_number_stored_in_a_different_form(): void
+    {
+        $ticketType = $this->centennialType();
+
+        $this->register($this->registrationPayload($ticketType, ['mobile' => '+8801712345678']))
+            ->assertStatus(201);
+
+        $this->register($this->registrationPayload($ticketType, ['mobile' => '01712345678']))
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'already_registered');
+
+        $this->assertDatabaseCount('registrations', 1);
+    }
+
+    /**
+     * Cancelled, expired and refunded do not count. Someone whose payment
+     * lapsed has to be able to start again without a support call.
+     */
+    public function test_a_cancelled_registration_frees_the_number(): void
+    {
+        $ticketType = $this->centennialType();
+
+        $this->register($this->registrationPayload($ticketType))->assertStatus(201);
+        $this->cancelExistingRegistrations();
+
+        $this->register($this->registrationPayload($ticketType))->assertStatus(201);
+
         $this->assertDatabaseCount('registrations', 2);
     }
 
@@ -350,6 +415,7 @@ class AttendeeUniquenessTest extends TestCase
         $ticketType = $this->centennialType();
 
         $this->register($this->registrationPayload($ticketType))->assertStatus(201);
+        $this->cancelExistingRegistrations();
 
         $this->register($this->registrationPayload($ticketType, [
             'email' => 'New.Address@example.com',
@@ -368,5 +434,21 @@ class AttendeeUniquenessTest extends TestCase
             ->assertStatus(201);
 
         $this->assertSame(2, Attendee::whereNull('email')->count());
+    }
+
+    /**
+     * Free the number for a second registration.
+     *
+     * One live registration per attendee is the rule (see
+     * `CreateRegistration::assertNotAlreadyRegistered()`), and `cancelled`
+     * is one of the states it deliberately does not count — so this is what
+     * a real registrant does before booking again, not a way around the
+     * guard.
+     */
+    private function cancelExistingRegistrations(): void
+    {
+        Registration::query()->each(
+            fn (Registration $registration) => $registration->forceFill(['status' => 'cancelled'])->save()
+        );
     }
 }

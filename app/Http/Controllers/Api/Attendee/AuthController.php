@@ -28,6 +28,23 @@ class AuthController extends Controller
     private const int MAX_CODE_ATTEMPTS = 5;
 
     /**
+     * Said whether or not the identifier is registered, so the response
+     * carries no enumeration signal.
+     *
+     * It used to promise a "login link", left over from the flow this
+     * replaced. A code is not a link, and the frontend spent a support
+     * cycle on someone waiting for an email that was never going to arrive.
+     */
+    /**
+     * Granted only to a token minted by `verify()`, and burned the first
+     * time it is spent. A 30-day session must not stay able to change the
+     * password weeks after the code that justified it.
+     */
+    private const string PASSWORD_RESET_ABILITY = 'password-reset';
+
+    private const string CODE_SENT_MESSAGE = 'If that account exists, a 6-digit sign-in code has been sent by SMS.';
+
+    /**
      * A real bcrypt hash of a value nobody knows, used only so a sign-in
      * attempt for an unknown number does the same work as one for a known
      * number. Comparing against nothing returns immediately, and that
@@ -71,16 +88,38 @@ class AuthController extends Controller
     )]
     public function __construct(private readonly QueueNotification $queueNotification) {}
 
+    /**
+     * Either identifier, exactly one required.
+     *
+     * `required_without` on both sides rather than a single `identifier`
+     * field: the two are validated differently (an email has a format worth
+     * checking, a mobile does not), and keeping them apart means a caller
+     * who sends an address never has it silently matched against the mobile
+     * column, where it would find nothing and read as a wrong password.
+     *
+     * @return array<string, array<int, string>>
+     */
+    private function identifierRules(): array
+    {
+        return [
+            'mobile' => ['required_without:email', 'nullable', 'string', 'max:20'],
+            'email' => ['required_without:mobile', 'nullable', 'email', 'max:254'],
+        ];
+    }
+
     public function requestLink(Request $request): JsonResponse
     {
-        $request->validate(['mobile' => ['required', 'string']]);
+        $request->validate($this->identifierRules());
 
-        $attendee = Attendee::whereIn('mobile', AttendeeIdentity::mobileLookupCandidates($request->string('mobile')->value()))->first();
+        $attendee = AttendeeIdentity::resolveAttendee(
+            $request->string('mobile')->value(),
+            $request->string('email')->value(),
+        );
 
         // Same response whether or not the number is registered — the
         // enumeration signal isn't worth leaking here.
         if (! $attendee) {
-            return response()->json(['message' => 'If that number is registered, a login link has been sent.']);
+            return response()->json(['message' => self::CODE_SENT_MESSAGE]);
         }
 
         // A six-digit code rather than a 48-character link, for two reasons
@@ -137,7 +176,7 @@ class AuthController extends Controller
         // To follow a link locally without a phone, read it from the
         // delivery log (Notifications → the row's rendered body), which is
         // the same text the recipient gets.
-        return response()->json(['message' => 'If that number is registered, a login link has been sent.']);
+        return response()->json(['message' => self::CODE_SENT_MESSAGE]);
     }
 
     #[OAT\Post(
@@ -200,14 +239,18 @@ class AuthController extends Controller
         // that short is not unique across attendees, so matching on it alone
         // would let one person's code open whichever account happened to
         // share it.
-        $request->validate([
-            'mobile' => ['required', 'string', 'max:20'],
+        $request->validate($this->identifierRules() + [
             'code' => ['required', 'string'],
         ]);
 
-        $attendee = Attendee::whereIn('mobile', AttendeeIdentity::mobileLookupCandidates($request->string('mobile')->value()))
-            ->whereNotNull('auth_token_hash')
-            ->first();
+        $attendee = AttendeeIdentity::resolveAttendee(
+            $request->string('mobile')->value(),
+            $request->string('email')->value(),
+        );
+
+        if ($attendee !== null && $attendee->auth_token_hash === null) {
+            $attendee = null;
+        }
 
         if (! $attendee || $attendee->auth_token_expires_at === null || $attendee->auth_token_expires_at->isPast()) {
             return $this->invalidCode();
@@ -231,7 +274,17 @@ class AuthController extends Controller
 
         $this->clearCode($attendee);
 
-        $token = $attendee->createToken('attendee-session', ['attendee'], now()->addDays(self::SESSION_DAYS));
+        // The extra ability is what lets `setPassword()` waive the current
+        // password below. Possession of a code sent to the registered
+        // number is the proof that a forgotten password cannot supply, and
+        // it is the only proof this flow has — without it "Forgot password?"
+        // ends with the reader signed in and still not knowing their
+        // password.
+        $token = $attendee->createToken(
+            'attendee-session',
+            ['attendee', self::PASSWORD_RESET_ABILITY],
+            now()->addDays(self::SESSION_DAYS),
+        );
 
         return response()->json([
             'token' => $token->plainTextToken,
@@ -247,6 +300,73 @@ class AuthController extends Controller
                 'mobile' => $attendee->mobile,
             ],
         ]);
+    }
+
+    #[OAT\Post(
+        path: '/attendee/auth/check',
+        summary: 'Whether an account exists for a mobile number or email address',
+        description: 'Answers 200 either way, including for an identifier nobody holds — a 404 here means the route '
+            .'is missing, never that the account is. Deliberately breaks the enumeration resistance the rest of '
+            .'this controller maintains; see the note in the source before extending it.',
+        tags: ['Authentication'],
+        requestBody: new OAT\RequestBody(
+            required: true,
+            content: new OAT\MediaType(
+                mediaType: 'application/json',
+                schema: new OAT\Schema(
+                    properties: [
+                        new OAT\Property(property: 'mobile', type: 'string'),
+                        new OAT\Property(property: 'email', type: 'string'),
+                    ],
+                    type: 'object',
+                ),
+            ),
+        ),
+        responses: [
+            new OAT\Response(response: 200, description: 'Whether an attendee holds that identifier'),
+            new OAT\Response(response: 422, description: 'Neither identifier was supplied, or one was malformed'),
+            new OAT\Response(response: 429, description: 'Too many checks'),
+        ],
+    )]
+    /**
+     * Does an account exist for this identifier?
+     *
+     * **This is the one route here that answers a question the rest of the
+     * controller refuses to answer.** `login()` returns the same 401 for an
+     * unknown number as for a wrong password, down to running a bcrypt
+     * verify against a dummy hash so the two cannot be told apart with a
+     * stopwatch; `requestLink()` returns the same message either way. Both
+     * are deliberate: this event's attendee list is its school's alumni
+     * roll, and confirming membership one number at a time is exactly what
+     * those defences exist to prevent.
+     *
+     * It exists because the product owner asked for it, weighing that
+     * against two real costs of the silence: an SMS is spent on numbers
+     * that can never receive one, and someone who mistypes a digit waits
+     * for a code nobody sent. That is a legitimate trade, made explicitly —
+     * but it is a trade, so it is fenced:
+     *
+     * - a strict per-IP throttle, tighter than sign-in, because a form
+     *   needs a handful of these and a scraper needs thousands;
+     * - a bare boolean, never a name, a masked number or a registration —
+     *   it confirms existence and nothing else;
+     * - no distinction between "no such account" and "soft-deleted", so a
+     *   removed attendee does not leak that they were ever here.
+     *
+     * If the trade is ever revisited, delete this method and the frontend
+     * degrades on its own: it reads a 404 as "cannot be asked" and falls
+     * back to sending the code and saying nothing.
+     */
+    public function check(Request $request): JsonResponse
+    {
+        $request->validate($this->identifierRules());
+
+        $attendee = AttendeeIdentity::resolveAttendee(
+            $request->string('mobile')->value(),
+            $request->string('email')->value(),
+        );
+
+        return response()->json(['data' => ['exists' => $attendee !== null]]);
     }
 
     private function clearCode(Attendee $attendee): void
@@ -329,12 +449,14 @@ class AuthController extends Controller
     )]
     public function login(Request $request): JsonResponse
     {
-        $request->validate([
-            'mobile' => ['required', 'string', 'max:20'],
+        $request->validate($this->identifierRules() + [
             'password' => ['required', 'string'],
         ]);
 
-        $attendee = Attendee::whereIn('mobile', AttendeeIdentity::mobileLookupCandidates($request->string('mobile')->value()))->first();
+        $attendee = AttendeeIdentity::resolveAttendee(
+            $request->string('mobile')->value(),
+            $request->string('email')->value(),
+        );
 
         $hasPassword = $attendee !== null && $attendee->hasPassword();
 
@@ -400,12 +522,20 @@ class AuthController extends Controller
         /** @var Attendee $attendee */
         $attendee = $request->user();
 
+        // Two ways to be allowed to set a password: know the current one,
+        // or hold a token minted by `verify()`, which means a code sent to
+        // the registered number was answered minutes ago. The second is the
+        // whole of "Forgot password?" — someone who has forgotten theirs
+        // cannot satisfy the first by definition.
+        $resettingByCode = $request->user()?->currentAccessToken()?->can(self::PASSWORD_RESET_ABILITY) === true;
+        $mustKnowCurrent = $attendee->hasPassword() && ! $resettingByCode;
+
         $request->validate([
-            'current_password' => [$attendee->hasPassword() ? 'required' : 'nullable', 'string'],
+            'current_password' => [$mustKnowCurrent ? 'required' : 'nullable', 'string'],
             'password' => ['required', 'string', PasswordRule::min(8), 'confirmed'],
         ]);
 
-        if ($attendee->hasPassword()
+        if ($mustKnowCurrent
             && ! PasswordHash::matches($request->string('current_password')->value(), (string) $attendee->password)) {
             throw ValidationException::withMessages([
                 'current_password' => 'That is not your current password.',
@@ -427,6 +557,12 @@ class AuthController extends Controller
         // it has to actually end them.
         $current = $request->user()?->currentAccessToken();
         $attendee->tokens()->where('id', '!=', $current?->getKey())->delete();
+
+        // Spent. The session continues, but it cannot reset the password a
+        // second time on the strength of one code.
+        if ($resettingByCode && $current !== null) {
+            $current->forceFill(['abilities' => ['attendee']])->save();
+        }
 
         return response()->json(['message' => 'Your password has been saved.']);
     }

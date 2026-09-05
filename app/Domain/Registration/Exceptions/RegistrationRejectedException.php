@@ -57,6 +57,24 @@ class RegistrationRejectedException extends RuntimeException
         );
     }
 
+    /**
+     * This person already holds a live registration.
+     *
+     * One registration per attendee is the event's rule, not a technical
+     * limit: a registration already admits a party through its guests, so
+     * a second one is a duplicate rather than a bigger booking. Cancelled,
+     * expired and refunded registrations do not count — someone whose
+     * payment lapsed has to be able to start again.
+     */
+    public static function alreadyRegistered(): self
+    {
+        return new self(
+            'This mobile number already has a registration. '
+            .'Sign in to view it, or cancel it before registering again.',
+            'already_registered',
+        );
+    }
+
     public function render(Request $request): JsonResponse
     {
         return response()->json([

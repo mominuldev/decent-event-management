@@ -124,6 +124,12 @@ class AttendeeProfileFieldsTest extends TestCase
 
         $this->submit($this->payload($ticketType))->assertStatus(201);
 
+        // Cancelled first: one live registration per attendee is the rule,
+        // and cancelled is a state it deliberately does not count.
+        Registration::query()->each(
+            fn (Registration $registration) => $registration->forceFill(['status' => 'cancelled'])->save()
+        );
+
         // Same mobile — the dedupe key — so this resolves to the existing
         // attendee rather than creating a second one.
         $this->submit($this->payload($ticketType, [

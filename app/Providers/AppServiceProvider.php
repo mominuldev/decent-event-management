@@ -22,6 +22,7 @@ use App\Domain\Payment\Gateways\PaymentGatewayResolver;
 use App\Domain\Payment\Models\Payment;
 use App\Domain\Registration\Events\RegistrationCreated;
 use App\Domain\Registration\Models\Attendee;
+use App\Domain\Registration\Support\AttendeeIdentity;
 use App\Domain\Registration\Models\Registration;
 use App\Domain\Shared\Support\TwoFactorPolicy;
 use App\Domain\Ticketing\Contracts\ScannerFleetStatus;
@@ -38,6 +39,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Foundation\Events\DiagnosingHealth;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -145,7 +147,7 @@ class AppServiceProvider extends ServiceProvider
         // IP stops a script walking a list of numbers, which the per-mobile
         // limit alone would happily allow.
         RateLimiter::for('sms-code', fn ($request) => [
-            Limit::perHour(3)->by('mobile:'.$request->input('mobile')),
+            Limit::perHour(3)->by('account:'.self::identifierKey($request)),
             Limit::perHour(20)->by('ip:'.$request->ip()),
         ]);
 
@@ -168,9 +170,39 @@ class AppServiceProvider extends ServiceProvider
         ]);
 
         RateLimiter::for('attendee-login', fn ($request) => [
-            Limit::perMinute(10)->by('mobile:'.$request->input('mobile')),
+            Limit::perMinute(10)->by('account:'.self::identifierKey($request)),
             Limit::perMinute(30)->by('ip:'.$request->ip()),
         ]);
+
+        // Account-existence checks. Tighter per IP than sign-in, and for a
+        // different reason: sign-in is bounded per account because an
+        // attacker targets one, while this is bounded per caller because
+        // the thing worth stopping is one caller sweeping many identifiers.
+        // Thirty an hour is more than any ticket form or recovery attempt
+        // needs and far less than enumerating an alumni roll requires.
+        RateLimiter::for('account-check', fn ($request) => [
+            Limit::perHour(30)->by('ip:'.$request->ip()),
+        ]);
+    }
+
+    /**
+     * The account a sign-in request is about, for rate-limiting.
+     *
+     * Keyed on whichever identifier was actually sent. Keying on `mobile`
+     * alone — which these limiters did before email became a valid
+     * identifier — would put every email-only attempt in one shared bucket
+     * under the empty string: three sign-ins an hour for the entire
+     * internet, and no per-account limit at all for the caller who matters.
+     */
+    private static function identifierKey(Request $request): string
+    {
+        $mobile = AttendeeIdentity::normaliseMobile((string) $request->input('mobile'));
+
+        if ($mobile !== '') {
+            return 'mobile:'.$mobile;
+        }
+
+        return 'email:'.(AttendeeIdentity::normaliseEmail((string) $request->input('email')) ?? '');
     }
 
     /**

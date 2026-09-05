@@ -282,6 +282,62 @@ class AttendeePasswordAuthTest extends TestCase
         ])->assertOk();
     }
 
+    /**
+     * "Forgot password?" in one flow. Someone who has a password but cannot
+     * remember it answers a code instead, and that has to be enough — the
+     * one thing they definitively cannot supply is the current password.
+     */
+    public function test_a_code_sign_in_can_reset_a_forgotten_password(): void
+    {
+        $this->attendeeWithPassword();
+
+        $this->postJson('/api/v1/attendee/auth/request-code', ['mobile' => '+8801711111111'])->assertOk();
+
+        $token = $this->postJson('/api/v1/attendee/auth/verify', [
+            'mobile' => '+8801711111111',
+            'code' => $this->codeFromTheSms(),
+        ])->assertOk()->json('token');
+
+        $this->withToken($token)->postJson('/api/v1/attendee/auth/password', [
+            'password' => 'a-brand-new-password',
+            'password_confirmation' => 'a-brand-new-password',
+        ])->assertOk();
+
+        $this->postJson('/api/v1/attendee/auth/login', [
+            'mobile' => '+8801711111111',
+            'password' => 'a-brand-new-password',
+        ])->assertOk();
+    }
+
+    /**
+     * The waiver is spent on first use. A 30-day session must not stay able
+     * to change the password weeks after the code that justified it — by
+     * which time the phone it arrived on may not be the same phone.
+     */
+    public function test_the_reset_waiver_is_burned_after_one_use(): void
+    {
+        $this->attendeeWithPassword();
+
+        $this->postJson('/api/v1/attendee/auth/request-code', ['mobile' => '+8801711111111'])->assertOk();
+
+        $token = $this->postJson('/api/v1/attendee/auth/verify', [
+            'mobile' => '+8801711111111',
+            'code' => $this->codeFromTheSms(),
+        ])->assertOk()->json('token');
+
+        $this->withToken($token)->postJson('/api/v1/attendee/auth/password', [
+            'password' => 'first-new-password',
+            'password_confirmation' => 'first-new-password',
+        ])->assertOk();
+
+        // Same token, second attempt: now it must know the current password
+        // like any other session.
+        $this->withToken($token)->postJson('/api/v1/attendee/auth/password', [
+            'password' => 'second-new-password',
+            'password_confirmation' => 'second-new-password',
+        ])->assertStatus(422);
+    }
+
     public function test_setting_a_password_revokes_every_other_session(): void
     {
         $attendee = $this->attendeeWithPassword();

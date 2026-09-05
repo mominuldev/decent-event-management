@@ -29,13 +29,19 @@ class CreateRegistration
             $mobile = AttendeeIdentity::normaliseMobile($data['mobile'] ?? null);
             $email = AttendeeIdentity::normaliseEmail($data['email'] ?? null);
 
+            // Matched across every stored form of the number, not just the
+            // one that was typed. `normaliseMobile()` deliberately does not
+            // canonicalise `01…` into `+880…`, so a returning registrant who
+            // typed it the other way round used to miss their own row and
+            // get a second attendee record.
             /** @var Attendee|null $attendee */
-            $attendee = Attendee::where('mobile', $mobile)->first();
+            $attendee = Attendee::whereIn('mobile', AttendeeIdentity::mobileLookupCandidates($mobile))->first();
 
-            // Both checked before reserving, so a rejected registration
+            // All three checked before reserving, so a rejected registration
             // never holds capacity it is not entitled to.
             $this->assertParticipantTypeAllowed($ticketType, (string) $data['participant_type']);
             $this->assertEmailAvailable($email, $attendee);
+            $this->assertNotAlreadyRegistered($attendee);
 
             if (! $ticketType->tryReserve()) {
                 throw RegistrationRejectedException::soldOut();
@@ -222,6 +228,36 @@ class CreateRegistration
      *
      * Soft-deleted attendees count, because the unique index counts them.
      */
+    /**
+     * One live registration per attendee.
+     *
+     * A registration already carries a whole party through its guests, so a
+     * second one is a duplicate, not a larger booking — and duplicates are
+     * what turn a fixed-capacity event into an overbooked one.
+     *
+     * `cancelled`, `expired` and `refunded` are excluded on purpose. Those
+     * are the states someone lands in when a payment lapsed or plans
+     * changed, and blocking them from starting again would strand them with
+     * no way back except a support call. `draft` *is* excluded from that
+     * mercy: it is the state a registration sits in while the payment page
+     * is open, and treating it as free would let a double-submit reserve
+     * capacity twice.
+     */
+    private function assertNotAlreadyRegistered(?Attendee $attendee): void
+    {
+        if ($attendee === null) {
+            return;
+        }
+
+        $live = $attendee->registrations()
+            ->whereNotIn('status', ['cancelled', 'expired', 'refunded'])
+            ->exists();
+
+        if ($live) {
+            throw RegistrationRejectedException::alreadyRegistered();
+        }
+    }
+
     private function assertEmailAvailable(?string $email, ?Attendee $attendee): void
     {
         if ($email === null) {

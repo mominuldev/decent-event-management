@@ -80,6 +80,14 @@ Route::prefix('attendee')->name('attendee.')->group(function (): void {
     Route::post('auth/verify', [AttendeeAuthController::class, 'verify'])
         ->middleware('throttle:attendee-login')
         ->name('auth.verify');
+
+    // Answers whether an account exists, which every other route here is
+    // built to refuse — read the note on the controller method before
+    // changing or reusing it. Its own bucket: this is bounded per caller,
+    // not per account, because sweeping many identifiers is the abuse.
+    Route::post('auth/check', [AttendeeAuthController::class, 'check'])
+        ->middleware('throttle:account-check')
+        ->name('auth.check');
 });
 
 // Attendee self-service — authenticated
