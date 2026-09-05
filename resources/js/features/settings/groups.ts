@@ -1,4 +1,4 @@
-import { Bell, CalendarDays, CreditCard, MessageSquare, Palette, ScanLine, Settings2, UserPlus, type LucideIcon } from 'lucide-react';
+import { Bell, CalendarDays, CreditCard, MessageSquare, Palette, ScanLine, Settings2, ShieldCheck, UserPlus, type LucideIcon } from 'lucide-react';
 import { titleCase } from '@/lib/format';
 
 interface GroupMeta {
@@ -45,6 +45,12 @@ const GROUP_META: Record<string, GroupMeta> = {
             'REVE Systems credentials, and the account’s prepaid balance. Keys are stored encrypted and cannot be read back once saved.',
         Icon: MessageSquare,
     },
+    security: {
+        label: 'Security',
+        description:
+            'Whether staff sign-in needs an authenticator code as well as a password. Turning it on takes effect at the next login: anyone not yet enrolled is walked through setting up an authenticator before they can do anything else.',
+        Icon: ShieldCheck,
+    },
     branding: {
         label: 'Branding',
         description: 'Logos, colours and copy shown across the public site.',
@@ -53,7 +59,7 @@ const GROUP_META: Record<string, GroupMeta> = {
 };
 
 /** Sections render in this order; anything unlisted follows, alphabetically. */
-const GROUP_ORDER = ['event', 'registration', 'payment', 'checkin', 'notification', 'sms', 'branding'];
+const GROUP_ORDER = ['event', 'registration', 'payment', 'checkin', 'notification', 'sms', 'security', 'branding'];
 
 export function groupMeta(group: string): GroupMeta {
     return GROUP_META[group] ?? { label: titleCase(group), description: '', Icon: Settings2 };

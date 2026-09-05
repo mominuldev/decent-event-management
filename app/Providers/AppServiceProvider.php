@@ -23,6 +23,7 @@ use App\Domain\Payment\Models\Payment;
 use App\Domain\Registration\Events\RegistrationCreated;
 use App\Domain\Registration\Models\Attendee;
 use App\Domain\Registration\Models\Registration;
+use App\Domain\Shared\Support\TwoFactorPolicy;
 use App\Domain\Ticketing\Contracts\ScannerFleetStatus;
 use App\Domain\Ticketing\Events\SigningKeyRotated;
 use App\Domain\Ticketing\Events\TicketIssued;
@@ -56,6 +57,11 @@ class AppServiceProvider extends ServiceProvider
         // controller flushes it on write, so an edit applies to the next
         // send with no cache TTL in between.
         $this->app->singleton(SmsGatewayConfig::class);
+
+        // Same reasoning for "is staff 2FA switched on?": one read per
+        // request, flushed by the settings controller when the switch is
+        // saved so the next login honours it immediately.
+        $this->app->singleton(TwoFactorPolicy::class);
 
         // Ticketing asks "is the scanner fleet ready for a key rotation?"
         // through an interface it owns; CheckIn answers it. The module

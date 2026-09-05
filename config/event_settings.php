@@ -380,4 +380,19 @@ return [
         'default' => true,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Security
+    |--------------------------------------------------------------------------
+    */
+
+    'security.two_factor_enabled' => [
+        'group' => 'security',
+        'type' => 'bool',
+        'is_public' => false,
+        'label' => 'Require two-factor authentication for staff',
+        'description' => 'Off: a password is the whole staff login. On: every staff login also needs an authenticator code, and anyone not yet enrolled is sent to set one up before they can do anything.',
+        'default' => false,
+    ],
+
 ];

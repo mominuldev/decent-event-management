@@ -48,7 +48,7 @@ Vendor-blocked pieces of Phase 5 — **the SMS half is no longer among them.** A
 - All 38 migrations with seeders and realistic factories (`DummyDataSeeder` for demo, `LoadTestSeeder` for volume, `ContentSeeder` for bilingual CMS baseline)
 - Eloquent models with relationships, casts, and `HasUlid`/`HasStateMachine`/`HasImmutableCreatedAt` traits applied
 - RBAC with roles, permissions, and policies (spatie/laravel-permission), seeded from `config/rbac.php`
-- Sanctum authentication for all three guards (web-admin, attendee, scanner) + TOTP 2FA for staff
+- Sanctum authentication for all three guards (web-admin, attendee, scanner) + TOTP 2FA for staff, gated on the `security.two_factor_enabled` setting (off by default since 2026-09-05 — see below)
 - REST API v1 route structure (public, attendee, admin, scanner, webhooks)
 - API Resources for all major entities
 - Horizon configuration with four queue lanes — `notifications` (Phase 5) and `tickets` (Phase 6) are live and draining; `payments`/`reports` are configured but nothing dispatches to them yet
@@ -799,7 +799,7 @@ Neither showed up because every test read the token out of the HTTP response, so
 
    Both rows are seeded and as short as the meaning allows. Set `notifications.locales.sms => 'en'` in `config/notifications.php` if the saving is worth more than the language — at 12,000 attendees it is a real bill, and it is a business decision rather than a technical one.
 
-**Still `local`-gated, deliberately left alone** — these were not what "dev mode" referred to, and neither is currently doing anything: the admin 2FA bypass in `Admin\AuthController` (no user has `two_factor_confirmed_at` set, so it is inert today) and CSP suppression in `SetSecurityHeaders` (Vite's HMR injects unnonced tags no strict policy survives). `APP_DEBUG` is also still `true`. Say so if you want any of them tightened.
+**Still `local`-gated, deliberately left alone** — these were not what "dev mode" referred to, and neither is currently doing anything: the admin 2FA bypass in `Admin\AuthController` (no user has `two_factor_confirmed_at` set, so it is inert today; as of 2026-09-05 it also sits on top of the `security.two_factor_enabled` switch) and CSP suppression in `SetSecurityHeaders` (Vite's HMR injects unnonced tags no strict policy survives). `APP_DEBUG` is also still `true`. Say so if you want any of them tightened.
 
 Full suite **630 passing / 2 skipped**, Pint and PHPStan level 8 clean, admin SPA typecheck clean; public site `tsc`, ESLint (0 errors, 7 pre-existing warnings) and `next build` clean. OpenAPI regenerated — still 115 paths, with `debug_token` gone from the documented response.
 
@@ -933,6 +933,25 @@ The payer is charged at the gateway, the payment reverts to `initiated`, the reg
 Two environment notes that cost time and will again: a second `next dev` **cannot** be started from the same source directory (Next refuses, and the running one has `NEXT_PUBLIC_API_URL` inlined at compile time, so it cannot be repointed without a restart) — copy the source to a scratch dir and `cp -Rc` its `node_modules`, because Turbopack rejects a symlink that points outside the project root. And run the second backend with `FRONTEND_URL`/`APP_URL` as **real environment variables** rather than editing `.env`; dotenv will not override them, so the running valet site is untouched.
 
 6 new tests (2 in `VerifyPaymentTest`, 4 in `FindStuckPaymentsTest`). The first runs against the `database` queue driver rather than the suite's `sync` default, because that is what the deployment target uses and because queuing is the whole point of the fix. Full suite green, Pint and PHPStan level 8 clean.
+
+### ✅ Staff 2FA is a switch an admin owns, and it ships off — 2026-09-05
+
+Two-factor authentication for staff used to be unconditional (docs/02 §2.2), with a `local`-only bypass in `Admin\AuthController` as the only way round it. It is now **`security.two_factor_enabled`** — a bool on the Settings screen, under a new **Security** group — and it is **off by default**, at explicit request, to be turned on later.
+
+**Why a switch rather than deleting the feature.** Mandatory 2FA has one failure mode nobody can recover from in the product: a staff member who loses their authenticator is locked out of the only account that can disable 2FA on itself, so recovery meant SSH plus a manual `UPDATE`. A switch also means "off for now" costs nothing to reverse — no migration, no deploy, no re-enrolment, because the secret and `two_factor_confirmed_at` stay on the user row whichever way it reads.
+
+- **`App\Domain\Shared\Support\TwoFactorPolicy` is the single answer to "is 2FA in force?"** — do not read the setting anywhere else. A container singleton with a per-instance memo (one query per request), flushed by `SettingController::update()` when the switch is saved, so an operator turning it on does not watch the next sign-in ignore it. `TwoFactorSettingTest::test_saving_the_setting_takes_effect_without_a_restart` exists because a memo with no flush is invisible until somebody is relying on it. Same pattern as `SmsGatewayConfig`.
+- **Both gates moved, not just login.** `login()` and `reauth()` both consult it. Leaving `reauth()` alone would have been the quiet bug: an account that had enrolled before the switch was turned off would still be asked for a code it may no longer be able to produce, blocking QR key rotation for exactly the person the switch was flipped to let back in.
+- **What "off" means, precisely:** no code is asked for, `requires_2fa_setup` is always false, and the token issued is always a full `admin` one. **An account that already enrolled is not held to it** — that is the recovery case, and it has a test. What it does *not* mean is a weaker password check; a wrong password is still 401 and still counts toward the lockout.
+- **What "on" means:** exactly the previous behaviour. An unenrolled account gets the setup-only 30-minute token and the SPA sends it to `/setup-2fa`; an enrolled one must supply its TOTP code.
+- **Enrolment is deliberately *not* gated on the switch.** `POST /admin/auth/2fa/setup` and `/confirm` work while it is off, so an account can be ready before anyone flips it. ⚠️ **The admin SPA has no voluntary-enrolment screen** — it reaches the setup page only when a login says enrolment is required — so today that ordering is available over the API only, and turning the switch on walks everybody through setup at their next login. That flow works; it is just not the gentle version. An "Enable two-factor" card on `/account` is the obvious follow-up.
+- **The `local` bypass is kept, on top of the switch**, unchanged and still inert outside a dev box. It is now folded into one `$twoFactorRequired` expression at the top of `login()` rather than being tested twice. Note the asymmetry it leaves: with the switch **on** on a local machine, `login()` skips the code and `reauth()` still asks for one. That is pre-existing and only reachable locally.
+- **Fixed in passing — a real 500:** `TwoFactorController::disable()` still used `Hash::check()`, which *throws* rather than returning false when the stored value is not a hash the configured hasher can read. Every other password comparison in this codebase moved to `App\Domain\Shared\Support\PasswordHash` when that was found; this call site was missed.
+- **No migration.** The setting materialises from `config/event_settings.php` the moment the release deploys, per this file's own settings-catalogue rule — the Settings screen renders the catalogue whether or not a row exists, and saving is what creates the row. `db:seed --class=EventSettingSeeder` is optional here, not required.
+- 9 tests in `tests/Feature/Auth/TwoFactorSettingTest.php` (off by default with no row; a full token really reaching an ordinary admin route, not just being labelled one; both positions of the switch against enrolled and unenrolled accounts; the password check unweakened; `reauth` in both positions; enrolling while off; and the flush). `AdminAuthTest` now turns the switch on in `setUp()` — those cases are *about* enforcement, so they have to ask for it rather than inherit it.
+
+**⚠️ Turn it on before launch.** Off is the right default for a system with no live staff traffic and it is what was asked for; it is not the right setting for a console holding gateway credentials, the attendee roster and key rotation. docs/06 §6.7's T8 mitigation is this switch.
+
 
 ### 💳 Payments — development environment
 

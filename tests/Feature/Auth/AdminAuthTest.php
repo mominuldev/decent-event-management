@@ -2,7 +2,9 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Domain\Shared\Models\EventSetting;
 use App\Domain\Shared\Models\User;
+use App\Domain\Shared\Support\TwoFactorPolicy;
 use Database\Seeders\RbacSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +20,21 @@ class AdminAuthTest extends TestCase
         parent::setUp();
 
         $this->seed(RbacSeeder::class);
+
+        // These cases are about 2FA enforcement, which is now a switch an
+        // admin owns and which ships off — see TwoFactorSettingTest for the
+        // off-by-default behaviour itself.
+        $this->enforceTwoFactor();
+    }
+
+    private function enforceTwoFactor(): void
+    {
+        EventSetting::query()->updateOrCreate(
+            ['key' => TwoFactorPolicy::SETTING_KEY],
+            ['group' => 'security', 'type' => 'bool', 'label' => 'Require 2FA', 'value' => '1'],
+        );
+
+        app(TwoFactorPolicy::class)->flush();
     }
 
     /**

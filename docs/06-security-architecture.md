@@ -17,7 +17,7 @@ Design against the attacks this system will actually face, not a generic checkli
 | T5 | Attendee data scraped via enumerable IDs | Privacy breach affecting 20,000 people | ULIDs everywhere public; ownership policies; rate limits |
 | T6 | Volunteer device lost or stolen on event day | Unauthorised admissions | Device revocation; PIN; no bulk data on device; scoped tokens |
 | T7 | Malicious file upload | RCE or stored XSS | MIME sniffing, re-encoding, private storage, no execution path |
-| T8 | Credential stuffing on admin accounts | Full system compromise | Mandatory TOTP 2FA, lockout, IP-pinned sessions |
+| T8 | Credential stuffing on admin accounts | Full system compromise | TOTP 2FA (`security.two_factor_enabled`, off by default — turn it on for launch), lockout, IP-pinned sessions |
 | T9 | Insider abuse — refunds or comped tickets | Financial loss | Mandatory reasons, full audit diffs, Super Admin alerts |
 | T10 | DoS during the registration-open spike | Outage at the worst moment | CDN, rate limits, queue isolation, static-first pages |
 | T11 | Gateway credentials leaked via DB backup | Financial compromise | Encrypted at rest, payload redaction, separate key store |
@@ -32,7 +32,7 @@ Three distinct authentication models for three distinct populations.
 ```mermaid
 flowchart TD
     subgraph staff["Staff — Super Admin, Event Manager"]
-        S1["Email + password<br/>bcrypt cost 12"] --> S2["Mandatory TOTP 2FA"]
+        S1["Email + password<br/>bcrypt cost 12"] --> S2["TOTP 2FA<br/>when security.two_factor_enabled"]
         S2 --> S3["Sanctum token<br/>8h TTL, IP-pinned"]
         S3 --> S4["Re-auth for sensitive ops<br/>refunds · key rotation · role change"]
     end
@@ -61,10 +61,10 @@ Twenty thousand people, most registering once, many on shared or public devices,
 | Control | Setting |
 |---|---|
 | Password policy | Min 12 chars, checked against the HIBP k-anonymity API on set |
-| 2FA | TOTP, mandatory for all admin roles, enforced at first login |
+| 2FA | TOTP for all admin roles, enforced at first login **when `security.two_factor_enabled` is on**. Off by default since 2026-09-05 — see docs/02 §2.2. Enrolment endpoints work either way, so an account can enrol before the switch is flipped |
 | Failed attempts | Lockout for 15 min after 5 failures, exponential thereafter |
 | Session | 8h absolute, 2h idle, IP-pinned — a changed IP forces re-auth |
-| Sensitive-action re-auth | Password + TOTP re-entry for refunds, role changes, key rotation, credential edits |
+| Sensitive-action re-auth | Password re-entry for refunds, role changes, key rotation, credential edits — plus TOTP while `security.two_factor_enabled` is on |
 | Token revocation | Role change or deactivation revokes all active Sanctum tokens immediately |
 
 ### Volunteer device enrolment

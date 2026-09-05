@@ -7,6 +7,7 @@ use App\Domain\Shared\Actions\UpdateStaffProfile;
 use App\Domain\Shared\Models\User;
 use App\Domain\Shared\Services\TwoFactorAuthenticationService;
 use App\Domain\Shared\Support\PasswordHash;
+use App\Domain\Shared\Support\TwoFactorPolicy;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\EnsureRecentlyReauthenticated;
 use App\Http\Requests\Admin\ChangePasswordRequest;
@@ -23,9 +24,12 @@ use OpenApi\Attributes as OAT;
 use Throwable;
 
 /**
- * Password + mandatory TOTP 2FA for Super Admin / Event Manager — docs/02
- * §2.2. Sessions are capped at 8h via an explicit token expiry, not
- * Sanctum's global default, because the attendee guard needs 30 days.
+ * Password, plus TOTP 2FA for Super Admin / Event Manager when it is
+ * switched on — docs/02 §2.2. Whether it is switched on is the
+ * `security.two_factor_enabled` setting, read through
+ * {@see TwoFactorPolicy}; it is off by default. Sessions are capped at 8h
+ * via an explicit token expiry, not Sanctum's global default, because the
+ * attendee guard needs 30 days.
  */
 #[OAT\Tag(name: 'Authentication')]
 class AuthController extends Controller
@@ -36,11 +40,14 @@ class AuthController extends Controller
 
     private const int SESSION_HOURS = 8;
 
-    public function __construct(private readonly TwoFactorAuthenticationService $twoFactor) {}
+    public function __construct(
+        private readonly TwoFactorAuthenticationService $twoFactor,
+        private readonly TwoFactorPolicy $twoFactorPolicy,
+    ) {}
 
     #[OAT\Post(
         path: '/admin/auth/login',
-        summary: 'Admin login with email/password and optional TOTP',
+        summary: 'Admin login with email/password, plus TOTP when staff 2FA is switched on',
         tags: ['Authentication'],
         requestBody: new OAT\RequestBody(
             required: true,
@@ -62,7 +69,7 @@ class AuthController extends Controller
                         new OAT\Property(
                             property: 'totp_code',
                             type: 'string',
-                            description: 'TOTP code if 2FA is enabled'
+                            description: 'Required only when the security.two_factor_enabled setting is on and this account has 2FA confirmed'
                         ),
                         new OAT\Property(
                             property: 'device_name',
@@ -93,7 +100,9 @@ class AuthController extends Controller
                             ),
                             new OAT\Property(
                                 property: 'requires_2fa_setup',
-                                type: 'boolean'
+                                type: 'boolean',
+                                description: 'True when staff 2FA is switched on and this account has not enrolled yet. '.
+                                    'The token returned is then setup-only and reaches nothing but the 2FA setup endpoints.'
                             ),
                             new OAT\Property(
                                 property: 'user',
@@ -156,12 +165,19 @@ class AuthController extends Controller
 
         $twoFactorConfirmed = $user->two_factor_confirmed_at !== null;
 
-        // Local-only convenience: never active in testing/staging/production,
-        // so the mandatory-2FA invariant (docs/02 §2.2) stays fully enforced
+        // Is 2FA switched on at all? `security.two_factor_enabled` on the
+        // Settings screen, off by default. While it is off a password is the
+        // whole login: no code is asked for, nobody is sent to the setup
+        // flow, and an account that already enrolled is not held to an
+        // authenticator it may no longer have.
+        //
+        // The `local` bypass is kept on top of it so a dev box stays usable
+        // with the setting on; it is never active in testing/staging/
+        // production, so turning the setting on really does enforce 2FA
         // everywhere it matters.
-        $bypass2fa = app()->environment('local');
+        $twoFactorRequired = $this->twoFactorPolicy->enforced() && ! app()->environment('local');
 
-        if ($twoFactorConfirmed && ! $bypass2fa) {
+        if ($twoFactorRequired && $twoFactorConfirmed) {
             $code = $request->string('totp_code')->value();
 
             if ($code === '' || $user->two_factor_secret === null || ! $this->twoFactor->verify($user->two_factor_secret, $code)) {
@@ -178,7 +194,10 @@ class AuthController extends Controller
             'last_login_ip' => $ip !== null ? inet_pton($ip) : null,
         ])->save();
 
-        $grantFullAccess = $twoFactorConfirmed || $bypass2fa;
+        // A setup-only token is only ever issued to push somebody through
+        // enrolment, so it is issued only while enrolment is actually being
+        // required of them.
+        $grantFullAccess = ! $twoFactorRequired || $twoFactorConfirmed;
 
         // Staff without confirmed 2FA get a setup-only token — see routes/api/v1.php.
         $ability = $grantFullAccess ? 'admin' : '2fa-setup';
@@ -534,7 +553,7 @@ class AuthController extends Controller
                     required: ['password'],
                     properties: [
                         new OAT\Property(property: 'password', type: 'string', format: 'password'),
-                        new OAT\Property(property: 'totp_code', type: 'string', description: 'Required when the account has 2FA confirmed'),
+                        new OAT\Property(property: 'totp_code', type: 'string', description: 'Required when staff 2FA is switched on and the account has it confirmed'),
                     ]
                 )
             )
@@ -577,11 +596,15 @@ class AuthController extends Controller
             ]);
         }
 
-        // Where 2FA is confirmed, re-auth means both factors again — a
-        // password alone is exactly what a shoulder-surfer or a reused
-        // credential gets you, and this gate exists for the case where the
-        // token itself may already be in the wrong hands.
-        if ($user->two_factor_confirmed_at !== null) {
+        // Where 2FA is in force and confirmed, re-auth means both factors
+        // again — a password alone is exactly what a shoulder-surfer or a
+        // reused credential gets you, and this gate exists for the case where
+        // the token itself may already be in the wrong hands. With 2FA
+        // switched off there is no second factor to ask for, and demanding
+        // one from an account that happens to still carry an old enrolment
+        // would block key rotation for exactly the person the switch was
+        // turned off to let back in.
+        if ($this->twoFactorPolicy->enforced() && $user->two_factor_confirmed_at !== null) {
             $code = $request->string('totp_code')->value();
 
             if ($code === '' || $user->two_factor_secret === null || ! $this->twoFactor->verify($user->two_factor_secret, $code)) {

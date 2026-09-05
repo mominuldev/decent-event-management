@@ -20,13 +20,15 @@
 
 | Role | Guard | Auth method | Session | Count (est.) |
 |---|---|---|---|---|
-| **Super Admin** | `web-admin` | Password + mandatory TOTP 2FA | 8h, IP-pinned | 2–3 |
-| **Event Manager** | `web-admin` | Password + TOTP 2FA | 8h | 4–8 |
+| **Super Admin** | `web-admin` | Password + TOTP 2FA when `security.two_factor_enabled` is on | 8h, IP-pinned | 2–3 |
+| **Event Manager** | `web-admin` | Password + TOTP 2FA when `security.two_factor_enabled` is on | 8h | 4–8 |
 | **Volunteer** | `scanner` | Device enrolment token + 6-digit PIN | Event window only | 20–30 |
 | **Attendee** | `attendee` | Magic link (email) or OTP (SMS) | 30 days, single-resource | 20,000+ |
 
 ### Super Admin
-Full system authority. Owns the things that are dangerous rather than merely important: gateway credentials, event settings, role assignment, ticket-type pricing, hard deletion, and the QR signing key rotation. There should be very few of these accounts, and 2FA is not optional.
+Full system authority. Owns the things that are dangerous rather than merely important: gateway credentials, event settings, role assignment, ticket-type pricing, hard deletion, and the QR signing key rotation. There should be very few of these accounts.
+
+**2FA is a switch, not a constant — changed 2026-09-05.** Whether staff logins demand a TOTP code is `security.two_factor_enabled` (Settings → Security), and it ships **off**. The mandatory version had one failure mode nobody could recover from: a staff member who loses their authenticator is locked out of the only account that can disable 2FA on itself, so recovery meant shell access to the host. `App\Domain\Shared\Support\TwoFactorPolicy` is the single answer to "is 2FA in force?" — do not read the setting anywhere else. Turn it on for launch.
 
 **Uniquely holds:** system settings, user/role management, credential management, key rotation, permanent deletion, audit log export.
 

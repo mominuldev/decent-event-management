@@ -725,7 +725,7 @@
                 "tags": [
                     "Authentication"
                 ],
-                "summary": "Admin login with email/password and optional TOTP",
+                "summary": "Admin login with email/password, plus TOTP when staff 2FA is switched on",
                 "operationId": "4582fd8c864b850bcdc1a9c523c0a8c0",
                 "requestBody": {
                     "required": true,
@@ -747,7 +747,7 @@
                                         "type": "string"
                                     },
                                     "totp_code": {
-                                        "description": "TOTP code if 2FA is enabled",
+                                        "description": "Required only when the security.two_factor_enabled setting is on and this account has 2FA confirmed",
                                         "type": "string"
                                     },
                                     "device_name": {
@@ -776,6 +776,7 @@
                                             "format": "date-time"
                                         },
                                         "requires_2fa_setup": {
+                                            "description": "True when staff 2FA is switched on and this account has not enrolled yet. The token returned is then setup-only and reaches nothing but the 2FA setup endpoints.",
                                             "type": "boolean"
                                         },
                                         "user": {
@@ -1100,7 +1101,7 @@
                                         "format": "password"
                                     },
                                     "totp_code": {
-                                        "description": "Required when the account has 2FA confirmed",
+                                        "description": "Required when staff 2FA is switched on and the account has it confirmed",
                                         "type": "string"
                                     }
                                 },
@@ -7730,7 +7731,7 @@
                     "Two-Factor"
                 ],
                 "summary": "Disable 2FA for the authenticated staff member",
-                "description": "Self-service: acts on the caller's own account only, no RBAC permission check beyond authentication. Requires the caller to re-enter their password. Only reachable with a full `admin`-ability token, i.e. 2FA must already be confirmed.",
+                "description": "Self-service: acts on the caller's own account only, no RBAC permission check beyond authentication. Requires the caller to re-enter their password. Only reachable with a full `admin`-ability token.",
                 "operationId": "a68367b94235a211d1e74c15813f8770",
                 "requestBody": {
                     "required": true,

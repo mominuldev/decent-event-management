@@ -4,13 +4,26 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Domain\Shared\Models\User;
 use App\Domain\Shared\Services\TwoFactorAuthenticationService;
+use App\Domain\Shared\Support\PasswordHash;
+use App\Domain\Shared\Support\TwoFactorPolicy;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OAT;
 
+/**
+ * Enrolling in, and dropping, TOTP 2FA on your own account.
+ *
+ * These endpoints work whether or not `security.two_factor_enabled` is on
+ * (see {@see TwoFactorPolicy}), so an account can enrol ahead of the switch
+ * being flipped. While the switch is off an enrolled account simply is not
+ * asked for its code at login, and its enrolment is left untouched.
+ *
+ * The admin SPA has no voluntary-enrolment screen yet — it reaches the setup
+ * page only when a login tells it enrolment is required — so today that
+ * ordering is available over the API only.
+ */
 #[OAT\Tag(name: 'Two-Factor')]
 class TwoFactorController extends Controller
 {
@@ -148,7 +161,7 @@ class TwoFactorController extends Controller
         summary: 'Disable 2FA for the authenticated staff member',
         description: 'Self-service: acts on the caller\'s own account only, no RBAC permission '.
             'check beyond authentication. Requires the caller to re-enter their password. '.
-            'Only reachable with a full `admin`-ability token, i.e. 2FA must already be confirmed.',
+            'Only reachable with a full `admin`-ability token.',
         security: [['bearerAuth' => []]],
         tags: ['Two-Factor'],
         requestBody: new OAT\RequestBody(
@@ -190,7 +203,11 @@ class TwoFactorController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        if (! Hash::check($request->string('password'), $user->password)) {
+        // PasswordHash, not Hash::check: the latter throws rather than
+        // returning false when the stored value is not a hash the configured
+        // hasher can read, turning a wrong answer here into a 500. This call
+        // site was missed when the rest of the codebase moved across.
+        if (! PasswordHash::matches($request->string('password')->value(), $user->password)) {
             throw ValidationException::withMessages(['password' => ['Incorrect password.']]);
         }
 

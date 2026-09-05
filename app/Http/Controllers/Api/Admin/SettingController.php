@@ -6,6 +6,7 @@ use App\Domain\Notification\Support\SmsGatewayConfig;
 use App\Domain\Shared\Models\ActivityLog;
 use App\Domain\Shared\Models\EventSetting;
 use App\Domain\Shared\Support\EventSettingCatalogue;
+use App\Domain\Shared\Support\TwoFactorPolicy;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateSettingRequest;
 use App\Http\Resources\EventSettingResource;
@@ -161,6 +162,13 @@ class SettingController extends Controller
         // key and the operator would reasonably conclude the save failed.
         if (SmsGatewayConfig::overridesGateway($key)) {
             app(SmsGatewayConfig::class)->flush();
+        }
+
+        // Same reason: whether staff 2FA is in force is memoised for the life
+        // of the process, and the next login has to honour what was just
+        // saved rather than what was true when this request started.
+        if ($key === TwoFactorPolicy::SETTING_KEY) {
+            app(TwoFactorPolicy::class)->flush();
         }
 
         $requestId = substr((string) ($request->header('X-Request-Id') ?? Str::ulid()), 0, 26);
