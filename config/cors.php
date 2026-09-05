@@ -32,7 +32,29 @@ return [
         env('FRONTEND_URL'),
     ])),
 
-    'allowed_origins_patterns' => [],
+    /*
+     * Local development only, and deliberately not in `allowed_origins`.
+     *
+     * `next dev` binds 3000 when it can and silently moves to 3001, 3002 …
+     * when something already holds it — a stray dev server from an earlier
+     * session is enough. The frontend reads `/public/ticket-types` straight
+     * from the browser, so a refused preflight does not degrade a corner of
+     * the page: the ticket form disappears entirely and is replaced by a
+     * panel, with the real cause visible only in the browser console. That
+     * has cost real debugging time more than once.
+     *
+     * Read through `env()` rather than `app()->environment()`: config files
+     * are evaluated before the application knows its own environment, and
+     * asking too early answered false here — which silently dropped *every*
+     * origin, port 3000 included.
+     *
+     * Gated on `local` because a pattern this wide is a genuine hole
+     * anywhere else: any page on any localhost port could call the API. In
+     * production only `FRONTEND_URL` is trusted, exactly as before.
+     */
+    'allowed_origins_patterns' => array_values(array_filter([
+        env('APP_ENV') === 'local' ? '#^http://(localhost|127\.0\.0\.1):\d+$#' : null,
+    ])),
 
     'allowed_headers' => ['Content-Type', 'Accept', 'Accept-Language', 'Idempotency-Key'],
 
