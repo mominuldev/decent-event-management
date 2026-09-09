@@ -37,7 +37,7 @@ class ReveSmsClientTest extends TestCase
         Http::preventStrayRequests();
 
         config([
-            'services.revesms.base_url' => 'https://smpp.revesms.com:7790',
+            'services.revesms.base_url' => 'https://smpp.ajuratech.com:7790',
             'services.revesms.api_key' => 'test-api-key',
             'services.revesms.secret_key' => 'test-secret',
             'services.revesms.sender_id' => 'DEC100',
@@ -57,7 +57,7 @@ class ReveSmsClientTest extends TestCase
         Http::assertSent(function (Request $request): bool {
             $body = $request->data();
 
-            return $request->url() === 'https://smpp.revesms.com:7790/sendtext'
+            return $request->url() === 'https://smpp.ajuratech.com:7790/sendtext'
                 && $request->method() === 'POST'
                 && $body['apikey'] === 'test-api-key'
                 && $body['secretkey'] === 'test-secret'
@@ -87,7 +87,7 @@ class ReveSmsClientTest extends TestCase
         app(ReveSmsClient::class)->sendText('DEC100', ['8801711223344'], 'Hello');
 
         Http::assertSent(function (Request $request): bool {
-            return $request->url() === 'https://smpp.revesms.com:7790/sendtext/test-api-key/test-secret'
+            return $request->url() === 'https://smpp.ajuratech.com:7790/sendtext/test-api-key/test-secret'
                 && ! array_key_exists('apikey', $request->data())
                 && ! array_key_exists('secretkey', $request->data());
         });

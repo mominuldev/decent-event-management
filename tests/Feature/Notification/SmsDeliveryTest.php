@@ -35,7 +35,7 @@ class SmsDeliveryTest extends TestCase
     private function configureGateway(): void
     {
         config([
-            'services.revesms.base_url' => 'https://smpp.revesms.com:7790',
+            'services.revesms.base_url' => 'https://smpp.ajuratech.com:7790',
             'services.revesms.api_key' => 'test-api-key',
             'services.revesms.secret_key' => 'test-secret',
             'services.revesms.sender_id' => 'DEC100',

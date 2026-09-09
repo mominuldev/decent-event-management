@@ -165,7 +165,7 @@ class SmsGatewaySettingsTest extends TestCase
             'services.revesms.api_key' => 'env-key',
             'services.revesms.secret_key' => 'env-secret',
             'services.revesms.sender_id' => 'ENVSENDER',
-            'services.revesms.base_url' => 'https://smpp.revesms.com:7790',
+            'services.revesms.base_url' => 'https://smpp.ajuratech.com:7790',
         ]);
 
         $admin = $this->superAdmin();
@@ -257,7 +257,7 @@ class SmsGatewaySettingsTest extends TestCase
             'services.revesms.api_key' => 'k',
             'services.revesms.secret_key' => 's',
             'services.revesms.sender_id' => 'DEC100',
-            'services.revesms.base_url' => 'https://smpp.revesms.com:7790',
+            'services.revesms.base_url' => 'https://smpp.ajuratech.com:7790',
         ]);
 
         Http::preventStrayRequests();

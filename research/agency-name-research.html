@@ -1,0 +1,775 @@
+<title>Ten Coined Names</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+
+<style>
+  :root {
+    --ground:    #F1F2F5;
+    --surface:   #FFFFFF;
+    --sunken:    #E7E8EE;
+    --ink:       #14151C;
+    --ink-soft:  #3B3D4C;
+    --muted:     #6B6E80;
+    --hairline:  #DBDCE4;
+    --rule:      #C3C5D1;
+    --accent:    #C4186B;
+    --accent-bg: #FBE7F0;
+    --cyan:      #0B6E7D;
+    --cyan-bg:   #DDF1F4;
+
+    --display: "Syne", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --body:    "Figtree", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+    --measure: 36rem;
+    --pad: clamp(1.15rem, 4vw, 3.25rem);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:    #0E0F15;
+      --surface:   #171923;
+      --sunken:    #1E202C;
+      --ink:       #ECEDF3;
+      --ink-soft:  #C0C3D0;
+      --muted:     #8B8FA3;
+      --hairline:  #262937;
+      --rule:      #363A4B;
+      --accent:    #FF5EA6;
+      --accent-bg: #2E1220;
+      --cyan:      #46D6E6;
+      --cyan-bg:   #0E2A30;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:    #0E0F15;
+    --surface:   #171923;
+    --sunken:    #1E202C;
+    --ink:       #ECEDF3;
+    --ink-soft:  #C0C3D0;
+    --muted:     #8B8FA3;
+    --hairline:  #262937;
+    --rule:      #363A4B;
+    --accent:    #FF5EA6;
+    --accent-bg: #2E1220;
+    --cyan:      #46D6E6;
+    --cyan-bg:   #0E2A30;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16.5px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 64rem; margin: 0 auto; padding: 0 var(--pad) 5rem; }
+
+  /* ---------- type primitives ---------- */
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  h1, h2 { font-family: var(--display); text-wrap: balance; margin: 0; }
+
+  h1 {
+    font-weight: 800;
+    font-size: clamp(2.5rem, 7.5vw, 4.6rem);
+    line-height: 0.94;
+    letter-spacing: -0.03em;
+    margin: 0.7rem 0 0;
+  }
+
+  h2 {
+    font-weight: 800;
+    font-size: clamp(1.35rem, 3vw, 1.8rem);
+    letter-spacing: -0.02em;
+    line-height: 1.12;
+  }
+
+  p { margin: 0 0 0.95rem; max-width: var(--measure); }
+  p:last-child { margin-bottom: 0; }
+
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+
+  /* ---------- masthead ---------- */
+
+  header.masthead { padding: clamp(2.75rem, 8vw, 5rem) 0 2rem; border-bottom: 2px solid var(--ink); }
+
+  .lede {
+    font-size: clamp(1.02rem, 2.1vw, 1.16rem);
+    color: var(--ink-soft);
+    max-width: 41rem;
+    margin: 1.4rem 0 0;
+  }
+
+  .constraints {
+    display: flex; flex-wrap: wrap; gap: 0.4rem;
+    margin-top: 1.5rem;
+  }
+  .tag {
+    font-family: var(--mono);
+    font-size: 0.68rem; font-weight: 500;
+    padding: 0.3rem 0.55rem;
+    background: var(--sunken);
+    color: var(--ink-soft);
+    border: 1px solid var(--hairline);
+  }
+  .tag.no { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
+  .tag.no::before { content: "✕ "; }
+
+  .factstrip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: 1px; margin-top: 2.25rem;
+    background: var(--hairline); border: 1px solid var(--hairline);
+  }
+  .fact { background: var(--surface); padding: 0.8rem 1rem 0.9rem; }
+  .fact dt {
+    font-family: var(--mono); font-size: 0.62rem;
+    letter-spacing: 0.13em; text-transform: uppercase; color: var(--muted);
+  }
+  .fact dd {
+    margin: 0.3rem 0 0;
+    font-family: var(--display); font-weight: 800;
+    font-size: 1.4rem; letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+  }
+  .fact.hot dd { color: var(--accent); }
+
+  /* ---------- sections ---------- */
+
+  section { padding-top: clamp(2.75rem, 6.5vw, 4.25rem); }
+  .sec-head { display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.35rem; }
+
+  .cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+    gap: 1.5rem 2.5rem;
+  }
+  .cols p { max-width: none; }
+
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-bg);
+    padding: 0.9rem 1.1rem;
+    font-size: 0.93rem;
+    color: var(--ink-soft);
+  }
+  .callout strong { color: var(--ink); font-weight: 600; }
+  .callout p { max-width: none; }
+
+  .aside {
+    border-left: 2px solid var(--rule);
+    padding-left: 1rem;
+    color: var(--ink-soft);
+    font-size: 0.92rem;
+  }
+  .aside strong { color: var(--ink); font-weight: 600; }
+  .aside p { max-width: none; }
+
+  /* ---------- name entries ---------- */
+
+  .entry {
+    border-top: 1px solid var(--hairline);
+    padding: 1.75rem 0;
+    display: grid;
+    grid-template-columns: 2.4rem minmax(0, 1fr);
+    gap: 0 0.9rem;
+  }
+  .entry:first-of-type { border-top: 2px solid var(--ink); }
+
+  .rank {
+    font-family: var(--mono); font-size: 0.75rem; font-weight: 700;
+    color: var(--muted); padding-top: 0.55rem; font-variant-numeric: tabular-nums;
+  }
+
+  .entry-body { display: grid; grid-template-columns: minmax(0,1fr); gap: 1.1rem; }
+  @media (min-width: 54rem) {
+    .entry-body { grid-template-columns: minmax(0, 16rem) minmax(0, 1fr); gap: 0 2.75rem; }
+  }
+
+  .name {
+    font-family: var(--display); font-weight: 800;
+    font-size: clamp(1.9rem, 5vw, 2.5rem);
+    line-height: 1; letter-spacing: -0.035em; margin: 0;
+  }
+  .name .root { color: var(--accent); }
+  .name .suf  { color: var(--muted); }
+
+  .gloss {
+    font-family: var(--mono); font-size: 0.68rem;
+    color: var(--muted); margin: 0.65rem 0 0; line-height: 1.75;
+  }
+  .gloss b { color: var(--ink-soft); font-weight: 500; }
+  .say {
+    display: inline-block;
+    font-family: var(--mono); font-size: 0.7rem; font-weight: 500;
+    color: var(--cyan); background: var(--cyan-bg);
+    padding: 0.15rem 0.4rem; margin-top: 0.55rem;
+  }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.8rem; }
+  .chip {
+    font-family: var(--mono); font-size: 0.66rem; font-weight: 500;
+    padding: 0.2rem 0.42rem; border: 1px solid var(--rule);
+    color: var(--muted); white-space: nowrap;
+  }
+  .chip.free { color: var(--cyan); border-color: var(--cyan); background: var(--cyan-bg); }
+  .chip.free::before { content: "✓ "; }
+
+  .field { margin-bottom: 0.9rem; }
+  .field:last-child { margin-bottom: 0; }
+  .field h3 {
+    font-family: var(--mono); font-size: 0.62rem; font-weight: 700;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 0.25rem;
+  }
+  .field p { max-width: 41rem; margin-bottom: 0; }
+  .field.caution h3 { color: var(--accent); }
+  .field.caution p { color: var(--ink-soft); }
+
+  /* ---------- table ---------- */
+
+  .table-scroll { overflow-x: auto; border: 1px solid var(--hairline); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; min-width: 42rem; }
+  th, td {
+    text-align: left; padding: 0.65rem 1rem;
+    border-bottom: 1px solid var(--hairline); font-size: 0.88rem; vertical-align: top;
+  }
+  thead th {
+    font-family: var(--mono); font-size: 0.61rem; font-weight: 700;
+    letter-spacing: 0.13em; text-transform: uppercase; color: var(--muted);
+    border-bottom: 1px solid var(--rule); white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.nm { font-family: var(--display); font-weight: 700; white-space: nowrap; }
+  td.dom { font-family: var(--mono); font-size: 0.78rem; white-space: nowrap; color: var(--muted); }
+
+  /* ---------- steps ---------- */
+
+  ol.steps { counter-reset: s; list-style: none; padding: 0; margin: 0; max-width: 44rem; }
+  ol.steps li { counter-increment: s; position: relative; padding: 0 0 0.95rem 2.3rem; }
+  ol.steps li::before {
+    content: counter(s, decimal-leading-zero);
+    position: absolute; left: 0; top: 0.15rem;
+    font-family: var(--mono); font-size: 0.7rem; font-weight: 700; color: var(--accent);
+  }
+  ol.steps b { font-weight: 600; }
+
+  code { font-family: var(--mono); font-size: 0.88em; }
+
+  footer {
+    margin-top: 3.5rem; padding-top: 1.15rem; border-top: 1px solid var(--hairline);
+    font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.03em; color: var(--muted);
+  }
+  footer p { max-width: 46rem; line-height: 1.75; }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Brand naming research &middot; revision 2 &middot; 2 September 2026</p>
+    <h1>Ten Coined<br>Names</h1>
+    <p class="lede">Single-word, invented, futuristic &mdash; for a digital agency selling WordPress themes and
+      plugins, its own SaaS, and services. All ten hold a free <code>.com</code> <em>and</em> a free
+      <code>.io</code> as of today.</p>
+
+    <div class="constraints">
+      <span class="tag">Single word</span>
+      <span class="tag">6&ndash;8 letters</span>
+      <span class="tag">Futuristic register</span>
+      <span class="tag no">forge</span>
+      <span class="tag no">stack</span>
+      <span class="tag no">plug / theme / press</span>
+    </div>
+
+    <dl class="factstrip">
+      <div class="fact"><dt>Names screened</dt><dd>16,767</dd></div>
+      <div class="fact hot"><dt>Hand-written free</dt><dd>4 / 459</dd></div>
+      <div class="fact"><dt>Shortlisted</dt><dd>10</dd></div>
+      <div class="fact"><dt>Reserve</dt><dd>10</dd></div>
+    </dl>
+  </header>
+
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">01 / Finding</p>
+      <h2>Why these names look invented</h2>
+    </div>
+    <div class="cols">
+      <div>
+        <p>Two batches were written by hand, in the register you asked for. The first was 256 names of the
+          <em>Vantor / Novira / Solvara / Elaris</em> kind. The second was 203 respellings of real words, the
+          pattern behind Figma, Vercel and Prysm &mdash; <em>Vertyx</em>, <em>Quantiq</em>, <em>Zenyth</em>,
+          <em>Matryx</em>, <em>Kortex</em>.</p>
+        <div class="callout">
+          <p><strong>Four of those 459 were available.</strong> Under one percent. Every name a person would
+            write down as obviously good is already registered &mdash; usually parked, not used. That is the
+            single most useful fact in this document, because it explains the shape of everything below.</p>
+        </div>
+      </div>
+      <div>
+        <p>So the search moved to the part of the sound-space nobody farms: Latinate and French endings
+          &mdash; <b>-ique</b>, <b>-ade</b>, <b>-une</b>, <b>-ance</b>, <b>-era</b>, <b>-ira</b> &mdash; bolted
+          onto short technical roots. Of 1,723 built that way, <b>652</b> had a free <code>.com</code>.</p>
+        <p>That is why every name here reads as European rather than Californian. It is not a style preference;
+          it is where the vacancies are. It also happens to suit an agency selling to Western clients &mdash;
+          it sounds like a studio, not a startup.</p>
+        <div class="aside">
+          <p><strong>Also tried and abandoned:</strong> 6,700 randomly generated pronounceable words. 85% had a
+            free <code>.com</code> and essentially none were worth saying aloud &mdash; availability and
+            brandability are close to inversely correlated, which is the whole problem.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">02 / Shortlist</p>
+      <h2>Ten names, ranked</h2>
+    </div>
+
+    <div class="entry">
+      <div class="rank">01</div>
+      <div class="entry-body">
+        <div>
+          <p class="name"><span class="root">Axi</span><span class="suf">une</span></p>
+          <p class="gloss"><b>axi-</b> &nbsp;axiom, axis<br><b>-une</b> &nbsp;open Latinate close</p>
+          <p class="say">AK-see-oon</p>
+          <div class="chips">
+            <span class="chip free">axiune.com</span><span class="chip free">.io</span><span class="chip free">.dev</span>
+          </div>
+        </div>
+        <div>
+          <div class="field">
+            <h3>Why choose it</h3>
+            <p>An axiom is the thing you accept first and build everything else on &mdash; the exact claim a firm
+              selling both products and the services around them wants to make. The same root carries
+              <em>axis</em>: the line a system turns on. It is the only name here whose meaning survives being
+              explained in a single sentence, which matters more than it sounds: a name you can justify in one
+              breath gets repeated correctly by other people.</p>
+          </div>
+          <div class="field">
+            <h3>As a mark</h3>
+            <p>Four vowels in six letters give it an open, unhurried sound and a logotype with plenty of
+              counter-space. The initial <b>A</b> is the most structurally interesting letter to build an icon
+              from &mdash; two strokes and a crossbar read as an axis at any size.</p>
+          </div>
+          <div class="field caution">
+            <h3>Watch out</h3>
+            <p>The <b>-une</b> ending is rare in English, so people will type <em>Axion</em> or <em>Axiom</em>.
+              Both are long registered, so you cannot buy the misspellings &mdash; budget for spelling it aloud
+              on every call.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="entry">
+      <div class="rank">02</div>
+      <div class="entry-body">
+        <div>
+          <p class="name"><span class="root">Arc</span><span class="suf">ique</span></p>
+          <p class="gloss"><b>arc-</b> &nbsp;arc, trajectory<br><b>-ique</b> &nbsp;technique, unique</p>
+          <p class="say">ar-SEEK</p>
+          <div class="chips">
+            <span class="chip free">arcique.com</span><span class="chip free">.io</span><span class="chip">.dev unverified</span>
+          </div>
+        </div>
+        <div>
+          <div class="field">
+            <h3>Why choose it</h3>
+            <p>The <b>-ique</b> ending carries <em>technique</em> and <em>unique</em> without having to say
+              either word, and an arc is the actual shape of a project: brief, build, launch, curve away.
+              The most design-forward name on the list &mdash; it reads as a studio with a point of view rather
+              than a development shop, and it will sit comfortably beside European agency names on a client's
+              shortlist.</p>
+          </div>
+          <div class="field">
+            <h3>As a mark</h3>
+            <p>Hands you a literal logo: a single drawn arc. Almost no other name here comes with its own
+              geometry already decided.</p>
+          </div>
+          <div class="field caution">
+            <h3>Watch out</h3>
+            <p>Two plausible readings &mdash; <em>ar-SEEK</em> and <em>AR-kick</em>. Pick one and use it in your
+              own voice consistently from day one; the second reading dies out quickly if you never use it.
+              The <code>.dev</code> lookup timed out and needs re-running.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="entry">
+      <div class="rank">03</div>
+      <div class="entry-body">
+        <div>
+          <p class="name"><span class="root">Quan</span><span class="suf">ira</span></p>
+          <p class="gloss"><b>quan-</b> &nbsp;quanta, quantify<br><b>-ira</b> &nbsp;soft vowel close</p>
+          <p class="say">kwa-NEER-a</p>
+          <div class="chips">
+            <span class="chip free">quanira.com</span><span class="chip free">.io</span><span class="chip">.dev unverified</span>
+          </div>
+        </div>
+        <div>
+          <div class="field">
+            <h3>Why choose it</h3>
+            <p>A quantum is the smallest indivisible unit of a thing &mdash; a decent description of a plugin, and
+              a good one for a company that sells software in pieces. The <b>kw-</b> opening is genuinely rare in
+              software branding, so it stands out immediately in a list otherwise full of Vs, Zs and Ns.</p>
+          </div>
+          <div class="field">
+            <h3>As a mark</h3>
+            <p>The softest and most premium-sounding name here. It ages well &mdash; there is no era-specific
+              technology reference in it to date the company in five years, which is not true of anything
+              built on <em>cyber-</em>, <em>-ify</em> or <em>-AI</em>.</p>
+          </div>
+          <div class="field caution">
+            <h3>Watch out</h3>
+            <p>Seven letters and three syllables &mdash; the slowest to type of the top three. The <b>-ira</b>
+              ending reads slightly pharmaceutical, which is fine for a design-led studio and less so if you
+              later pivot to infrastructure.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="entry">
+      <div class="rank">04</div>
+      <div class="entry-body">
+        <div>
+          <p class="name"><span class="root">Orb</span><span class="suf">ade</span></p>
+          <p class="gloss"><b>orb-</b> &nbsp;orbit, sphere<br><b>-ade</b> &nbsp;cascade, decade</p>
+          <p class="say">or-BAYD</p>
+          <div class="chips">
+            <span class="chip free">orbade.com</span><span class="chip free">.io</span><span class="chip free">.dev</span>
+          </div>
+        </div>
+        <div>
+          <div class="field">
+            <h3>Why choose it</h3>
+            <p>Shortest and cleanest on the list at six letters. <em>Orb</em> is a whole system seen from
+              outside; <b>-ade</b> is the suffix of things that unfold over time &mdash; <em>cascade</em>,
+              <em>decade</em>. Together they say scale and duration, which is the pitch for a maintenance
+              retainer rather than a one-off build.</p>
+          </div>
+          <div class="field">
+            <h3>As a mark</h3>
+            <p>The best logotype prospect here. Six letters, near-symmetrical, and one strong <b>O</b> that works
+              as a standalone icon down to 16px &mdash; which is the size that actually matters, because it is a
+              favicon, an app icon and a marketplace avatar.</p>
+          </div>
+          <div class="field caution">
+            <h3>Watch out</h3>
+            <p><em>Bade</em> is the past tense of <em>bid</em>, so a few readers will parse it as "or bade".
+              Minor, and it disappears once the word is set as a logotype.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="entry">
+      <div class="rank">05</div>
+      <div class="entry-body">
+        <div>
+          <p class="name"><span class="root">Zeph</span><span class="suf">une</span></p>
+          <p class="gloss"><b>zeph-</b> &nbsp;zephyr, west wind<br><b>-une</b> &nbsp;open Latinate close</p>
+          <p class="say">ZEF-yoon</p>
+          <div class="chips">
+            <span class="chip free">zephune.com</span><span class="chip free">.io</span><span class="chip">.dev unverified</span>
+          </div>
+        </div>
+        <div>
+          <div class="field">
+            <h3>Why choose it</h3>
+            <p>A zephyr is a light west wind &mdash; speed without force. If the agency's pitch is fast delivery
+              and low friction, no other root on this list says it as economically. The <b>Z</b> opening is the
+              rarest first letter in English commerce and the most memorable.</p>
+          </div>
+          <div class="field">
+            <h3>As a mark</h3>
+            <p>Alphabetically last, which is a small but real advantage in any directory that sorts A&ndash;Z:
+              you are the name still on screen when someone scrolls to the bottom. The <b>ph</b> also gives the
+              logotype an unusual internal rhythm to work with.</p>
+          </div>
+          <div class="field caution">
+            <h3>Watch out</h3>
+            <p><em>Zeph</em> only means something once the zephyr connection is made &mdash; unexplained it is
+              just letters. Also the highest misspelling risk here (<em>zeff-</em>, <em>zef-</em>).
+              <code>.dev</code> unverified.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="entry">
+      <div class="rank">06</div>
+      <div class="entry-body">
+        <div>
+          <p class="name"><span class="root">Lyr</span><span class="suf">era</span></p>
+          <p class="gloss"><b>lyr-</b> &nbsp;Lyra, lyric<br><b>-era</b> &nbsp;age, epoch</p>
+          <p class="say">ly-RAIR-uh</p>
+          <div class="chips">
+            <span class="chip free">lyrera.com</span><span class="chip free">.io</span><span class="chip">.dev unverified</span>
+          </div>
+        </div>
+        <div>
+          <div class="field">
+            <h3>Why choose it</h3>
+            <p>Lyra is a northern constellation and the root of <em>lyric</em>; <b>-era</b> is an age. The most
+              musical name on the list, and the rolled double-<b>r</b> survives being said in Bangla as
+              cleanly as in English &mdash; worth weighing when your team says the name far more often than
+              your clients do.</p>
+          </div>
+          <div class="field">
+            <h3>As a mark</h3>
+            <p>Fits a studio that leads with visual craft. Lyra's five stars are a ready-made constellation
+              motif that avoids the obvious swoosh.</p>
+          </div>
+          <div class="field caution">
+            <h3>Watch out</h3>
+            <p>Half its letters are <b>l</b>/<b>r</b>, which some accents blur into each other. Close enough to
+              <em>Lyra</em> and <em>Riviera</em> that a trademark check should come before you print anything.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="entry">
+      <div class="rank">07</div>
+      <div class="entry-body">
+        <div>
+          <p class="name"><span class="root">Onyx</span><span class="suf">ique</span></p>
+          <p class="gloss"><b>onyx-</b> &nbsp;black gemstone<br><b>-ique</b> &nbsp;technique, unique</p>
+          <p class="say">on-ix-EEK</p>
+          <div class="chips">
+            <span class="chip free">onyxique.com</span><span class="chip free">.io</span><span class="chip free">.dev</span>
+          </div>
+        </div>
+        <div>
+          <div class="field">
+            <h3>Why choose it</h3>
+            <p>The most visual root on the list &mdash; onyx is a black banded gemstone, so the name arrives with
+              a palette and a material already attached. Paired with <b>-ique</b> it reads as a luxury digital
+              studio, which is the right register if you intend to price a theme catalogue above the
+              marketplace average rather than at it.</p>
+          </div>
+          <div class="field">
+            <h3>As a mark</h3>
+            <p>Black, high-gloss, sharp-edged &mdash; an art direction that writes itself and is unusually
+              cheap to execute consistently across a site, a marketplace listing and a deck.</p>
+          </div>
+          <div class="field caution">
+            <h3>Watch out</h3>
+            <p>Eight letters and three syllables makes it the least typeable name here. It needs a short
+              logotype (a single <b>O</b>) doing the work in every small placement. <em>Onyx</em> alone is also
+              a crowded trademark field &mdash; check carefully.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="entry">
+      <div class="rank">08</div>
+      <div class="entry-body">
+        <div>
+          <p class="name"><span class="root">Myr</span><span class="suf">ance</span></p>
+          <p class="gloss"><b>myr-</b> &nbsp;myriad, countless<br><b>-ance</b> &nbsp;resonance, radiance</p>
+          <p class="say">MY-rance</p>
+          <div class="chips">
+            <span class="chip free">myrance.com</span><span class="chip free">.io</span><span class="chip free">.dev</span>
+          </div>
+        </div>
+        <div>
+          <div class="field">
+            <h3>Why choose it</h3>
+            <p><em>Myriad</em> means countless, and <b>-ance</b> turns a root into a quality &mdash;
+              <em>resonance</em>, <em>radiance</em>, <em>cadence</em>. The result is the only name here that
+              already sounds like an existing English abstract noun, so it passes as an established company
+              with no explanation at all. That is worth a great deal in a cold email.</p>
+          </div>
+          <div class="field">
+            <h3>As a mark</h3>
+            <p>Reads calm and established rather than new, which suits a firm selling retainers. It is also the
+              easiest name here for a non-technical client to spell correctly on the first try.</p>
+          </div>
+          <div class="field caution">
+            <h3>Watch out</h3>
+            <p>Said quickly it can land as "my rants". It also sits near <em>Myriad</em> and <em>Mylan</em>, both
+              real companies &mdash; of everything on this list, this is the one to run through a trademark
+              search first.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="entry">
+      <div class="rank">09</div>
+      <div class="entry-body">
+        <div>
+          <p class="name"><span class="root">Cyr</span><span class="suf">ave</span></p>
+          <p class="gloss"><b>cyr-</b> &nbsp;cyber, Cyrus<br><b>-ave</b> &nbsp;wave, octave</p>
+          <p class="say">sy-RAYV</p>
+          <div class="chips">
+            <span class="chip free">cyrave.com</span><span class="chip free">.io</span><span class="chip free">.dev</span>
+          </div>
+        </div>
+        <div>
+          <div class="field">
+            <h3>Why choose it</h3>
+            <p>The most energetic name on the list. There is an audible <em>wave</em> in it, and the
+              <b>cy-</b> opening carries just enough of <em>cyber</em> to place the company in technology
+              without dating it the way the full prefix would. Right if the agency's voice is young and the
+              products are consumer-facing rather than enterprise.</p>
+          </div>
+          <div class="field">
+            <h3>As a mark</h3>
+            <p>Short, front-loaded and fast to say &mdash; it works as a spoken brand, which matters if you
+              expect to be recommended in Slack channels and Facebook groups rather than found in search.</p>
+          </div>
+          <div class="field caution">
+            <h3>Watch out</h3>
+            <p>The same energy is the risk: <em>rave</em> is plainly visible inside it and reads as nightlife to
+              some audiences. The <b>cy-</b> also invites a "sigh-rave" first reading.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="entry">
+      <div class="rank">10</div>
+      <div class="entry-body">
+        <div>
+          <p class="name"><span class="root">Vyr</span><span class="suf">ine</span></p>
+          <p class="gloss"><b>vyr-</b> &nbsp;invented, vir-adjacent<br><b>-ine</b> &nbsp;chlorine, adrenaline</p>
+          <p class="say">VY-reen</p>
+          <div class="chips">
+            <span class="chip free">vyrine.com</span><span class="chip free">.io</span><span class="chip free">.dev</span>
+          </div>
+        </div>
+        <div>
+          <div class="field">
+            <h3>Why choose it</h3>
+            <p>The sleekest and most product-like name here. <b>-ine</b> is the suffix English uses for
+              substances and compounds &mdash; <em>chlorine</em>, <em>adrenaline</em>, <em>crystalline</em> &mdash;
+              so it reads as a material rather than a company, which is genuinely apt for a business whose
+              output is components other people build with.</p>
+          </div>
+          <div class="field">
+            <h3>As a mark</h3>
+            <p>Six letters, one dominant <b>V</b>, no ascender clutter. Of the ten, it would make the tightest
+              wordmark.</p>
+          </div>
+          <div class="field caution">
+            <h3>Watch out</h3>
+            <p>This is why it is tenth and not higher: <b>vyr-</b> sits one letter from <b>vir-</b>, as in
+              <em>virus</em> and <em>viral</em>. For a software company that association is worth taking
+              seriously rather than hoping nobody makes it.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">03 / Reserve</p>
+      <h2>Ten more, and why they lost</h2>
+    </div>
+    <p style="max-width:44rem">All confirmed unregistered today. Several are worth buying purely as defensive
+      redirects around whichever name you pick.</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Name</th><th>Domain</th><th>Reading</th><th>Held back because</th></tr></thead>
+        <tbody>
+          <tr><td class="nm">Vexune</td><td class="dom">vexune.com</td><td>VEX-yoon</td><td>Sharpest sound of the whole set, but <em>vex</em> is a real English verb meaning to irritate</td></tr>
+          <tr><td class="nm">Nyxade</td><td class="dom">nyxade.com</td><td>NIX-ade</td><td>Nyx is the Greek goddess of night &mdash; but <em>nix</em> means to cancel or reject</td></tr>
+          <tr><td class="nm">Onyxade</td><td class="dom">onyxade.com</td><td>ON-ix-ade</td><td>Onyxique is the stronger form of the same root; buy as a redirect</td></tr>
+          <tr><td class="nm">Vyrera</td><td class="dom">vyrera.com</td><td>vy-RAIR-a</td><td>One letter from Lyrera &mdash; buy defensively if you pick that</td></tr>
+          <tr><td class="nm">Cyrera</td><td class="dom">cyrera.com</td><td>sy-RAIR-a</td><td>Sits between Cyrave and Lyrera without beating either</td></tr>
+          <tr><td class="nm">Quanura</td><td class="dom">quanura.com</td><td>kwa-NOOR-a</td><td>Same root as Quanira, duller vowel; buy as a redirect</td></tr>
+          <tr><td class="nm">Novaune</td><td class="dom">novaune.com</td><td>no-VAWN</td><td>Strong sound, but <em>nova</em> is already heavily worked in tech branding</td></tr>
+          <tr><td class="nm">Zephade</td><td class="dom">zephade.com</td><td>ZEF-ade</td><td>Zephune scans better on the same root</td></tr>
+          <tr><td class="nm">Elyium</td><td class="dom">elyium.com</td><td>ee-LY-um</td><td>One letter from Elysium &mdash; too close to a very heavily used name</td></tr>
+          <tr><td class="nm">Kryena</td><td class="dom">kryena.com</td><td>KRY-ena</td><td>Audible <em>cry</em>; also the only <code>.com</code> lookup here that timed out &mdash; re-check before relying on it</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">04 / Method</p>
+      <h2>How availability was checked</h2>
+    </div>
+    <div class="cols">
+      <div>
+        <p>Every candidate was queried against the authoritative registry over RDAP, not a reseller's search box
+          &mdash; Verisign for <code>.com</code>, Identity Digital for <code>.io</code>, Google Registry for
+          <code>.dev</code>. HTTP <b>404</b> means no registration record exists; <b>200</b> means taken.</p>
+        <p>Going direct avoids the two failure modes of typing names into a registrar: cached results, and
+          search-leak front-running, where a name you looked up is registered by someone else hours later.
+          Four <code>.dev</code> lookups timed out; those are marked <em>unverified</em> above rather than
+          guessed at.</p>
+      </div>
+      <div>
+        <div class="aside">
+          <p><strong>Not covered.</strong> No trademark search &mdash; not USPTO, not WIPO, not the Bangladesh
+            DPDT register. No social handle check on X, GitHub, npm or LinkedIn. A free domain is necessary but
+            not sufficient: a registered mark in your class can stop you using a name whose domain you own.</p>
+          <p><strong>Availability decays.</strong> Results are from 2 September 2026. A clustered, thematically
+            obvious list like this one is exactly what drop-catchers watch for.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">05 / Next</p>
+      <h2>Before you commit</h2>
+    </div>
+    <ol class="steps">
+      <li><b>Register your top two or three today.</b> About $12 a year each. Deciding between names you already
+        own beats deciding between names someone else may take this week &mdash; and after this search, that is
+        not a theoretical risk.</li>
+      <li><b>Take the phone test.</b> Say the name and the domain to someone who has never seen it written, and
+        ask them to type it. <em>Zephune</em> and <em>Arcique</em> are most likely to fail this;
+        <em>Orbade</em> and <em>Myrance</em> least.</li>
+      <li><b>Trademark-search in your real classes.</b> Class 42 covers software design and development
+        services; class 9 covers downloadable software. Run <em>Myrance</em> and <em>Onyxique</em> first &mdash;
+        both sit near existing marks.</li>
+      <li><b>Check the handles you will actually use.</b> GitHub organisation, npm scope, WordPress.org plugin
+        author slug, X, LinkedIn. For a WordPress product business the
+        <a href="https://wordpress.org/plugins/">WordPress.org</a> author slug matters more than X does.</li>
+      <li><b>Buy the near-miss for the winner only.</b> <em>vyrera.com</em> if you take Lyrera,
+        <em>quanura.com</em> if you take Quanira, <em>onyxade.com</em> if you take Onyxique. Redirect them;
+        never build on them.</li>
+    </ol>
+  </section>
+
+  <footer>
+    <p>16,767 single-word candidates screened across eight generated and hand-written batches. Availability
+      verified 2026-09-02 via RDAP against Verisign (.com), Identity Digital (.io) and Google Registry (.dev).
+      No trademark, corporate registry or social handle search was performed &mdash; treat this document as
+      domain research only.</p>
+  </footer>
+
+</div>

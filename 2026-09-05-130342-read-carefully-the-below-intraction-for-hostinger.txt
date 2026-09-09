@@ -1,0 +1,235 @@
+ ▐▛███▛█   Claude Code v2.1.260
+▝▜██████▀  Opus 5 · Claude Max
+  ▝▝ ▝▝    ~/Sites/decent-event-management
+
+
+❯ Read carefully the below intraction for hostinger deployment requirment. I    
+  want to update the deployment enverment following the structure. please make  
+  this changes carefullly                                                       
+                                                                                
+  Your workflow has one major deployment problem: it uploads the entire Laravel 
+  repository to public_html, while your intended structure keeps Laravel        
+  outside public_html. This can cause .env, app/, vendor/, and configuration    
+  files to be in the wrong location.                                            
+                                                                                
+  Recommended structure                                                         
+                                                                                
+  Copy                                                                          
+  /home/u804311556/domains/100potal.nsbatihighschool.edu.bd/                    
+  ├── laravel/                                                                  
+  │   ├── .env                                                                  
+  │   ├── artisan                                                               
+  │   ├── app/                                                                  
+  │   ├── vendor/                                                               
+  │   └── public/                                                               
+  └── public_html/                                                              
+      ├── index.php                                                             
+      ├── .htaccess                                                             
+      └── built frontend files                                                  
+  Change these parts                                                            
+  Set the GitHub secret HOSTINGER_DEPLOY_PATH to:                               
+                                                                                
+  Copy                                                                          
+  /home/u804311556/domains/100potal.nsbatihighschool.edu.bd/laravel             
+  Do not use that same path as the public web root. Your domain must continue   
+  serving:                                                                      
+                                                                                
+  Copy                                                                          
+  /home/u804311556/domains/100potal.nsbatihighschool.edu.bd/public_html         
+  After uploading the Laravel repository, add a separate deployment step to     
+  copy only public/ contents into public_html:                                  
+                                                                                
+  Copy                                                                          
+  - name: Publish Laravel public directory                                      
+    env:                                                                        
+      DEPLOY_PATH: ${{ secrets.HOSTINGER_DEPLOY_PATH }}                         
+      PUBLIC_PATH:                                                              
+  /home/u804311556/domains/100potal.nsbatihighschool.edu.bd/public_html         
+    run: |                                                                      
+      ssh -i ~/.ssh/id_rsa -p "$DEPLOY_SSH_PORT" \                              
+    -o StrictHostKeyChecking=no \                                               
+    "$DEPLOY_SSH_USER@$DEPLOY_SSH_HOST" \                                       
+    "rsync -a --delete \                                                        
+    --exclude='.htaccess' \                                                     
+    '$DEPLOY_PATH/public/' \                                                    
+    '$PUBLIC_PATH/'"                                                            
+  In the remote migration step, keep:                                           
+                                                                                
+  Copy                                                                          
+  cd "$DEPLOY_PATH"                                                             
+  That must point to the Laravel directory containing artisan and .env.         
+                                                                                
+  Make sure the production .env exists here:                                    
+                                                                                
+  Copy                                                                          
+  /home/u804311556/domains/100potal.nsbatihighschool.edu.bd/laravel/.env        
+  Your current workflow correctly excludes .env, so GitHub will not upload or   
+  replace it.                                                                   
+                                                                                
+  Important Laravel environment fix                                             
+  After every .env change, run:                                                 
+                                                                                
+  Copy                                                                          
+  cd /home/u804311556/domains/100potal.nsbatihighschool.edu.bd/laravel          
+                                                                                
+  /opt/alt/php84/usr/bin/php artisan optimize:clear                             
+  /opt/alt/php84/usr/bin/php artisan config:cache                               
+  Also, application code should use:                                            
+                                                                                
+  Copy                                                                          
+  config('app.url')                                                             
+  instead of:                                                                   
+                                                                                
+  Copy                                                                          
+  env('APP_URL')                                                                
+  After config:cache, Laravel should read environment values through            
+  configuration files, not by calling env() directly inside controllers or      
+  services.                                                                     
+                                                                                
+  Remove this security risk                                                     
+  Your workflow currently uses:                                                 
+                                                                                
+  Copy                                                                          
+  --generate-password                                                           
+  for the first administrator. This can print the generated password into the   
+  GitHub Actions log. Remove that option and set SUPER_ADMIN_PASSWORD only in   
+  the server .env, or create the administrator manually once.                   
+
+⏺ I'll look at the current deployment workflow before changing anything.
+
+  Searched for 2 patterns, read 1 file, listed 1 directory, ran 3 shell commands (ctrl+o to expand)
+
+⏺ Now I'll make the workflow changes. First, the remote migrate step:
+
+  Searched for 1 pattern, read 1 file, ran 5 shell commands (ctrl+o to expand)
+
+⏺ Now the new publish step:
+
+  Read 1 file, ran 4 shell commands (ctrl+o to expand)
+
+⏺ Let me close one gap: an hPanel-generated .htaccess with no front-controller
+  rewrite would leave the site 404ing.
+
+  Searched for 1 pattern, ran 9 shell commands (ctrl+o to expand)
+
+⏺ Now update CLAUDE.md's deployment description:
+
+  Searched for 1 pattern, read 1 file, ran 8 shell commands (ctrl+o to expand)
+
+⏺ Done. Here's what changed and what you need to do on your side.
+
+  Workflow — .github/workflows/backend-ci.yml
+
+  New step: "Publish Laravel public directory" (runs last, after migrations). It
+  rsyncs $DEPLOY_PATH/public/ → $PUBLIC_PATH/ on the host — a local rsync, so
+  nothing is uploaded twice.
+
+  It reads a new HOSTINGER_PUBLIC_PATH (secret or repo variable — secret wins).
+  Unset, the step skips entirely, so it's opt-in and nothing about the current
+  deployment changes until you set it. I added guards your snippet didn't have,
+  because --delete in a web root is unforgiving:
+
+  ┌────────────────────────────┬────────────────────────────────────────────┐
+  │         Situation          │                 Behaviour                  │
+  ├────────────────────────────┼────────────────────────────────────────────┤
+  │ public_html resolves to    │                                            │
+  │ the same dir as            │ skips — otherwise rsync deletes a          │
+  │ laravel/public (symlinked, │ directory into itself                      │
+  │  or moved doc root)        │                                            │
+  ├────────────────────────────┼────────────────────────────────────────────┤
+  │ target is / or $HOME       │ refuses                                    │
+  ├────────────────────────────┼────────────────────────────────────────────┤
+  │ the Laravel tree sits      │ refuses, with the mkdir laravel command to │
+  │ inside the target (the     │  fix it                                    │
+  │ current layout)            │                                            │
+  ├────────────────────────────┼────────────────────────────────────────────┤
+  │ public_html or             │                                            │
+  │ laravel/public doesn't     │ fails with which one                       │
+  │ exist                      │                                            │
+  ├────────────────────────────┼────────────────────────────────────────────┤
+  │ a .env found in the web    │ copied to laravel/.env.webroot-<stamp>     │
+  │ root                       │ before --delete removes it, with a "rotate │
+  │                            │  these credentials" warning                │
+  └────────────────────────────┴────────────────────────────────────────────┘
+
+  Ordering is deliberate: it runs after the migrate step, which aborts when the
+  host has no .env. So a misconfigured DEPLOY_PATH can never reach the delete,
+  and storage:link has already created public/storage for the sync to carry
+  across (verified — the absolute symlink still resolves from public_html).
+
+  .htaccess is excluded as you specified, which left two ways to break the site,
+  so both are handled: absent → Laravel's public/.htaccess is copied in;
+  present but with no front-controller rewrite (an hPanel PHP-handler default) →
+  Laravel's rules are appended, keeping the existing block, idempotently;
+  present with the old RewriteRule ^(.*)$ public/$1 → the deploy fails loudly,
+  because under the new layout that rewrite 404s the entire site.
+
+  Other changes: optimize:clear now runs before
+  config:cache/route:cache/view:cache, with a fallback to individual clears if
+  the cache store is unreachable (optimize:clear runs cache:clear, which throws
+  on a dead store). --generate-password is removed from
+  admin:create-super-admin. The document-root .htaccess restore is skipped once
+  HOSTINGER_PUBLIC_PATH is set, since laravel/ isn't served.
+
+  I tested the remote script against a real filesystem for all seven scenarios
+  above, not just read it.
+
+  Already satisfied
+
+  config('app.url') vs env('APP_URL') — there are zero env() calls in app/,
+  routes/ or database/. The only two are in tests, which never run cached. I
+  documented the rule in docs/09 §4 to keep it that way.
+
+  What you must do (outside the repo)
+
+  1. Set HOSTINGER_DEPLOY_PATH →
+     /home/u804311556/domains/100potal.nsbatihighschool.edu.bd/laravel
+  2. Add HOSTINGER_PUBLIC_PATH →
+     /home/u804311556/domains/100potal.nsbatihighschool.edu.bd/public_html
+  3. Before the first push, on the host:
+  cd ~/domains/100potal.nsbatihighschool.edu.bd
+  mkdir -p laravel
+  mv public_html/.env laravel/.env
+  mv public_html/storage laravel/storage
+  chmod 600 laravel/.env
+     The first deploy --deletes everything else out of public_html, including
+     the old copy of the app. Take a db:backup first.
+  4. Since --generate-password is gone, set
+     SUPER_ADMIN_EMAIL/SUPER_ADMIN_PASSWORD in laravel/.env, or create the
+     account by hand — with neither set the step skips and exits 0 rather than
+     blocking the deploy.
+  5. Update the two cron entries: the artisan path is now .../laravel/artisan.
+
+  Docs updated: docs/09 §1 rewritten around the split layout (with the migration
+  steps and the two older shapes kept as supported), §4 for the .env location
+  and the config-cache rule, §5/§6 paths, a new "first Super Admin" subsection,
+  and the verification checklist now asserts /artisan, /composer.json and
+  /vendor/autoload.php are unreachable — which they currently answer 200 to.
+  Nothing committed.
+
+✻ Cogitated for 8m 44s · done Friday 10:43 PM
+
+❯ now commit this and merge the main                                            
+
+  Merged new-deployment, listed 1 directory, ran 2 shell commands (ctrl+o to expand)
+
+⏺ Committed as 43a7c69 and fast-forward merged into main. main is now 1 ahead of
+  origin/main; I haven't pushed.
+
+  research/agency-name-research.html is still untracked — unrelated to this
+  work, so I left it alone.
+
+  Before you push: a push to main triggers this deploy job. Set both secrets and
+  move .env + storage/ on the host first, or the deploy runs against the old
+  layout — which is safe (the publish step skips while HOSTINGER_PUBLIC_PATH is
+  unset), but the super-admin change takes effect immediately, so if you were
+  relying on --generate-password having created that account, it won't create
+  one any more.
+
+  Want me to push?
+
+✻ Baked for 38s · done Friday 11:04 PM
+
+❯ /import 
+  ⎿  Detected agent config, but found nothing importable.
+     - settings.json keys: selectedAuthType: No direct Claude Code equivalent, or cosmetic. Review manually if you relied on them.
