@@ -323,7 +323,7 @@ class CreateRegistration
     {
         $method = config('services.payment.default_method');
 
-        return is_string($method) && $method !== '' ? $method : 'sslcommerz';
+        return is_string($method) && $method !== '' ? $method : 'paystation';
     }
 
     private function intentTtlMinutes(): int

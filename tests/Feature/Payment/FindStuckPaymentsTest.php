@@ -29,8 +29,8 @@ class FindStuckPaymentsTest extends TestCase
 
     public function test_it_lists_only_online_payments_that_have_not_settled(): void
     {
-        $stuck = $this->payment('initiated', 'sslcommerz', 'online');
-        $settled = $this->payment('succeeded', 'sslcommerz', 'online');
+        $stuck = $this->payment('initiated', 'paystation', 'online');
+        $settled = $this->payment('succeeded', 'paystation', 'online');
         $manual = $this->payment('pending', 'bkash', 'manual');
 
         $this->artisan('payments:stuck')

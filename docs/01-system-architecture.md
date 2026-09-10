@@ -36,7 +36,7 @@ graph TB
     end
 
     subgraph ext["External Providers"]
-        PAY["bKash · Nagad<br/>Rocket · SSLCommerz"]
+        PAY["PayStation<br/>(bKash · Nagad · Rocket · cards)"]
         SMS["SMS Gateway"]
         WAP["WhatsApp Cloud API"]
         MAIL["Transactional Email"]
@@ -406,7 +406,7 @@ graph TB
     REC["Nightly reconciliation<br/>vs gateway settlement report"]
 
     REG --> SEL
-    SEL -->|bKash · Nagad · Rocket · SSLCommerz| INI --> RDR --> USR --> CBK
+    SEL -->|PayStation hosted checkout| INI --> RDR --> USR --> CBK
     USR -.async.-> IPN
     CBK --> VRF
     IPN --> VRF
@@ -435,7 +435,7 @@ A single payment routinely produces four to six transaction rows. Collapsing the
 
 ### Gateway adapter interface
 
-Each of `BkashClient`, `NagadClient`, `RocketClient`, `SslCommerzClient` implements one contract — `createIntent`, `verify`, `refund`, `parseWebhook` — so gateway-specific quirks (bKash's token refresh cycle, Nagad's RSA payload encryption, SSLCommerz's `val_id` validation call) stay contained in the adapter and never leak into domain logic.
+Each adapter implements one contract — `createIntent`, `verify`, `refund`, `parseWebhook`, `supportsGatewayRefund` — so gateway-specific quirks stay contained in the adapter and never leak into domain logic. `PayStationClient` is the live one (its `/transaction-status` lookup, its string `status_code`, and its unsigned IPN all stop at the adapter boundary); `BkashClient`/`NagadClient`/`RocketClient` are still `FakeGateway` stand-ins. `SslCommerzClient` was removed 2026-09-10.
 
 ### Reconciliation
 

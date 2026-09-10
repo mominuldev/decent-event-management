@@ -22,7 +22,7 @@
 | browser bar produces — would otherwise sit in this list matching nothing,
 | and the only symptom is a refused preflight visible in the browser console.
 | Normalising here means the same env var can stay a full URL for the
-| SSLCommerz return legs and the ticket email CTA, which want one.
+| PayStation return leg and the ticket email CTA, which want one.
 */
 $normaliseOrigin = static function (string $url): ?string {
     $url = trim($url);
@@ -62,7 +62,7 @@ return [
     | it proxies through its own BFF route handlers — so no cookie/credential
     | support is needed here (Gap G2).
     |
-    | `FRONTEND_URL` already exists as an env var for the SSLCommerz return
+    | `FRONTEND_URL` already exists as an env var for the PayStation return
     | redirect (config/services.php) — reused here so there's one source of
     | truth for "what origin is the frontend". `FRONTEND_URLS` is the
     | comma-separated overflow for the cases where one origin is not enough.

@@ -183,7 +183,7 @@ class LoadTestSeeder extends Seeder
                     'payment_number' => 'PAY-100Y-'.str_pad((string) $paymentSeq, 6, '0', STR_PAD_LEFT),
                     'registration_id' => $registration->id,
                     'attendee_id' => $registration->attendee_id,
-                    'method' => fake()->randomElement(['bkash', 'nagad', 'rocket', 'sslcommerz']),
+                    'method' => fake()->randomElement(['bkash', 'nagad', 'rocket', 'paystation']),
                     'channel' => 'online',
                     'status' => 'succeeded',
                     'amount_due_paisa' => $registration->total_paisa,

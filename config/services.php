@@ -43,39 +43,60 @@ return [
     ],
 
     // Which gateway a registration's payment intent is opened against when
-    // the caller doesn't name one. `sslcommerz` is the only adapter backed
+    // the caller doesn't name one. `paystation` is the only adapter backed
     // by a real implementation — bkash/nagad/rocket still resolve to
     // FakeGateway pending their merchant applications (Phase 4B), so
     // defaulting to one of those would silently take the public checkout
-    // off the real money path.
+    // off the real money path. PayStation is an aggregator and already
+    // offers those wallets on its own hosted checkout, so there is nothing
+    // a payer loses by this being the default.
     'payment' => [
-        'default_method' => env('PAYMENT_DEFAULT_METHOD', 'sslcommerz'),
+        'default_method' => env('PAYMENT_DEFAULT_METHOD', 'paystation'),
     ],
 
-    // Phase 4A — SslCommerzClient. Sandbox credentials are self-service
-    // (developer.sslcommerz.com), no merchant onboarding required. The
-    // shared demo store is `testbox` / `qwerty` — verified against the live
-    // sandbox on 2026-08-14, which is also how the previously-documented
-    // `qwerty1234` was found to be wrong ("Store Password credential
-    // mismatch"). Swap the URLs to the live hosts only once a real merchant
-    // account exists (Phase 4B) — never flip `sandbox` without also
-    // swapping the credentials, or a real amount could hit the demo store.
+    // PayStation (paystation.com.bd/documentation) — the payment
+    // aggregator that replaced SSLCommerz on 2026-09-10. One hosted
+    // checkout fronts bKash, Nagad, Rocket, Upay, cards, internet banking
+    // and EMI, so this one merchant relationship covers what would
+    // otherwise be four onboardings.
     //
-    // Both `sandbox.sslcommerz.com` and the older `sandbox-gw.sslcommerz.com`
-    // answer the session endpoint; the former is what the v4 docs publish
-    // and returns the current EasyCheckOut URL, so it is the default for
-    // session, validation and refund alike.
-    'sslcommerz' => [
-        'store_id' => env('SSLCOMMERZ_STORE_ID', 'testbox'),
-        'store_password' => env('SSLCOMMERZ_STORE_PASSWORD', 'qwerty'),
-        'sandbox' => env('SSLCOMMERZ_SANDBOX', true),
-        'base_url' => env('SSLCOMMERZ_BASE_URL', 'https://sandbox.sslcommerz.com'),
-        'validation_base_url' => env('SSLCOMMERZ_VALIDATION_BASE_URL', 'https://sandbox.sslcommerz.com'),
+    // ⚠️ **The environment is chosen by the base URL, and credentials are
+    // not portable between them.** Sandbox credentials on the live host
+    // (or the reverse) answer `1001 Invalid Credential.` on initiation —
+    // but on `/transaction-status` a wrong merchantId is indistinguishable
+    // from an unknown invoice (`2001 Transaction not found in system`),
+    // which is why PayStationClient never reads 2001 as a failed payment.
+    // Never flip `base_url` without swapping the credentials with it.
+    //
+    // The defaults below are the sandbox credentials PayStation publishes
+    // in its own documentation. They are shared by everyone testing
+    // against the sandbox, so treat anything they touch as public.
+    'paystation' => [
+        'merchant_id' => env('PAYSTATION_MERCHANT_ID', '104-1653730183'),
+        'password' => env('PAYSTATION_MERCHANT_PASSWORD', 'gamecoderstorepass'),
+        'base_url' => env('PAYSTATION_BASE_URL', 'https://sandbox.paystation.com.bd'),
 
-        // Source-IP allowlist for the IPN (docs/06 §6.6), on top of
-        // signature verification — empty (the default) is a deliberate
-        // no-op rather than a guessed range; see EnsureIpnFromAllowlistedIp.
-        'ipn_ip_allowlist' => array_filter(array_map('trim', explode(',', (string) env('SSLCOMMERZ_IPN_IP_ALLOWLIST', '')))),
+        // 0 = the merchant absorbs PayStation's charge, 1 = the payer does.
+        //
+        // Keep this at 0 unless you have decided otherwise deliberately.
+        // At 1 the payer is billed our amount *plus* the gateway fee, so
+        // the money that actually moves is larger than `amount_due_paisa`.
+        // PayStationClient compares against the status API's
+        // `request_amount` (what we asked for) rather than
+        // `payment_amount` (what was charged) precisely so that stays
+        // workable — but any figure the payer sees before checkout, and
+        // every reconciliation total, is still computed from our amount.
+        'pay_with_charge' => (int) env('PAYSTATION_PAY_WITH_CHARGE', 0),
+
+        // Source-IP allowlist for the IPN (docs/06 §6.7), empty by default.
+        // This one carries more weight than usual: PayStation's IPN has no
+        // signature at all, so an allowlist is the only network-layer check
+        // available. It is still left empty rather than guessed — a wrong
+        // range silently drops real payment notifications — so until
+        // PayStation publishes its ranges, the fact that an IPN can only
+        // ever *prompt* a server-to-server verify is what carries the
+        // security argument. See EnsureIpnFromAllowlistedIp.
+        'ipn_ip_allowlist' => array_filter(array_map('trim', explode(',', (string) env('PAYSTATION_IPN_IP_ALLOWLIST', '')))),
     ],
 
     // Phase 6 — QrSigner (docs/06 §6.5). `active_private_key` signs new

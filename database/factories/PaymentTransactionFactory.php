@@ -19,7 +19,7 @@ class PaymentTransactionFactory extends Factory
             'payment_id' => Payment::factory(),
             'type' => fake()->randomElement(['initiate', 'callback', 'ipn', 'verify']),
             'direction' => fake()->randomElement(['outbound', 'inbound']),
-            'gateway' => fake()->randomElement(['bkash', 'nagad', 'rocket', 'sslcommerz']),
+            'gateway' => fake()->randomElement(['bkash', 'nagad', 'rocket', 'paystation']),
             'status' => 'success',
             'amount_paisa' => fake()->numberBetween(50000, 500000),
             'currency' => 'BDT',

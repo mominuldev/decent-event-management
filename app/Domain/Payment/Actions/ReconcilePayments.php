@@ -26,7 +26,7 @@ use Throwable;
  * {@see PaymentGatewayInterface}
  * only supports looking up a transaction this system already knows
  * about. Building an enumeration contract generically across
- * bKash/Nagad/Rocket/SSLCommerz — whose settlement-export APIs all
+ * PayStation/bKash/Nagad/Rocket — whose settlement-export APIs all
  * differ and none are wired up yet — would be guessing at a shape Phase
  * 4B hasn't picked. Flagged here rather than silently skipped, matching
  * how this project treats every other vendor-blocked gap.

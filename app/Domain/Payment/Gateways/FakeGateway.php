@@ -87,6 +87,16 @@ class FakeGateway implements PaymentGatewayInterface
         );
     }
 
+    /**
+     * The stand-in models a gateway that does support refunds, so the
+     * bkash/nagad/rocket flows keep exercising RefundPayment's gateway
+     * branch rather than PayStation's out-of-band one.
+     */
+    public function supportsGatewayRefund(): bool
+    {
+        return true;
+    }
+
     public function parseWebhook(Request $request): GatewayWebhookResult
     {
         /** @var array<string, mixed> $payload */

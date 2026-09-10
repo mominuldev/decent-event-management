@@ -49,7 +49,7 @@ class ReveSmsClientTest extends TestCase
     public function test_it_posts_the_documented_sendtext_parameters(): void
     {
         Http::fake([
-            'smpp.revesms.com:7790/sendtext' => Http::response(['Status' => '0', 'Message_ID' => '1373104']),
+            'smpp.ajuratech.com:7790/sendtext' => Http::response(['Status' => '0', 'Message_ID' => '1373104']),
         ]);
 
         $results = app(ReveSmsClient::class)->sendText('DEC100', ['8801711223344'], 'Hello');
@@ -192,7 +192,7 @@ class ReveSmsClientTest extends TestCase
 
     public function test_multi_status_asks_for_the_ids_and_maps_the_receipts(): void
     {
-        Http::fake(['smpp.revesms.com:7790/getmultistatus' => Http::response([
+        Http::fake(['smpp.ajuratech.com:7790/getmultistatus' => Http::response([
             ['messageid' => '7331', 'status' => 'DELIVRD'],
             ['messageid' => '7332', 'status' => 'UNDELIV'],
             ['messageid' => '7333', 'status' => 'ACCEPTD'],

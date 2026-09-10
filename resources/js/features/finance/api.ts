@@ -1,4 +1,4 @@
-import { api, toApiError } from '@/lib/api';
+import { api, ApiRequestError, toApiError } from '@/lib/api';
 import type { PaginatedResponse } from '@/lib/pagination';
 import { unwrap } from '@/lib/pagination';
 import type { SortParams } from '@/lib/sorting';
@@ -54,12 +54,22 @@ export async function rejectManual(ulid: string, rejectionReason: string): Promi
 
 export async function refundPayment(
     ulid: string,
-    payload: { reason: string; type: 'full' | 'partial'; amount_paisa?: number },
+    payload: {
+        reason: string;
+        type: 'full' | 'partial';
+        amount_paisa?: number;
+        acknowledged_out_of_band?: boolean;
+        gateway_refund_reference?: string;
+    },
 ): Promise<RefundResult> {
     try {
         const { data } = await api.post(`/admin/payments/${ulid}/refund`, payload);
         return unwrap<RefundResult>(data);
     } catch (e) {
-        throw new Error(toApiError(e).message);
+        // ApiRequestError, not a bare Error: this endpoint answers
+        // `out_of_band_refund_acknowledgement_required` with per-field
+        // messages, and flattening it to `.message` would leave the
+        // dialog unable to say which control is missing.
+        throw new ApiRequestError(e);
     }
 }

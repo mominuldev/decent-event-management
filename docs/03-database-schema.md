@@ -365,7 +365,7 @@ DTM1.<ticket_ulid>.<admits_total>.<exp_unix>.<key_id>.<ed25519_sig_b64url>
 | `payment_number` | VARCHAR(32) | | Unique: `PAY-100Y-000148` |
 | `registration_id` | BIGINT UNSIGNED FK | | → `registrations.id` |
 | `attendee_id` | BIGINT UNSIGNED FK | | → `attendees.id` — denormalised for finance queries |
-| `method` | VARCHAR(32) | | `bkash`, `nagad`, `rocket`, `sslcommerz`, `manual_bkash`, `manual_nagad`, `manual_rocket`, `bank_transfer`, `cash` |
+| `method` | VARCHAR(32) | | `paystation`, `bkash`, `nagad`, `rocket`, `manual_bkash`, `manual_nagad`, `manual_rocket`, `bank_transfer`, `cash`. `sslcommerz` was retired 2026-09-10 and no longer resolves — historical rows may still carry it. |
 | `channel` | VARCHAR(16) | | `online`, `manual` |
 | `status` | VARCHAR(32) | | See state machine below |
 | `amount_due_paisa` | BIGINT UNSIGNED | | |
@@ -420,7 +420,7 @@ DTM1.<ticket_ulid>.<admits_total>.<exp_unix>.<key_id>.<ed25519_sig_b64url>
 | `payment_id` | BIGINT UNSIGNED FK | | → `payments.id` |
 | `type` | VARCHAR(32) | | `initiate`, `redirect`, `callback`, `ipn`, `verify`, `query`, `refund`, `reversal` |
 | `direction` | VARCHAR(16) | | `outbound`, `inbound` |
-| `gateway` | VARCHAR(32) | | `bkash`, `nagad`, `rocket`, `sslcommerz` |
+| `gateway` | VARCHAR(32) | | `paystation`, `bkash`, `nagad`, `rocket` (historical rows may carry `sslcommerz`) |
 | `status` | VARCHAR(32) | | `success`, `failed`, `pending`, `error` |
 | `amount_paisa` | BIGINT UNSIGNED | ✓ | |
 | `currency` | CHAR(3) | ✓ | |

@@ -25,7 +25,7 @@ class DatabaseSeeder extends Seeder
             ContentSeeder::class,
             NotificationTemplateSeeder::class,
             // DummyDataSeeder::class,
-            // SuperAdminSeeder::class,
+            SuperAdminSeeder::class,
         ]);
     }
 }

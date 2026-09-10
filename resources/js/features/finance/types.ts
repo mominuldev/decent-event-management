@@ -1,4 +1,4 @@
-export type PaymentMethod = 'bkash' | 'nagad' | 'rocket' | 'sslcommerz' | 'manual';
+export type PaymentMethod = 'bkash' | 'nagad' | 'rocket' | 'paystation' | 'manual';
 
 export interface Payment {
     ulid: string;
@@ -33,9 +33,19 @@ export interface RefundResult {
 }
 
 export const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
+    { value: 'paystation', label: 'PayStation' },
     { value: 'bkash', label: 'bKash' },
     { value: 'nagad', label: 'Nagad' },
     { value: 'rocket', label: 'Rocket' },
-    { value: 'sslcommerz', label: 'SSLCommerz' },
     { value: 'manual', label: 'Manual' },
 ];
+
+/**
+ * Gateways that publish no refund API, so the money has to move in their
+ * own merchant panel before this system may record anything. The server
+ * is the authority — RefundPayment refuses with
+ * `out_of_band_refund_acknowledgement_required` either way — this list
+ * only decides whether the dialog asks for the acknowledgement up front
+ * instead of after a rejected submit.
+ */
+export const GATEWAYS_WITHOUT_REFUND_API: PaymentMethod[] = ['paystation'];

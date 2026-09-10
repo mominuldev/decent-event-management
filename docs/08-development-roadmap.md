@@ -44,7 +44,7 @@ gantt
 > **Revised 2026-08-03.** Phase 4 was split into **4A (sandbox)** and **4B (live cutover)** after confirming that SSLCommerz sandbox credentials are self-service and require no merchant onboarding — see [Phase 4A](#phase-4a--sslcommerz-sandbox-integration). This takes merchant onboarding off the critical path and pulls the projected event-ready date forward by roughly five weeks. Phase 3.5 (CMS) was added; it was previously in no phase at all. See [§9.5](#95-revision-log).
 
 **The two schedule risks that are not engineering problems:**
-1. **Payment gateway merchant onboarding** (bKash, Nagad, Rocket, SSLCommerz) takes 2–6 weeks in Bangladesh and requires trade licence, TIN, and bank documents. **Start this during Phase 2, not Phase 4.** It is the single most common cause of slipped launch dates on projects like this. *It no longer blocks engineering* — Phase 4A builds and proves the full money path against sandbox — but it still blocks **Phase 4B**, and therefore blocks taking a single real taka.
+1. **Payment gateway merchant onboarding** (*as of 2026-09-10 this is PayStation alone*; formerly bKash, Nagad, Rocket, SSLCommerz) takes 2–6 weeks in Bangladesh and requires trade licence, TIN, and bank documents. **Start this during Phase 2, not Phase 4.** It is the single most common cause of slipped launch dates on projects like this. *It no longer blocks engineering* — Phase 4A builds and proves the full money path against sandbox — but it still blocks **Phase 4B**, and therefore blocks taking a single real taka.
 2. **WhatsApp Business template approval** by Meta takes days per template and templates get rejected for wording. **Draft and submit during Phase 2.**
 
 Both are procurement, not development. Neither can be compressed by working harder.
@@ -331,7 +331,11 @@ Sequence the schema and public read API in weeks 1–2 so Phase 3's week 6 (publ
 
 ---
 
-## Phase 4A — SSLCommerz Sandbox Integration
+## Phase 4A — Payment Gateway Sandbox Integration
+
+> **⚠️ Superseded 2026-09-10: the gateway is now PayStation, not SSLCommerz.** At the client's request SSLCommerz was removed entirely and replaced by **PayStation** (<https://www.paystation.com.bd/documentation>), whose sandbox credentials are likewise self-service — in fact published in their own documentation — so every argument below about taking merchant onboarding off the critical path holds unchanged, and holds *more strongly*: PayStation is an aggregator whose single hosted checkout already fronts bKash, Nagad, Rocket, Upay and cards, so the four separate merchant applications this phase was designed to work around are no longer needed at all. Only a live PayStation merchant account remains for Phase 4B. The section below is kept as the record of the 2026-08-03 revision and its reasoning; for what is actually built, see CLAUDE.md §"PayStation replaces SSLCommerz — 2026-09-10".
+
+### Original scope (SSLCommerz, historical)
 
 **Duration:** 3 weeks · **Depends on:** Phase 2 (D1–D4 closed) · **Blocked by nothing external** · **Added:** 2026-08-03
 
@@ -671,7 +675,7 @@ Red nodes are external dependencies with lead times outside the team's control. 
 
 | # | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|---|
-| R1 | Gateway onboarding delayed | High | ~~High~~ **Medium** | *Revised 2026-08-03.* Start week 1 of Phase 2; sequence SSLCommerz first as the fastest to approve; keep manual verification as a launch-capable fallback. **Impact downgraded** because Phase 4A proves the full money path against self-service sandbox, so a delay no longer blocks Phases 6–9 — it blocks only live collection |
+| R1 | Gateway onboarding delayed | High | ~~High~~ ~~Medium~~ **Low** | *Revised 2026-08-03; revised again 2026-09-10.* **One** merchant relationship is now needed, not four: PayStation aggregates bKash/Nagad/Rocket/Upay/cards behind one hosted checkout. Its sandbox is self-service and the full money path is proven against it, so a delay blocks only live collection. Manual verification remains a launch-capable fallback |
 | R2 | Venue network unusable on event day | High | — | Already mitigated architecturally: offline-first is the default, not a fallback |
 | R3 | Registration spike exceeds forecast | Medium | Medium | CDN-first static pages, autoscaling, load-tested headroom |
 | R4 | Bangla rendering breaks in PDF or SMS | Medium | Medium | Test on physical devices and real printers in Phases 5 and 6 |
@@ -741,7 +745,7 @@ Six further gaps were raised and then dismissed as **correctly deferred** — th
 
 **Projected effect on the schedule:** event-ready moves from roughly late January 2027 to roughly late December 2026 — about five weeks — entirely from removing procurement from the critical path. Registration open (~12 October 2026) is essentially unchanged, since it depends on Phase 5 messaging.
 
-**Development environment for payments:** SSLCommerz sandbox, per <https://sandbox-gw.sslcommerz.com/docs> and <https://developer.sslcommerz.com/doc/v4/>. Endpoints and the mandatory server-side `val_id` validation rule are recorded in [Phase 4A](#phase-4a--sslcommerz-sandbox-integration).
+**Development environment for payments:** ~~SSLCommerz sandbox~~ **PayStation sandbox** (`https://sandbox.paystation.com.bd`), per <https://www.paystation.com.bd/documentation> — changed 2026-09-10. Endpoints, the mandatory server-side `/transaction-status` verification rule, and the five undocumented response behaviours confirmed against the live sandbox are recorded in CLAUDE.md §"Payments — PayStation".
 
 **Immediate actions**
 

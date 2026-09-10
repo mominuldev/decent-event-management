@@ -13,11 +13,19 @@ use Symfony\Component\HttpFoundation\Response;
  * and is a deliberate no-op when that list is empty, rather than
  * hardcoding a guessed range: an incorrect allowlist silently drops real
  * money notifications, which is worse than skipping this layer until
- * someone pastes SSLCommerz's actual published IPN ranges into `.env`.
+ * someone pastes the gateway's actual published IPN ranges into `.env`.
  * Signature verification in the gateway adapter is the primary defense
- * either way — this is defense-in-depth on top of it, not instead of it.
+ * where a gateway offers one — this is defense-in-depth on top of it,
+ * not instead of it.
  *
- * Route usage: `->middleware('ipn.allowlist:sslcommerz')`.
+ * ⚠️ PayStation offers none: its IPN is an unauthenticated JSON POST.
+ * There, this middleware is the only network-layer check there could
+ * be, so filling `PAYSTATION_IPN_IP_ALLOWLIST` in is worth more than it
+ * is for a signed gateway. What holds the line until then is that an
+ * IPN can only ever prompt a server-to-server verify, never settle a
+ * payment — see PayStationClient::parseWebhook().
+ *
+ * Route usage: `->middleware('ipn.allowlist:paystation')`.
  */
 class EnsureIpnFromAllowlistedIp
 {

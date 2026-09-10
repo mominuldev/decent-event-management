@@ -2,16 +2,28 @@
 
 namespace App\Domain\Payment\Gateways;
 
+use App\Domain\Payment\Actions\ReconcilePayments;
 use App\Domain\Payment\Gateways\Contracts\PaymentGatewayInterface;
 use Illuminate\Contracts\Foundation\Application;
 use InvalidArgumentException;
 
 /**
  * Maps a payment method / gateway name to its adapter — the one place
- * that branches on gateway name; domain code never does. `sslcommerz`
- * resolves to the real {@see SslCommerzClient} (Phase 4A); `bkash`,
- * `nagad`, and `rocket` stay on {@see FakeGateway} until their merchant
- * applications land (Phase 4B — see CLAUDE.md's External Dependencies).
+ * that branches on gateway name; domain code never does.
+ *
+ * `paystation` resolves to the real {@see PayStationClient}. It is an
+ * aggregator, so its hosted checkout already offers bKash, Nagad, Rocket,
+ * Upay and cards; the standalone `bkash`/`nagad`/`rocket` methods are kept
+ * for a possible direct integration later and stay on {@see FakeGateway}
+ * until their own merchant applications land (Phase 4B — see CLAUDE.md's
+ * External Dependencies).
+ *
+ * `sslcommerz` was removed on 2026-09-10 and is deliberately **not**
+ * mapped to anything: a payment row left over from that era must fail to
+ * resolve rather than quietly resolve to a fake that would happily report
+ * a real transaction as settled. Both read paths that touch historical
+ * rows ({@see ReconcilePayments} and
+ * `payments:stuck`) already catch a resolver failure and log it.
  */
 class PaymentGatewayResolver
 {
@@ -22,7 +34,7 @@ class PaymentGatewayResolver
      *
      * @var list<string>
      */
-    public const array SUPPORTED_GATEWAYS = ['bkash', 'nagad', 'rocket', 'sslcommerz'];
+    public const array SUPPORTED_GATEWAYS = ['bkash', 'nagad', 'rocket', 'paystation'];
 
     public function __construct(private readonly Application $app) {}
 
@@ -33,7 +45,7 @@ class PaymentGatewayResolver
         }
 
         return match ($method) {
-            'sslcommerz' => $this->app->make(SslCommerzClient::class),
+            'paystation' => $this->app->make(PayStationClient::class),
             default => $this->app->make(FakeGateway::class),
         };
     }

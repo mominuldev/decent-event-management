@@ -4718,7 +4718,7 @@
                     {
                         "name": "method",
                         "in": "query",
-                        "description": "Filter by payment method (bkash, nagad, rocket, sslcommerz, manual, ...)",
+                        "description": "Filter by payment method (paystation, bkash, nagad, rocket, manual, ...)",
                         "schema": {
                             "type": "string"
                         }
@@ -8433,6 +8433,45 @@
                 }
             }
         },
+        "/attendee/auth/check": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Whether an account exists for a mobile number or email address",
+                "description": "Answers 200 either way, including for an identifier nobody holds — a 404 here means the route is missing, never that the account is. Deliberately breaks the enumeration resistance the rest of this controller maintains; see the note in the source before extending it.",
+                "operationId": "7b96415abaa4cfe42a2627904a3385c8",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "mobile": {
+                                        "type": "string"
+                                    },
+                                    "email": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Whether an attendee holds that identifier"
+                    },
+                    "422": {
+                        "description": "Neither identifier was supplied, or one was malformed"
+                    },
+                    "429": {
+                        "description": "Too many checks"
+                    }
+                }
+            }
+        },
         "/attendee/auth/logout": {
             "post": {
                 "tags": [
@@ -10492,6 +10531,35 @@
                 }
             }
         },
+        "/public/payments/paystation/return/{payment}": {
+            "get": {
+                "tags": [
+                    "Public"
+                ],
+                "summary": "Browser return target for a PayStation checkout session",
+                "description": "PayStation redirects (or form-POSTs) the payer's browser here after its hosted checkout — never the IPN, which arrives separately at `/webhooks/paystation`. This handler writes nothing: it reads the payment only to find which registration page to send the browser back to, then redirects to an origin taken entirely from server-side config (`FRONTEND_URL`). Per docs/06 §6.6 a browser return proves nothing and must never transition a payment. Unlike the removed SSLCommerz legs there is no `next` parameter at all — PayStation accepts a single `callback_url`, so the payment ULID travels in the path and there is no caller-supplied redirect target to abuse. The `payment_status` hint added to the redirect decides only whether the return page polls; what it displays comes from the registration's own server-side status.",
+                "operationId": "0686ec7d046b478889d40e9c22d594fc",
+                "parameters": [
+                    {
+                        "name": "payment",
+                        "in": "path",
+                        "description": "Payment ULID, set into the callback URL server-side when the session was created",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "Redirect to the frontend registration page"
+                    },
+                    "404": {
+                        "description": "No such payment"
+                    }
+                }
+            }
+        },
         "/public/registrations/{registration}/payment/initiate": {
             "post": {
                 "tags": [
@@ -11245,45 +11313,6 @@
                 }
             }
         },
-        "/public/payments/sslcommerz/return/{status}": {
-            "get": {
-                "tags": [
-                    "Public"
-                ],
-                "summary": "Browser return target for a SSLCommerz payment session",
-                "description": "SSLCommerz redirects (or form-POSTs) the payer's browser here after a hosted-page session — never the IPN, which arrives separately at `/webhooks/sslcommerz`. This handler reads nothing from the database and writes nothing: it only re-derives the frontend return page from server-side config (`FRONTEND_URL`) and redirects the browser there, per docs/06 §6.6 — a browser return proves nothing and must never transition a payment. The `next` query parameter is honoured only when its host matches the configured frontend origin, so this cannot be turned into an open redirect by a hand-crafted request.",
-                "operationId": "521c2daea350ac9f535aec94ea7134ea",
-                "parameters": [
-                    {
-                        "name": "status",
-                        "in": "path",
-                        "description": "Which return leg the gateway hit",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "enum": [
-                                "success",
-                                "fail",
-                                "cancel"
-                            ]
-                        }
-                    },
-                    {
-                        "name": "next",
-                        "in": "query",
-                        "description": "Frontend return URL, set server-side at session creation; honoured only if its host matches FRONTEND_URL",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "302": {
-                        "description": "Redirect to the frontend return page"
-                    }
-                }
-            }
-        },
         "/public/ticket-types": {
             "get": {
                 "tags": [
@@ -11973,6 +12002,83 @@
                 }
             }
         },
+        "/webhooks/paystation": {
+            "post": {
+                "tags": [
+                    "Webhooks"
+                ],
+                "summary": "PayStation Instant Payment Notification (IPN)",
+                "description": "Server-to-server notification from PayStation, dispatched to `ProcessGatewayWebhook::handle('paystation', $request)`. PayStation sends a flat JSON body (`invoice_number`, `trx_status`, `trx_id`, `trx_amount`, `order_date_time`, `payment_method`, `reference`) and only for **successful** transactions.\n\n**This request carries no signature.** PayStation publishes no HMAC, shared secret or signing scheme for the IPN — their documentation states `Auth: None` — so the adapter reports it as `unsigned` rather than pretending a check passed. It is still safe to act on because acting on it means exactly one thing: a fresh server-to-server `verify()` call against PayStation's own `/transaction-status`, which re-reads the status and the amount. Nothing in this body is ever trusted to settle a payment, and the body's own `trx_amount` is ignored in favour of the amount the gateway reports when asked directly.\n\nThe IPN URL is configured per merchant in PayStation's dashboard — it is not sent with each payment — so this endpoint must be registered with them before any notification arrives.\n\nAlways answers `200`, as PayStation retries anything else: an unknown `invoice_number` is logged and ignored, and a duplicate notification is recorded once and skipped thereafter.",
+                "operationId": "8436e90220c7f395f80b383a60e00a4f",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "invoice_number",
+                                    "trx_status",
+                                    "trx_id"
+                                ],
+                                "properties": {
+                                    "invoice_number": {
+                                        "description": "The invoice sent at initiation — this system's `payments.payment_number`, matched against `gateway_reference`",
+                                        "type": "string",
+                                        "example": "PAY-A1B2C3D4"
+                                    },
+                                    "trx_status": {
+                                        "description": "Always \"Success\" — the IPN fires only for successful transactions. Compared case-insensitively.",
+                                        "type": "string",
+                                        "example": "Success"
+                                    },
+                                    "trx_id": {
+                                        "description": "PayStation's transaction id, recorded on the resulting PaymentTransaction row",
+                                        "type": "string",
+                                        "example": "CG20D8AYB4"
+                                    },
+                                    "trx_amount": {
+                                        "description": "Amount in BDT. Recorded for the audit trail but never used to settle — the amount check is made against the gateway's own status API.",
+                                        "type": "number",
+                                        "example": 2500
+                                    },
+                                    "order_date_time": {
+                                        "type": "string",
+                                        "example": "2026-09-10 15:52:28"
+                                    },
+                                    "payment_method": {
+                                        "type": "string",
+                                        "example": "bKash"
+                                    },
+                                    "reference": {
+                                        "type": "string",
+                                        "example": "REG-100Y-000123"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Notification acknowledged. Always returned once the payload is parsed, regardless of whether a matching payment was found.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "received"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/webhooks/sms/dlr": {
             "post": {
                 "tags": [
@@ -12039,76 +12145,6 @@
                 "summary": "Rocket payment gateway IPN callback",
                 "description": "Server-to-server instant payment notification (IPN) from Rocket, dispatched to `ProcessGatewayWebhook::handle('rocket', $request)`. The payload is parsed and signature-verified by the resolved gateway adapter's `parseWebhook()` (see `PaymentGatewayResolver::forMethod()` — as of Phase 2 every gateway name, including `rocket`, resolves to the `FakeGateway` stand-in; a real `RocketClient` adapter with Rocket-specific verification handling lands in Phase 4, per docs/01-system-architecture.md §\"Payment Gateway Integration\"). A valid signature only triggers a fresh server-to-server `verify()` call (`VerifyPayment`) against the matched `Payment` — this webhook body is never itself trusted to transition a payment to `succeeded`. An invalid signature, or a `gateway_reference` matching no known payment, is recorded/logged and silently ignored; the response is always `200` regardless of outcome, since the gateway only expects a plain acknowledgement, never an error status.",
                 "operationId": "e60f5d93cf18af7b8975ef7c60bddb54",
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "properties": {
-                                    "gateway_reference": {
-                                        "description": "Matches Payment::gateway_reference for the intent this IPN concerns",
-                                        "required": [
-                                            "gateway_reference"
-                                        ],
-                                        "type": "string"
-                                    },
-                                    "status": {
-                                        "description": "Gateway-reported settlement status",
-                                        "required": [
-                                            "status"
-                                        ],
-                                        "type": "string",
-                                        "enum": [
-                                            "succeeded",
-                                            "failed",
-                                            "pending"
-                                        ]
-                                    },
-                                    "gateway_transaction_id": {
-                                        "description": "Gateway-assigned transaction id, stored on the resulting PaymentTransaction row",
-                                        "type": "string"
-                                    },
-                                    "signature": {
-                                        "description": "HMAC-SHA256 of \"{gateway_reference}|{status}\", keyed by the shared webhook secret (`services.fake_gateway.webhook_secret` in the current stand-in). This is the authenticity check for the request in place of bearer-token auth.",
-                                        "required": [
-                                            "signature"
-                                        ],
-                                        "type": "string"
-                                    }
-                                },
-                                "type": "object"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "Webhook acknowledged. Always returned once the payload is parsed, regardless of whether the payment was matched or the signature was valid.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "properties": {
-                                        "status": {
-                                            "type": "string",
-                                            "example": "received"
-                                        }
-                                    },
-                                    "type": "object"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/webhooks/sslcommerz": {
-            "post": {
-                "tags": [
-                    "Webhooks"
-                ],
-                "summary": "SSLCommerz payment gateway IPN callback",
-                "description": "Server-to-server instant payment notification (IPN) from SSLCommerz, dispatched to `ProcessGatewayWebhook::handle('sslcommerz', $request)`. The payload is parsed and signature-verified by the resolved gateway adapter's `parseWebhook()` (see `PaymentGatewayResolver::forMethod()` — as of Phase 2 every gateway name, including `sslcommerz`, resolves to the `FakeGateway` stand-in; a real `SslCommerzClient` adapter with SSLCommerz-specific `val_id` validation-call handling lands in Phase 4, per docs/01-system-architecture.md §\"Payment Gateway Integration\"). A valid signature only triggers a fresh server-to-server `verify()` call (`VerifyPayment`) against the matched `Payment` — this webhook body is never itself trusted to transition a payment to `succeeded`. An invalid signature, or a `gateway_reference` matching no known payment, is recorded/logged and silently ignored; the response is always `200` regardless of outcome, since the gateway only expects a plain acknowledgement, never an error status.",
-                "operationId": "597f34671e4e7bf3d951406803060166",
                 "requestBody": {
                     "required": true,
                     "content": {

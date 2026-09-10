@@ -257,7 +257,7 @@ erDiagram
         string payment_number UK
         bigint registration_id FK
         bigint attendee_id FK
-        string method "bkash nagad rocket sslcommerz manual"
+        string method "paystation bkash nagad rocket manual"
         string channel "online manual"
         string status
         bigint amount_due_paisa

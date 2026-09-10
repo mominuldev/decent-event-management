@@ -59,7 +59,7 @@ class PaymentController extends Controller
             new OAT\Parameter(
                 name: 'method',
                 in: 'query',
-                description: 'Filter by payment method (bkash, nagad, rocket, sslcommerz, manual, ...)',
+                description: 'Filter by payment method (paystation, bkash, nagad, rocket, manual, ...)',
                 schema: new OAT\Schema(type: 'string')
             ),
             new OAT\Parameter(
@@ -579,7 +579,9 @@ class PaymentController extends Controller
                 $user,
                 $request->validated('reason'),
                 $request->validated('amount_paisa'),
-                $request->validated('type')
+                $request->validated('type'),
+                (bool) $request->validated('acknowledged_out_of_band', false),
+                $request->validated('gateway_refund_reference'),
             );
 
             ActivityLog::create([
@@ -594,6 +596,12 @@ class PaymentController extends Controller
                     'refund_ulid' => $refund->ulid,
                     'amount_paisa' => $refund->amount_paisa,
                     'reason' => $request->validated('reason'),
+
+                    // Whether a human asserted this refund rather than a
+                    // gateway confirming it is the single most important
+                    // thing about the row during a dispute.
+                    'acknowledged_out_of_band' => (bool) $request->validated('acknowledged_out_of_band', false),
+                    'gateway_refund_reference' => $refund->gateway_refund_id,
                 ],
                 'ip_address' => $request->ip(),
                 'request_id' => substr((string) ($request->header('X-Request-Id') ?? Str::ulid()), 0, 26),

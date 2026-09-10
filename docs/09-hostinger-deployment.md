@@ -54,7 +54,7 @@ and none of them accept a client-supplied alternative:
   Wrong value and the public site's every request fails in the browser with no server-side
   error to find. A trailing slash or a path is fine here — CORS reduces the value to a bare
   origin, because a browser's `Origin` header carries neither.
-- **The SSLCommerz return legs** redirect the payer here after checkout, and
+- **The PayStation return leg** redirects the payer here after checkout, and
   `SslCommerzReturnController` refuses any `next` whose host does not match — deliberately,
   so a crafted request cannot turn the return into an open redirect.
 - **The payment callback URL** (`PaymentController::initiate`) is built from it server-side.
@@ -512,9 +512,9 @@ MAIL_FROM_ADDRESS=
 MAIL_FROM_NAME="${APP_NAME}"
 
 # Payments. Sandbox until the merchant applications land (Phase 4B).
-SSLCOMMERZ_STORE_ID=
-SSLCOMMERZ_STORE_PASSWORD=
-SSLCOMMERZ_SANDBOX=true
+PAYSTATION_MERCHANT_ID=
+PAYSTATION_MERCHANT_PASSWORD=
+PAYSTATION_BASE_URL=https://sandbox.paystation.com.bd
 
 # Headless Chrome for ticket PDFs — see §7. Leave blank if unavailable
 # and expect PDF generation to fail.
@@ -704,7 +704,7 @@ periodically. Neither is automated.
 - [ ] An attendee photo loads over `/storage/...` (the published `storage` symlink resolves)
 - [ ] `curl -s https://100potal.nsbatihighschool.edu.bd/api/v1/public/ticket-types` → JSON with the `CEN` type
 - [ ] Admin console loads at `/login` and a seeded Super Admin can sign in
-- [ ] A test registration reaches `pending_payment` and returns a real SSLCommerz redirect URL
+- [ ] A test registration reaches `pending_payment` and returns a real PayStation checkout URL
 - [ ] Within ~2 minutes of a paid registration: `notifications` row leaves `queued`, and the ticket has a QR image
 - [ ] `php artisan schedule:list` shows all five scheduled commands
 - [ ] `storage/logs/laravel.log` is being written and is not world-readable over HTTP

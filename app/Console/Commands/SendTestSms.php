@@ -17,7 +17,7 @@ use Throwable;
  * It prints the raw gateway response deliberately. Every response field
  * name in the client is an inference from the vendor's request-only
  * material, so what this prints is the thing to paste back into
- * `ReveSmsClient`'s parser to tighten it. `SslCommerzClient` shipped in
+ * `ReveSmsClient`'s parser to tighten it. `SslCommerzClient` (since removed) shipped in
  * exactly this position and its first live call found two real defects.
  *
  * It writes no outbox row and ignores the kill switches: this checks the

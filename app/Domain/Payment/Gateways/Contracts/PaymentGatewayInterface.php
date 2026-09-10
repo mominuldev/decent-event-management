@@ -2,14 +2,16 @@
 
 namespace App\Domain\Payment\Gateways\Contracts;
 
+use App\Domain\Payment\Actions\RefundPayment;
 use App\Domain\Payment\Models\Payment;
 use Illuminate\Http\Request;
 
 /**
- * One contract for all four gateways (bKash, Nagad, Rocket, SSLCommerz —
- * docs/01 §1.7). Gateway-specific quirks (token refresh, RSA payloads,
- * `val_id` calls) stay inside each adapter; domain code only ever sees
- * this interface.
+ * One contract for every gateway (PayStation, plus bKash, Nagad and
+ * Rocket pending their own merchant applications — docs/01 §1.7).
+ * Gateway-specific quirks (token refresh, RSA payloads, status-lookup
+ * shapes) stay inside each adapter; domain code only ever sees this
+ * interface.
  */
 interface PaymentGatewayInterface
 {
@@ -22,6 +24,19 @@ interface PaymentGatewayInterface
     public function verify(Payment $payment): GatewayVerificationResult;
 
     public function refund(Payment $payment, int $amountPaisa, string $reason): GatewayRefundResult;
+
+    /**
+     * Whether {@see refund()} can actually move money at the gateway.
+     *
+     * Not every gateway exposes a refund API — PayStation reports `refund`
+     * as a transaction *status* but publishes no endpoint to cause one, so
+     * a refund there is performed by a human in the merchant panel. An
+     * adapter returning false makes {@see RefundPayment}
+     * demand an explicit out-of-band acknowledgement plus the panel's own
+     * reference before it records anything, rather than silently booking a
+     * refund nobody executed.
+     */
+    public function supportsGatewayRefund(): bool;
 
     /**
      * Parses and authenticates an inbound webhook request. Implementations

@@ -12,7 +12,7 @@ import { totalOf } from '@/lib/pagination';
 import { shortDate } from '@/lib/format';
 import { useTableSorting } from '@/lib/sorting';
 import * as financeApi from './api';
-import { PAYMENT_METHODS, type Payment, type PaymentMethod } from './types';
+import { GATEWAYS_WITHOUT_REFUND_API, PAYMENT_METHODS, type Payment, type PaymentMethod } from './types';
 
 const knownStatusTone: Record<string, Tone> = {
     pending: 'neutral',
@@ -44,12 +44,23 @@ function RefundDialog({ payment, onClose }: { payment: Payment; onClose: () => v
     const [reason, setReason] = useState('');
     const [error, setError] = useState<string | null>(null);
 
+    // PayStation has no refund API: the money moves in its merchant panel
+    // and this dialog only records that it did. The server refuses without
+    // both of these, so asking here is what keeps that refusal from being
+    // the first the operator hears of it.
+    const needsAcknowledgement = GATEWAYS_WITHOUT_REFUND_API.includes(payment.method);
+    const [acknowledged, setAcknowledged] = useState(false);
+    const [gatewayReference, setGatewayReference] = useState('');
+
     const refundMutation = useMutation({
         mutationFn: () =>
             financeApi.refundPayment(payment.ulid, {
                 reason: reason.trim(),
                 type,
                 amount_paisa: type === 'partial' ? Math.round(Number(amount) * 100) : undefined,
+                ...(needsAcknowledgement
+                    ? { acknowledged_out_of_band: acknowledged, gateway_refund_reference: gatewayReference.trim() }
+                    : {}),
             }),
         onSuccess: (result) => {
             push('success', `Refund ${result.refund_number} recorded (${money(result.amount_paisa)}).`);
@@ -61,7 +72,10 @@ function RefundDialog({ payment, onClose }: { payment: Payment; onClose: () => v
     });
 
     const refundable = payment.amount_paid_paisa - payment.refunded_paisa;
-    const canSubmit = reason.trim().length >= 3 && (type === 'full' || (Number(amount) > 0 && Math.round(Number(amount) * 100) <= refundable));
+    const canSubmit =
+        reason.trim().length >= 3 &&
+        (type === 'full' || (Number(amount) > 0 && Math.round(Number(amount) * 100) <= refundable)) &&
+        (!needsAcknowledgement || (acknowledged && gatewayReference.trim().length > 0));
 
     return (
         <Dialog
@@ -95,6 +109,33 @@ function RefundDialog({ payment, onClose }: { payment: Payment; onClose: () => v
                     <Label htmlFor="refund_reason">Reason</Label>
                     <Textarea id="refund_reason" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why is this being refunded?" />
                 </div>
+                {needsAcknowledgement && (
+                    <div className="space-y-3 rounded-md border border-warning-border bg-warning-bg p-3">
+                        <p className="text-[13px] text-warning-fg">
+                            {PAYMENT_METHODS.find((m) => m.value === payment.method)?.label ?? payment.method} cannot be
+                            refunded from here — it publishes no refund API. Issue the refund in its merchant panel
+                            first, then record it below. This voids the ticket and releases the seat.
+                        </p>
+                        <label className="flex items-start gap-2 text-[13px] text-text">
+                            <input
+                                type="checkbox"
+                                className="mt-0.5"
+                                checked={acknowledged}
+                                onChange={(e) => setAcknowledged(e.target.checked)}
+                            />
+                            <span>I have already issued this refund at the gateway.</span>
+                        </label>
+                        <div>
+                            <Label htmlFor="refund_gateway_reference">Gateway refund reference</Label>
+                            <Input
+                                id="refund_gateway_reference"
+                                value={gatewayReference}
+                                onChange={(e) => setGatewayReference(e.target.value)}
+                                placeholder="Reference shown in the merchant panel"
+                            />
+                        </div>
+                    </div>
+                )}
                 {error && <p className="text-[13px] text-critical-fg">{error}</p>}
                 <div className="flex justify-end gap-2 border-t border-border pt-4">
                     <Button variant="outline" size="sm" onClick={onClose} disabled={refundMutation.isPending}>Cancel</Button>

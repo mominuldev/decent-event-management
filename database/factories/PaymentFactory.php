@@ -22,7 +22,7 @@ class PaymentFactory extends Factory
             'payment_number' => 'PAY-100Y-'.fake()->unique()->numerify('######'),
             'registration_id' => Registration::factory(),
             'attendee_id' => Attendee::factory(),
-            'method' => fake()->randomElement(['bkash', 'nagad', 'rocket', 'sslcommerz']),
+            'method' => fake()->randomElement(['bkash', 'nagad', 'rocket', 'paystation']),
             'channel' => 'online',
             'status' => 'initiated',
             'amount_due_paisa' => $amount,

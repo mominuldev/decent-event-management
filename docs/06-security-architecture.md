@@ -229,7 +229,7 @@ This is enforced in one place — a single guarded state transition on the payme
 
 ### Card data
 
-**None is stored, ever.** All card handling occurs on the gateway's hosted page. SSLCommerz is the only card-capable method in scope and it is redirect-based. The system never sees a PAN, which keeps PCI scope at SAQ-A.
+**None is stored, ever.** All card handling occurs on the gateway's hosted page. PayStation is the only card-capable method in scope and it is redirect-based. The system never sees a PAN, which keeps PCI scope at SAQ-A.
 
 ### Reconciliation as a security control
 

@@ -17,7 +17,7 @@ use Throwable;
  * `MAIL_MAILER` resolves to (`config/mail.php`) — `log` in local/dev is a
  * safe zero-cost sandbox; pointing it at Postmark/SES/Resend (keys
  * already scaffolded in `config/services.php`) needs no code change,
- * mirroring how `SslCommerzClient` only needed credentials.
+ * mirroring how `PayStationClient` only needs credentials.
  */
 class MailDriver implements NotificationChannelInterface
 {

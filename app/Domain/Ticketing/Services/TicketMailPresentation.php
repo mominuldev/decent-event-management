@@ -168,7 +168,7 @@ class TicketMailPresentation
 
     /**
      * The public site's registration page — the one URL the payment return
-     * legs already prove exists (`SslCommerzReturnController`). Built from
+     * leg already proves exists (`PayStationReturnController`). Built from
      * `services.frontend.url` server-side, never from a request.
      */
     private function registrationUrl(Ticket $ticket): ?string

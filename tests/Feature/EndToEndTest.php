@@ -285,7 +285,7 @@ class EndToEndTest extends TestCase
             'children_count' => 0,
             // Named explicitly rather than relying on the configured
             // default: this test drives FakeGateway's deterministic IPN, and
-            // the public default is now `sslcommerz` (a real adapter that
+            // the public default is now `paystation` (a real adapter that
             // would try to reach the sandbox).
             'payment_method' => 'bkash',
             'idempotency_key' => 'test-gateway-flow-registration',
