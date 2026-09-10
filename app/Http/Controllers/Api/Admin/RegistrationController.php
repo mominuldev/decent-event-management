@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Domain\Registration\Actions\CreateRegistration;
 use App\Domain\Registration\Models\Registration;
+use App\Domain\Registration\Support\RegistrationContext;
 use App\Domain\Shared\Models\ActivityLog;
+use App\Domain\Shared\Models\User;
 use App\Domain\Shared\Support\ListSort;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\StoreAdminRegistrationRequest;
 use App\Http\Requests\Admin\UpdateRegistrationRequest;
-use App\Http\Resources\RegistrationResource;
+use App\Http\Resources\Admin\AdminRegistrationResource;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -36,6 +40,129 @@ class RegistrationController extends Controller
 
     /** Newest first — this list had no ORDER BY at all before, so paging it was not even stable. */
     private const DEFAULT_SORT = 'created_at';
+
+    #[OAT\Post(
+        path: '/admin/registrations',
+        summary: 'Register an attendee at the counter, to be paid in cash',
+        description: 'Creates a registration on an attendee\'s behalf and a cash payment row in `pending`. '
+            .'It does **not** take the money: settle it with `POST /admin/payments/{payment}/collect-cash`, '
+            .'which is what issues the ticket and sends the confirmation. Requires an `Idempotency-Key` header, '
+            .'so a double-tapped button at a desk cannot create two registrations.',
+        tags: ['Registrations'],
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OAT\Parameter(
+                name: 'Idempotency-Key',
+                in: 'header',
+                required: true,
+                description: 'Unique per submission. A replay with the same body returns the original response.',
+                schema: new OAT\Schema(type: 'string', maxLength: 64)
+            ),
+        ],
+        requestBody: new OAT\RequestBody(
+            required: true,
+            content: new OAT\MediaType(
+                mediaType: 'application/json',
+                schema: new OAT\Schema(
+                    required: [
+                        'full_name', 'full_name_bn', 'father_name', 'mobile', 'gender', 'occupation',
+                        'current_address', 'participant_type', 'ticket_type_ulid', 'participation_type',
+                        'adults_count', 'children_count',
+                    ],
+                    properties: [
+                        new OAT\Property(property: 'full_name', type: 'string', maxLength: 150),
+                        new OAT\Property(property: 'full_name_bn', type: 'string', maxLength: 150),
+                        new OAT\Property(property: 'father_name', type: 'string', maxLength: 150),
+                        new OAT\Property(property: 'mobile', type: 'string', maxLength: 20),
+                        new OAT\Property(property: 'email', type: 'string', format: 'email', nullable: true),
+                        new OAT\Property(property: 'gender', type: 'string', enum: ['male', 'female']),
+                        new OAT\Property(property: 'date_of_birth', type: 'string', format: 'date', nullable: true),
+                        new OAT\Property(property: 'occupation', type: 'string', maxLength: 100),
+                        new OAT\Property(property: 'designation', type: 'string', nullable: true, maxLength: 100),
+                        new OAT\Property(property: 'organization', type: 'string', nullable: true, maxLength: 200),
+                        new OAT\Property(property: 'current_address', type: 'string', maxLength: 255),
+                        new OAT\Property(property: 'participant_type', type: 'string', enum: ['current_student', 'former_student', 'teacher', 'staff', 'guardian', 'guest', 'sponsor', 'other']),
+                        new OAT\Property(property: 'ssc_batch_year', type: 'integer', nullable: true),
+                        new OAT\Property(property: 'current_class', type: 'string', nullable: true),
+                        new OAT\Property(property: 'ticket_type_ulid', type: 'string'),
+                        new OAT\Property(property: 'event_session_ulid', type: 'string', nullable: true),
+                        new OAT\Property(property: 'participation_type', type: 'string', enum: ['single', 'couple', 'family']),
+                        new OAT\Property(property: 'adults_count', type: 'integer', minimum: 1, maximum: 10),
+                        new OAT\Property(property: 'children_count', description: 'Every child attending, infants included. Which of them are free is decided server-side from each guest\'s age.', type: 'integer', minimum: 0, maximum: 10),
+                        new OAT\Property(property: 'guests', type: 'array', items: new OAT\Items(type: 'object')),
+                        new OAT\Property(property: 'tshirt_required', type: 'boolean', nullable: true),
+                        new OAT\Property(property: 'tshirt_size', type: 'string', nullable: true),
+                        new OAT\Property(property: 'special_notes', type: 'string', nullable: true, maxLength: 1000),
+                    ]
+                )
+            )
+        ),
+        responses: [
+            new OAT\Response(
+                response: 201,
+                description: 'Registration created, with its pending cash payment under `payments`',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(
+                                property: 'data',
+                                properties: [
+                                    new OAT\Property(property: 'ulid', type: 'string'),
+                                    new OAT\Property(property: 'registration_number', type: 'string'),
+                                    new OAT\Property(property: 'status', type: 'string', example: 'pending_payment'),
+                                    new OAT\Property(property: 'total_paisa', type: 'integer'),
+                                    new OAT\Property(property: 'source', type: 'string', example: 'admin_counter'),
+                                    new OAT\Property(property: 'payments', type: 'array', items: new OAT\Items(type: 'object')),
+                                ],
+                                type: 'object'
+                            ),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 400, description: 'Idempotency-Key header missing'),
+            new OAT\Response(response: 401, description: 'Unauthenticated'),
+            new OAT\Response(response: 403, description: 'Missing registration.create permission'),
+            new OAT\Response(response: 409, description: 'Idempotency-Key reused with a different body, or a request with it is in flight'),
+            new OAT\Response(
+                response: 422,
+                description: 'Validation error, or the registration was refused: `sold_out`, '
+                    .'`participant_type_not_allowed`, `email_already_registered`, `already_registered`',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(property: 'code', type: 'string'),
+                            new OAT\Property(property: 'message', type: 'string'),
+                            new OAT\Property(property: 'request_id', type: 'string', nullable: true),
+                        ]
+                    )
+                )
+            ),
+        ]
+    )]
+    public function store(StoreAdminRegistrationRequest $request, CreateRegistration $action): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        // Everything about how this row differs from a public checkout —
+        // source, cash method, manual channel, no reservation TTL — is
+        // carried by the context rather than spelled out here, so the
+        // pricing, free-infant and capacity logic stays the single
+        // implementation both paths run.
+        $registration = $action(
+            $request->validated(),
+            RegistrationContext::counter($user),
+            $request->ip(),
+            substr((string) ($request->header('X-Request-Id') ?? Str::ulid()), 0, 26),
+        );
+
+        return (new AdminRegistrationResource($registration))
+            ->response()
+            ->setStatusCode(201);
+    }
 
     #[OAT\Get(
         path: '/admin/registrations',
@@ -177,7 +304,7 @@ class RegistrationController extends Controller
 
         $perPage = min((int) $request->input('per_page', 15), 100);
 
-        return RegistrationResource::collection($query->paginate($perPage));
+        return AdminRegistrationResource::collection($query->paginate($perPage));
     }
 
     #[OAT\Get(
@@ -238,7 +365,7 @@ class RegistrationController extends Controller
             new OAT\Response(response: 404, description: 'Registration not found'),
         ]
     )]
-    public function show(Request $request, Registration $registration): RegistrationResource
+    public function show(Request $request, Registration $registration): AdminRegistrationResource
     {
         abort_unless((bool) $request->user()?->can('registration.view'), Response::HTTP_FORBIDDEN);
 
@@ -250,7 +377,7 @@ class RegistrationController extends Controller
             'tickets',
         ]);
 
-        return new RegistrationResource($registration);
+        return new AdminRegistrationResource($registration);
     }
 
     #[OAT\Patch(
@@ -312,7 +439,7 @@ class RegistrationController extends Controller
             new OAT\Response(response: 422, description: 'Validation error, or the requested status transition is not permitted'),
         ]
     )]
-    public function update(UpdateRegistrationRequest $request, Registration $registration): RegistrationResource
+    public function update(UpdateRegistrationRequest $request, Registration $registration): AdminRegistrationResource
     {
         $oldData = $registration->toArray();
         $validated = $request->validated();
@@ -342,7 +469,9 @@ class RegistrationController extends Controller
             'request_id' => $requestId,
         ]);
 
-        return new RegistrationResource($registration->refresh());
+        $registration->load(['attendee', 'guests', 'ticketType', 'payments']);
+
+        return new AdminRegistrationResource($registration);
     }
 
     #[OAT\Delete(

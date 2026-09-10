@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Domain\Payment\Actions\CollectCashPayment;
 use App\Domain\Payment\Actions\RefundPayment;
 use App\Domain\Payment\Actions\VerifyManualPayment;
 use App\Domain\Payment\Models\Payment;
@@ -9,6 +10,7 @@ use App\Domain\Shared\Models\ActivityLog;
 use App\Domain\Shared\Models\User;
 use App\Domain\Shared\Support\ListSort;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\CollectCashPaymentRequest;
 use App\Http\Requests\Admin\RefundPaymentRequest;
 use App\Http\Requests\Admin\RejectManualPaymentRequest;
 use App\Http\Requests\Admin\VerifyManualPaymentRequest;
@@ -236,6 +238,116 @@ class PaymentController extends Controller
         $payment->load(['registration', 'attendee', 'verifiedBy', 'transactions', 'refunds']);
 
         return new PaymentResource($payment);
+    }
+
+    #[OAT\Post(
+        path: '/admin/payments/{payment}/collect-cash',
+        summary: 'Record cash taken at the counter and issue the ticket',
+        description: 'Settles a `pending` or `awaiting_verification` payment against cash handed over in person, '
+            .'then queues ticket issuance — which is what sends the confirmation email, SMS and WhatsApp message '
+            .'carrying the QR. The amount must equal `amount_due_paisa` exactly; a counter sale is settled in full '
+            .'or not at all. A payment already `initiated` at a gateway is refused, because taking cash for one '
+            .'risks the attendee being charged twice.',
+        tags: ['Payments'],
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OAT\Parameter(
+                name: 'payment',
+                in: 'path',
+                required: true,
+                description: 'Payment ULID',
+                schema: new OAT\Schema(type: 'string')
+            ),
+        ],
+        requestBody: new OAT\RequestBody(
+            required: true,
+            content: new OAT\MediaType(
+                mediaType: 'application/json',
+                schema: new OAT\Schema(
+                    required: ['amount_received_paisa'],
+                    properties: [
+                        new OAT\Property(property: 'amount_received_paisa', description: 'Must equal the payment\'s `amount_due_paisa`.', type: 'integer', minimum: 0),
+                        new OAT\Property(property: 'receipt_reference', description: 'The paper receipt book number, where the desk runs one.', type: 'string', nullable: true, maxLength: 64),
+                        new OAT\Property(property: 'note', type: 'string', nullable: true, maxLength: 200),
+                    ]
+                )
+            )
+        ),
+        responses: [
+            new OAT\Response(
+                response: 200,
+                description: 'Cash recorded, payment succeeded, ticket queued',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(
+                                property: 'data',
+                                properties: [
+                                    new OAT\Property(property: 'ulid', type: 'string'),
+                                    new OAT\Property(property: 'payment_number', type: 'string'),
+                                    new OAT\Property(property: 'method', type: 'string', example: 'cash'),
+                                    new OAT\Property(property: 'channel', type: 'string', example: 'manual'),
+                                    new OAT\Property(property: 'status', type: 'string', example: 'succeeded'),
+                                    new OAT\Property(property: 'amount_paid_paisa', type: 'integer'),
+                                    new OAT\Property(property: 'paid_at', type: 'string', format: 'date-time', nullable: true),
+                                    new OAT\Property(property: 'verified_by_name', type: 'string', nullable: true),
+                                ],
+                                type: 'object'
+                            ),
+                            new OAT\Property(property: 'message', type: 'string'),
+                        ]
+                    )
+                )
+            ),
+            new OAT\Response(response: 401, description: 'Unauthenticated'),
+            new OAT\Response(response: 403, description: 'Missing payment.collect_cash permission'),
+            new OAT\Response(response: 404, description: 'Payment not found'),
+            new OAT\Response(
+                response: 422,
+                description: 'Validation error, or `cash_amount_mismatch` / `payment_not_collectable`',
+                content: new OAT\MediaType(
+                    mediaType: 'application/json',
+                    schema: new OAT\Schema(
+                        properties: [
+                            new OAT\Property(property: 'code', type: 'string', example: 'cash_amount_mismatch'),
+                            new OAT\Property(property: 'message', type: 'string'),
+                            new OAT\Property(property: 'errors', type: 'object', nullable: true),
+                            new OAT\Property(property: 'request_id', type: 'string', nullable: true),
+                        ]
+                    )
+                )
+            ),
+        ]
+    )]
+    public function collectCash(CollectCashPaymentRequest $request, Payment $payment, CollectCashPayment $action): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        // No try/catch: CashCollectionRejectedException renders its own 422
+        // in the uniform envelope, carrying a `code` the SPA branches on and
+        // — for a mismatch — a field-level error the amount input can show.
+        // Flattening it here the way verifyManual() flattens
+        // InvalidArgumentException would lose both.
+        $payment = $action->execute(
+            payment: $payment,
+            collectedBy: $user,
+            amountReceivedPaisa: (int) $request->validated('amount_received_paisa'),
+            receiptReference: $request->validated('receipt_reference'),
+            note: $request->validated('note'),
+            ip: $request->ip(),
+            requestId: substr((string) ($request->header('X-Request-Id') ?? Str::ulid()), 0, 26),
+        );
+
+        // The audit row is written by the Action itself (D8), not here.
+
+        $payment->load(['registration', 'attendee', 'verifiedBy', 'transactions', 'refunds']);
+
+        return response()->json([
+            'data' => new PaymentResource($payment),
+            'message' => 'Cash recorded. The ticket is being issued and the confirmation sent.',
+        ]);
     }
 
     #[OAT\Post(

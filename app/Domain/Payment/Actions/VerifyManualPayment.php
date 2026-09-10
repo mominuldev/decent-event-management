@@ -34,6 +34,16 @@ class VerifyManualPayment
 
             $now = now();
 
+            // `pending → succeeded` is not a legal move — Payment::TRANSITIONS
+            // has `'pending' => ['initiated', 'awaiting_verification',
+            // 'expired']` — so the `pending` branch this method's own guard
+            // admits used to throw InvalidStateTransitionException straight
+            // out of an admin endpoint as a 500. Every existing test set
+            // `awaiting_verification` first, which is why it was never seen.
+            if ($payment->status === 'pending') {
+                $payment->transitionTo('awaiting_verification');
+            }
+
             $payment->transitionTo('succeeded');
             $payment->paid_at = $now;
             $payment->verified_by_user_id = max(0, (int) $verifiedBy->id);

@@ -4,6 +4,7 @@ namespace App\Domain\Notification\Listeners;
 
 use App\Domain\Notification\Actions\QueueNotification;
 use App\Domain\Registration\Events\RegistrationCreated;
+use App\Domain\Registration\Support\RegistrationContext;
 
 class QueueRegistrationReceivedNotification
 {
@@ -15,6 +16,17 @@ class QueueRegistrationReceivedNotification
         $attendee = $registration->attendee;
 
         if ($attendee === null) {
+            return;
+        }
+
+        // A counter sale is settled in cash within the same minute, so this
+        // message's own copy — "Complete payment to confirm your seat" —
+        // is false by the time it would arrive, and it lands right beside
+        // the ticket confirmation that has already gone out. Suppressed by
+        // source rather than by editing the template, because the wording
+        // is correct for every other way a registration is made.
+        // {@see RegistrationContext::counter()}
+        if ($registration->source === 'admin_counter') {
             return;
         }
 

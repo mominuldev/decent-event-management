@@ -280,7 +280,13 @@ class RegistrationController extends Controller
     )]
     public function show(Registration $registration): RegistrationResource
     {
-        $registration->load(['attendee', 'guests', 'ticketType', 'payments']);
+        // No `payments` here, deliberately. This endpoint is unauthenticated
+        // and RegistrationResource carries no payment fields — the eager
+        // load it used to do was a wasted query on a route the public site
+        // polls every few seconds, and re-adding one would be the moment
+        // payment rows started being published to anyone holding a ULID.
+        // Payment progress is visible through `status` alone.
+        $registration->load(['attendee', 'guests', 'ticketType']);
 
         return new RegistrationResource($registration);
     }

@@ -29,6 +29,42 @@ class AdminPaymentTicketTest extends TestCase
         $this->admin->assignRole('Super Admin');
     }
 
+    /**
+     * VerifyManualPayment's own guard admits `pending`, but
+     * `Payment::TRANSITIONS` has no `pending → succeeded` edge — so that
+     * branch used to throw InvalidStateTransitionException straight out of
+     * an admin endpoint as an unhandled 500. Every other test in the suite
+     * sets `awaiting_verification` first, which is why it was never seen.
+     */
+    public function test_a_manual_payment_still_in_pending_can_be_verified(): void
+    {
+        $attendee = Attendee::factory()->create();
+        $ticketType = TicketType::factory()->create(['quantity_reserved' => 1, 'quantity_sold' => 0]);
+        $registration = Registration::factory()->create([
+            'attendee_id' => $attendee->id,
+            'ticket_type_id' => $ticketType->id,
+            'status' => 'pending_payment',
+        ]);
+
+        $payment = Payment::factory()->create([
+            'registration_id' => $registration->id,
+            'attendee_id' => $attendee->id,
+            'status' => 'pending',
+            'manual_trx_id' => 'TRXPENDING01',
+            'amount_due_paisa' => 100000,
+        ]);
+
+        Sanctum::actingAs($this->admin, ['admin'], 'web-admin');
+
+        $this->postJson(route('api.v1.admin.payments.verify-manual', ['payment' => $payment->ulid]), [
+            'verification_note' => 'Bank statement matches',
+        ])
+            ->assertStatus(200)
+            ->assertJsonPath('data.status', 'succeeded');
+
+        $this->assertSame('succeeded', $payment->refresh()->status);
+    }
+
     public function test_admin_can_verify_manual_payment(): void
     {
         $attendee = Attendee::factory()->create();

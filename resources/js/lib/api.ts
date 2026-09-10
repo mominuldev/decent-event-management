@@ -56,12 +56,49 @@ export interface ApiError {
     request_id?: string;
 }
 
-/** Normalise an axios error into the API's error envelope. */
+/**
+ * Normalise a thrown value into the API's error envelope.
+ *
+ * The three failures below are genuinely different things and used to
+ * collapse into one message. That is not cosmetic: a bug in our own code
+ * reported as "Network error. Please try again." sends the reader to check
+ * their wifi and the developer to check the server, and neither is where
+ * the fault is. It happened — `crypto.randomUUID()` is secure-context only,
+ * so on `http://…test` the counter-registration form threw before sending
+ * anything and said the network was down. See lib/id.ts.
+ */
 export function toApiError(e: unknown): ApiError {
-    if (axios.isAxiosError(e) && e.response?.data) {
-        return e.response.data as ApiError;
+    if (axios.isAxiosError(e)) {
+        const data = e.response?.data;
+
+        // The server answered in the uniform envelope — the normal path.
+        if (data && typeof data === 'object') {
+            return data as ApiError;
+        }
+
+        // It answered with something else: an HTML error page from a 500
+        // with APP_DEBUG on, or a proxy's own page. Returning it verbatim
+        // used to put `message: undefined` in a toast.
+        if (e.response) {
+            return {
+                message: `The server returned an unexpected ${e.response.status} response.`,
+                code: 'unexpected_response',
+            };
+        }
+
+        // No response at all — the only case that really is the network.
+        return { message: 'Network error. Please try again.' };
     }
-    return { message: 'Network error. Please try again.' };
+
+    // Not an HTTP failure, so it is a fault in this app rather than in the
+    // request. Logged in full because the toast is deliberately short, and
+    // this is the case where the stack is the whole story.
+    console.error('Unexpected client-side error', e);
+
+    return {
+        message: e instanceof Error ? e.message : 'Something went wrong. Please reload and try again.',
+        code: 'client_error',
+    };
 }
 
 /**

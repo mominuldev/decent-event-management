@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Check, Search, Trash2, X } from 'lucide-react';
+import { Banknote, Check, Plus, Search, Trash2, X } from 'lucide-react';
 import { Badge, Button, Card, CardHeader, Input, Label, Select, Skeleton, Textarea, type Tone } from '@/components/ui';
 import { Dialog, ConfirmDialog } from '@/components/Dialog';
 import { DataTable } from '@/components/DataTable';
@@ -11,6 +11,7 @@ import { cn, money } from '@/lib/cn';
 import { totalOf } from '@/lib/pagination';
 import { shortDate } from '@/lib/format';
 import { useTableSorting } from '@/lib/sorting';
+import { NewRegistrationDialog } from './NewRegistrationDialog';
 import * as registrationsApi from './api';
 import { EDITABLE_STATUSES, type Registration, type RegistrationStatus, type UpdateRegistrationPayload } from './types';
 
@@ -277,6 +278,30 @@ function RegistrationDetail({ ulid, onClose }: { ulid: string; onClose: () => vo
 
     const canEdit = can('registration.update');
     const canDelete = can('registration.delete');
+    const canCollectCash = can('payment.collect_cash');
+
+    /**
+     * The one payment cash may settle. `initiated` is excluded server-side
+     * too — a live gateway session means taking cash here could see the
+     * attendee charged twice for one seat — so this only hides a button
+     * that would be refused, rather than being the check itself.
+     */
+    const collectablePayment = data?.payments?.find(
+        (p) => p.status === 'pending' || p.status === 'awaiting_verification',
+    );
+
+    const collectCashMutation = useMutation({
+        mutationFn: (paymentUlid: string) =>
+            registrationsApi.collectCash(paymentUlid, {
+                amount_received_paisa: collectablePayment?.amount_due_paisa ?? 0,
+            }),
+        onSuccess: () => {
+            push('success', 'Cash recorded. The ticket has been issued and the confirmation sent.');
+            void queryClient.invalidateQueries({ queryKey: ['registration', ulid] });
+            void queryClient.invalidateQueries({ queryKey: ['registrations'] });
+        },
+        onError: (e: Error) => push('critical', e.message),
+    });
 
     return (
         <Dialog
@@ -296,6 +321,18 @@ function RegistrationDetail({ ulid, onClose }: { ulid: string; onClose: () => vo
                             </Button>
                         ) : <span />}
                         <div className="flex gap-2">
+                            {canCollectCash && collectablePayment && (
+                                <Button
+                                    size="sm"
+                                    disabled={collectCashMutation.isPending}
+                                    onClick={() => void collectCashMutation.mutateAsync(collectablePayment.ulid)}
+                                >
+                                    <Banknote size={15} />
+                                    {collectCashMutation.isPending
+                                        ? 'Recording…'
+                                        : `Cash received — ${money(collectablePayment.amount_due_paisa)}`}
+                                </Button>
+                            )}
                             <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
                             {canEdit && (
                                 <Button
@@ -451,6 +488,8 @@ const columns: ColumnDef<Registration, unknown>[] = [
 ];
 
 export default function RegistrationsPage() {
+    const { can } = useAuth();
+    const [creating, setCreating] = useState(false);
     const [search, setSearch] = useState('');
     const [status, setStatus] = useState<RegistrationStatus | ''>('');
     const [dateFrom, setDateFrom] = useState('');
@@ -478,9 +517,16 @@ export default function RegistrationsPage() {
 
     return (
         <div className="space-y-6">
-            <div>
-                <h1 className="text-[26px] font-bold tracking-tight text-text">Registrations</h1>
-                <p className="mt-1 text-[14px] text-text-muted">Track and manage every registration through its lifecycle.</p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h1 className="text-[26px] font-bold tracking-tight text-text">Registrations</h1>
+                    <p className="mt-1 text-[14px] text-text-muted">Track and manage every registration through its lifecycle.</p>
+                </div>
+                {can('registration.create') && (
+                    <Button onClick={() => setCreating(true)}>
+                        <Plus size={15} /> New registration
+                    </Button>
+                )}
             </div>
 
             <Card>
@@ -536,6 +582,12 @@ export default function RegistrationsPage() {
                     onSortingChange={setSorting}
                 />
             </Card>
+
+            <NewRegistrationDialog
+                open={creating}
+                onClose={() => setCreating(false)}
+                canCollectCash={can('payment.collect_cash')}
+            />
 
             {selected && <RegistrationDetail ulid={selected} onClose={() => setSelected(null)} />}
         </div>

@@ -10,7 +10,10 @@ use App\Domain\Registration\Models\Attendee;
 use App\Domain\Registration\Models\Registration;
 use App\Domain\Registration\Models\RegistrationGuest;
 use App\Domain\Registration\Support\AttendeeIdentity;
+use App\Domain\Registration\Support\RegistrationContext;
+use App\Domain\Shared\Models\ActivityLog;
 use App\Domain\Shared\Models\EventSetting;
+use App\Domain\Shared\Models\User;
 use App\Domain\Ticketing\Models\TicketType;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -19,10 +22,22 @@ class CreateRegistration
 {
     /**
      * @param  array<string, mixed>  $data
+     * @param  RegistrationContext|null  $context  How this registration came to
+     *                                             exist. Defaults to the public
+     *                                             checkout, so the original call
+     *                                             site is unchanged.
      */
-    public function __invoke(array $data): Registration
-    {
-        return DB::transaction(function () use ($data): Registration {
+    public function __invoke(
+        array $data,
+        ?RegistrationContext $context = null,
+        ?string $ip = null,
+        ?string $requestId = null,
+    ): Registration {
+        $context ??= RegistrationContext::publicWeb(
+            isset($data['payment_method']) && is_string($data['payment_method']) ? $data['payment_method'] : null,
+        );
+
+        return DB::transaction(function () use ($data, $context, $ip, $requestId): Registration {
             /** @var TicketType $ticketType */
             $ticketType = TicketType::where('ulid', $data['ticket_type_ulid'])->firstOrFail();
 
@@ -144,7 +159,8 @@ class CreateRegistration
                 'discount_paisa' => 0,
                 'total_paisa' => $totalPrice,
                 'currency' => $ticketType->currency ?? 'BDT',
-                'source' => 'web_public',
+                'source' => $context->source,
+                'created_by_user_id' => $context->createdByUserId,
                 'special_notes' => $data['special_notes'] ?? null,
             ]);
 
@@ -168,8 +184,8 @@ class CreateRegistration
                 'payment_number' => 'PAY-'.Str::upper(Str::random(8)),
                 'registration_id' => $registration->id,
                 'attendee_id' => $attendee->id,
-                'method' => $data['payment_method'] ?? $this->defaultPaymentMethod(),
-                'channel' => 'online',
+                'method' => $context->paymentMethod,
+                'channel' => $context->paymentChannel,
                 'status' => 'pending',
                 'amount_due_paisa' => $totalPrice,
                 'amount_paid_paisa' => 0,
@@ -177,9 +193,14 @@ class CreateRegistration
                 'idempotency_key' => $data['idempotency_key'] ?? Str::random(32),
                 // Reservation TTL starts now, not at gateway-session open —
                 // an attendee who abandons the checkout before ever
-                // clicking "pay" must still release capacity (D5).
-                'expires_at' => now()->addMinutes($this->intentTtlMinutes()),
+                // clicking "pay" must still release capacity (D5). A
+                // counter sale has no TTL: capacity taken at a desk is not
+                // an abandoned checkout, and the sweeper must never
+                // release a seat somebody is standing there paying for.
+                'expires_at' => $context->paymentExpires ? now()->addMinutes($this->intentTtlMinutes()) : null,
             ]);
+
+            $this->logIfStaffCreated($registration, $context, $ip, $requestId);
 
             $registration->load(['attendee', 'guests', 'ticketType', 'payments']);
 
@@ -251,10 +272,14 @@ class CreateRegistration
 
         $live = $attendee->registrations()
             ->whereNotIn('status', ['cancelled', 'expired', 'refunded'])
-            ->exists();
+            ->latest('id')
+            ->first();
 
-        if ($live) {
-            throw RegistrationRejectedException::alreadyRegistered();
+        if ($live !== null) {
+            throw RegistrationRejectedException::alreadyRegistered(
+                (string) $live->registration_number,
+                (string) $live->status,
+            );
         }
     }
 
@@ -314,23 +339,55 @@ class CreateRegistration
         return $count;
     }
 
-    /**
-     * The gateway a checkout opens against when the caller doesn't name
-     * one. Config rather than a literal so pointing the public flow at a
-     * different gateway is a deploy-time change, not a code change.
-     */
-    private function defaultPaymentMethod(): string
-    {
-        $method = config('services.payment.default_method');
-
-        return is_string($method) && $method !== '' ? $method : 'paystation';
-    }
-
     private function intentTtlMinutes(): int
     {
         $value = EventSetting::where('key', 'payment.intent_ttl_minutes')->value('value');
 
         return $value !== null ? max(1, (int) $value) : 30;
+    }
+
+    /**
+     * Audits a registration a member of staff made on somebody else's
+     * behalf (D8: written from the Action, not a controller).
+     *
+     * Only when there is a causer. A public self-registration has no actor
+     * to hold responsible and would add 20,000 rows of noise to a table
+     * whose whole value is that every row is somebody's deliberate act; a
+     * counter registration is exactly such an act, and is the record that
+     * says who put this person on the list.
+     */
+    private function logIfStaffCreated(
+        Registration $registration,
+        RegistrationContext $context,
+        ?string $ip,
+        ?string $requestId,
+    ): void {
+        if ($context->createdByUserId === null) {
+            return;
+        }
+
+        ActivityLog::create([
+            'log_name' => 'registration',
+            'event' => 'created',
+            'description' => "Created registration {$registration->registration_number} at the counter",
+            'causer_type' => (new User)->getMorphClass(),
+            'causer_id' => $context->createdByUserId,
+            'subject_type' => $registration->getMorphClass(),
+            'subject_id' => $registration->id,
+            'properties' => [
+                'source' => $context->source,
+                'registration_number' => $registration->registration_number,
+                'total_paisa' => (int) $registration->total_paisa,
+                'currency' => $registration->currency,
+                'party' => [
+                    'adults' => (int) $registration->adults_count,
+                    'children' => (int) $registration->children_count,
+                    'infants' => (int) $registration->infants_count,
+                ],
+            ],
+            'ip_address' => $ip,
+            'request_id' => $requestId,
+        ]);
     }
 
     /**

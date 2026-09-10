@@ -27,6 +27,12 @@ use App\Http\Controllers\Api\Admin\VolunteerController;
 use Illuminate\Support\Facades\Route;
 
 Route::apiResource('registrations', RegistrationController::class)->except(['store']);
+// Counter registration. Idempotent for the same reason the public one is,
+// only with more at stake: a double-tapped button at a desk would create
+// two registrations and take two lots of cash for one attendee.
+Route::post('registrations', [RegistrationController::class, 'store'])
+    ->middleware('idempotent:registration.create.admin')
+    ->name('registrations.store');
 // Registered before the apiResource, or `export` is swallowed by the
 // `{attendee}` binding and answers 404 instead of downloading.
 Route::get('attendees/export', [AttendeeController::class, 'export'])->name('attendees.export');
@@ -38,6 +44,7 @@ Route::post('tickets/{ticket:ulid}/reissue', [TicketController::class, 'reissue'
 
 Route::apiResource('payments', PaymentController::class)->only(['index', 'show']);
 Route::post('payments/{payment:ulid}/verify-manual', [PaymentController::class, 'verifyManual'])->name('payments.verify-manual');
+Route::post('payments/{payment:ulid}/collect-cash', [PaymentController::class, 'collectCash'])->name('payments.collect-cash');
 Route::post('payments/{payment:ulid}/reject-manual', [PaymentController::class, 'rejectManual'])->name('payments.reject-manual');
 Route::post('payments/{payment:ulid}/refund', [PaymentController::class, 'refund'])->name('payments.refund');
 

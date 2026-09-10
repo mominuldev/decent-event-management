@@ -66,10 +66,20 @@ class RegistrationRejectedException extends RuntimeException
      * expired and refunded registrations do not count — someone whose
      * payment lapsed has to be able to start again.
      */
-    public static function alreadyRegistered(): self
+    public static function alreadyRegistered(?string $registrationNumber = null, ?string $status = null): self
     {
+        // The existing registration is named where it is known, because the
+        // two callers need different things from this message. A member of
+        // the public needs to be told their booking already exists; a member
+        // of staff at a desk needs to be told *which record to collect cash
+        // against*, and "already has a registration" with no reference is a
+        // dead end they cannot act on without going and searching for it.
+        $detail = $registrationNumber !== null
+            ? " (#{$registrationNumber}".($status !== null ? ", status: {$status}" : '').')'
+            : '';
+
         return new self(
-            'This mobile number already has a registration. '
+            "This mobile number already has a registration{$detail}. "
             .'Sign in to view it, or cancel it before registering again.',
             'already_registered',
         );

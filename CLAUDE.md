@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Phase 2 — Backend API Development (Week 2 of 6 weeks) — D1–D4 closed 2026-08-04, sign-off still pending frontend-lead OpenAPI review**
 **Phase 3.5 — CMS: closed 2026-08-04. Backend foundation (schema + public read API) and admin half (CRUD with revision capture/restore, media upload, SPA screens, ISR revalidation hook) both landed — see [§Phase 3.5 below](#-phase-35-cms--closed-2026-08-04).**
 **Phase 5 — Email/SMS/WhatsApp: buildable-now slice landed 2026-08-04 (outbox, dispatcher, real email, admin dashboard). Real SMS/WhatsApp drivers and DLR webhooks stay deferred — no vendor is chosen and Meta hasn't approved templates. See [§Phase 5 below](#-phase-5-emailsmswhatsapp--buildable-now-slice-closed-2026-08-04).**
+**Counter sales — staff registering a walk-up and taking cash landed 2026-09-10.** `POST /admin/registrations` + `POST /admin/payments/{payment}/collect-cash`, behind the new `payment.collect_cash` permission — **which needs `php artisan db:seed --class=RbacSeeder` on the host or every caller gets a 403.** See [§Staff can register a walk-up and take cash](#-staff-can-register-a-walk-up-and-take-cash--2026-09-10).
 **Phase 4A — Payment gateway: SSLCommerz was removed and replaced by PayStation on 2026-09-10** at the client's request. `PayStationClient` is real and verified against the live sandbox; the expiry sweeper (D5), nightly reconciliation and the refund path all carry over. PayStation is an aggregator, so its one hosted checkout already fronts bKash/Nagad/Rocket/Upay/cards — which is why the four separate merchant applications are no longer on the critical path. See [§PayStation replaces SSLCommerz](#-paystation-replaces-sslcommerz--2026-09-10). The older SSLCommerz sections below are kept as history and marked superseded.**
 **Phase 6 — QR & PDF Tickets: buildable-now slice landed 2026-08-04; the remaining non-hardware items closed 2026-08-21 — manifest streaming at a 12,000-ticket cold start, key rotation as a server-enforced staged procedure, and the Bangla PDF text-layer defect fixed by moving rendering to headless Chrome. Only physical print/scan testing is still outstanding, and it needs a real printer and real devices. See [§Phase 6 close-out](#-phase-6-closed-out--manifest-at-scale-real-key-rotation-and-the-bangla-pdf-defect-fixed--2026-08-21).**
 **Phase 7 — Mobile Verification App: the React Native scanner is a separate repo (`decent-event-scanner`, sibling to this one — see "Three frontends, two repos" below), so nothing here changed except one small backend addition: `POST /scanner/v1/enrol` now also returns the volunteer's assigned gates. Core offline scan loop (enrolment, manifest delta sync, local Ed25519 verification, local admission policy, offline scan queue with batched idempotent upload) landed there 2026-08-04. Manual lookup, override-request routing, crash reporting, and all physical-device testing are deferred — see that repo's README.**
@@ -1111,6 +1112,137 @@ Phase 4A shipped `SslCommerzClient` in full but explicitly never called a live s
 
 **Still open:** `refund()` is still exercised only against fakes. `SSLCOMMERZ_IPN_IP_ALLOWLIST` remains an intentional no-op until someone supplies SSLCommerz's real IPN ranges.
 
+### ✅ Staff can register a walk-up and take cash — 2026-09-10
+
+Every registration until now was made by the public, unauthenticated
+`POST /public/registrations` and settled by a gateway. There was no way to register
+somebody at a desk — `routes/api/admin.php` registered `registrations` with
+`->except(['store'])` — and no way to record money handed over in notes: the only
+non-gateway settlement path, `VerifyManualPayment`, refuses to run without a
+`manual_trx_id`, which cash does not have.
+
+**Two audited endpoints, chained by one dialog.** Creating the record and taking the money
+are separate operations because they are separate facts, and because the split makes the
+abandoned case recoverable: a registration created but not paid sits `pending_payment` in
+the list, visible and collectable later, rather than being lost if the second step fails.
+
+| | |
+|---|---|
+| `POST /admin/registrations` | `registration.create`. Creates the registration plus a `pending` cash payment. `idempotent:registration.create.admin`, so a double-tapped button cannot create two registrations and two cash liabilities. |
+| `POST /admin/payments/{payment}/collect-cash` | **New permission `payment.collect_cash`.** Settles it, queues the ticket, and the confirmation goes out. |
+
+**`collect-cash` works on any payment in `pending`/`awaiting_verification`, not only ones
+this feature created** — so a walk-in who abandoned an online checkout and turned up with
+cash is settled from the same button, with the original method recorded on the transaction
+row. A payment already `initiated` is refused: a live gateway session means taking cash
+could see the attendee charged twice for one seat.
+
+- **`CreateRegistration` was parameterised, not forked.** `App\Domain\Registration\Support\RegistrationContext`
+  (`publicWeb()` / `counter(User)`) carries source, payment method, channel, creating user and
+  whether the payment gets a TTL; the parameter defaults to `publicWeb()`, so the one existing
+  call site is unchanged. Copying the action would have duplicated the tiered pricing, the
+  free-infant count, the participant-type check and the atomic `tryReserve()` — the four
+  things most expensive to have drift.
+- **`channel` is `manual` and that is load-bearing, not a label.** `ExpirePaymentIntents`,
+  `ReconcilePayments` and `payments:stuck` all select `channel != 'manual'` and then hand the
+  row's `method` to `PaymentGatewayResolver::forMethod()`, which throws for `cash`. Any other
+  channel would either sweep a paid registration into `expired` or crash the nightly
+  reconciliation. `method = 'cash'` is what distinguishes it from a bank/wallet transfer,
+  which is also `manual`. There is no `expires_at` either: capacity taken at a desk is not an
+  abandoned checkout.
+- **Cash settles in full or not at all.** The operator states what they took and it is
+  compared against `amount_due_paisa`; a mismatch is a 422 naming **both** figures, with a
+  field-level error on the amount input. No discounts (a concession is a ticket-type price
+  tier) and no part payments.
+- **`CollectCashPayment` is a sibling of `VerifyManualPayment`, not a widening of it.** That
+  action's duplicate-`manual_trx_id` guard is the only thing stopping one bank-transfer
+  reference being approved twice, and reusing it would have meant deleting that guard for
+  every caller to serve this one. It re-reads the payment `lockForUpdate()`, so two tills
+  settling the same payment cannot both succeed, and it writes its own `ActivityLog` (D8).
+- **The attendee gets the ticket confirmation and nothing else.** `TicketIssued` already
+  sends email + SMS + WhatsApp carrying the QR, so no payment event is dispatched — the buyer
+  is standing at the desk, and a second message would be noise and, on SMS, a billed one.
+  `QueueRegistrationReceivedNotification` now skips `admin_counter` registrations outright:
+  its copy reads *"Complete payment to confirm your seat"*, which is false the moment the
+  money is in the till.
+- **The counter form requires the same four profile fields the public one does** (Bangla name,
+  father's name, occupation, current address), so a record taken at a desk prints correctly on
+  the ticket and in the directory PDF. It has no `password` field — staff never set an
+  attendee's credential — and no `payment_method`, since a counter sale is always cash.
+- **A duplicate is refused with the existing registration named.** `RegistrationRejectedException::alreadyRegistered()`
+  now carries the number and status, because an operator mid-queue needs to know *which*
+  record to collect against, not merely that one exists. The public message improves too.
+- **`AdminRegistrationResource` is a new class, not a field on the shared one.** The SPA needs
+  the payment ULID off the registration it just created, but `RegistrationResource` is also
+  the response of the **unauthenticated** `GET /public/registrations/{ulid}` — which had been
+  eager-loading `payments` that nothing rendered. Adding the field there would have published
+  `payer_msisdn`, `manual_trx_id`, `gateway_transaction_id` and every money column to anyone
+  holding a ULID. The field went where the audience is staff; the public controller's dead
+  eager-load was dropped.
+- Admin SPA: a **New registration** button on the registrations page, and a two-step dialog —
+  details, then *Cash received — ৳X* against **the server's own total**. That is the reason
+  the flow is two calls: a third mirror of the pricing formula (after `CreateRegistration` and
+  the public site's `pricing.ts`) behind a till is where it would first quietly disagree, and
+  the symptom would be undercharging real people. A `pending_payment` registration also gets
+  the same button in its detail dialog, gated on `payment.collect_cash`.
+
+**Two real bugs fixed in passing:**
+
+1. **`VerifyManualPayment` 500'd on a `pending` payment.** Its own guard admits
+   `['awaiting_verification', 'pending']`, but `Payment::TRANSITIONS` has
+   `'pending' => ['initiated', 'awaiting_verification', 'expired']` — so that branch threw
+   `InvalidStateTransitionException` straight out of an admin endpoint. Every existing test
+   set `awaiting_verification` first, which is why it had never been seen. Both this and the
+   new action now step through `awaiting_verification`. Pinned by a test **confirmed to fail
+   against the old code** (`500: Payment #1 cannot transition from "pending" to "succeeded"`).
+2. The public poll endpoint's wasted `payments` eager-load, above.
+
+**Fixed on first real use — `crypto.randomUUID()` is secure-context only.** The dialog
+generated its `Idempotency-Key` (and its guest-row React keys) with `crypto.randomUUID()`,
+which is specified `[SecureContext]`: it exists on HTTPS and on localhost and is `undefined`
+everywhere else — including `http://decent-event-management.test`, which is how this app is
+served in development. So it threw `TypeError` *before* the request was sent, and the form
+reported **"Network error. Please try again."** while nothing had reached the server at all.
+`resources/js/lib/id.ts`'s `randomId()` is now the only way this SPA makes one: native where
+it exists, otherwise a v4 assembled from `crypto.getRandomValues()`, which carries no such
+gate. **Do not call `crypto.randomUUID()` directly anywhere in `resources/js`** — production
+is HTTPS, so it works there and fails only in development, which is the worst way round.
+
+That the symptom named the network is a second fault, now fixed too: `toApiError()` returned
+"Network error" for *any* non-axios throw, so a bug in our own code sent the reader to check
+their wifi. It now separates the three cases — the server's own envelope, a non-JSON response
+(an `APP_DEBUG` HTML 500 used to surface as a toast reading `undefined`), a real absent
+response — and reports a client-side fault as such, logging the stack to the console.
+
+**⚠️ Needs `php artisan db:seed --class=RbacSeeder` on the host.** `payment.collect_cash` is a
+new entry in `config/rbac.php`, and the catalogue only exists in a database once the seeder has
+run — without it every caller including Super Admin gets a 403. Same footgun `attendee.export`
+hit. Granted to Super Admin and Event Manager; deliberately separate from
+`payment.verify_manual`, because approving a bank transfer against a statement and taking cash
+front-of-house are different jobs that may go to different people.
+
+21 tests (18 in `tests/Feature/Admin/AdminCashRegistrationTest.php`, the `VerifyManualPayment`
+regression, and `registration.create`/`payment.collect_cash` HTTP round-trips in
+`ComprehensivePermissionTest`). Full suite **832 passing / 2 skipped**, Pint and PHPStan level 8
+clean, SPA typecheck + build clean. OpenAPI regenerated — **124 paths** (was 123; `collect-cash`
+is new and `/admin/registrations` gained a `post`).
+
+**Verified against the running app**, not only tests: a teacher with spouse, a 9-year-old and a
+1-year-old returned `children_count: 1`, `infants_count: 1` and ৳6,500 (৳2,500 + ৳2,000 +
+৳2,000, infant free); ৳6,000 was refused naming both figures; ৳6,500 settled the payment to
+`cash`/`manual`/`succeeded`; and the queued job issued ticket `DEC100-CEN-XXXX-00001` with
+`admits_total: 4` — the free infant still occupying an admit — an active QR, a rendered QR
+image and PDF, and `ticket_delivered` rows **sent** on email and SMS with no
+`registration_received` row beside them. The dev database was restored afterwards (rows removed,
+`CEN.quantity_sold` decremented, the ticket-number sequence cleared) and the minted token revoked.
+
+**⚠️ Worth knowing before verifying anything ticket-shaped on the dev box again:** this
+machine's `.env` has **live REVE SMS credentials and a real SMTP mailer**, and
+`QUEUE_CONNECTION=redis` with a worker running — so issuing a ticket here really does send an
+SMS (billed against the prepaid balance) and a real email to whatever address the fixture
+carries. The verification above sent one of each. Use an address and a number you own, or run
+the check against the test database instead.
+
 ### 🚨 External Dependencies (start during Phase 2!)
 - [ ] **PayStation live merchant account** — the only gateway relationship now needed. Sandbox is self-service (credentials are published in their docs and are already the defaults here), so nothing is blocked until go-live; what is needed is a live `PAYSTATION_MERCHANT_ID`/`PAYSTATION_MERCHANT_PASSWORD` plus the IPN URL registered in their dashboard. See [§PayStation replaces SSLCommerz](#-paystation-replaces-sslcommerz--2026-09-10).
 - [ ] ~~Payment gateway merchant applications (bKash, Nagad, Rocket, SSLCommerz)~~ — **no longer on the critical path** (2026-09-10). PayStation aggregates all of these on one hosted checkout, so direct adapters are now an optional optimisation rather than a prerequisite for launch.
@@ -1211,7 +1343,13 @@ php artisan app:generate-open-api-spec   # writes public/docs/openapi.json
 php artisan db:seed                              # RBAC, settings, ticket types, sessions, gates
 php artisan db:seed --class=DummyDataSeeder      # demo registrations/payments/tickets for local dev
 php artisan db:seed --class=LoadTestSeeder       # bulk volume for performance work
+php artisan db:seed --class=RbacSeeder           # re-run after adding a permission to config/rbac.php
 ```
+⚠️ **A new permission does not exist until `RbacSeeder` has run.** The catalogue lives in
+`config/rbac.php` but is enforced from the database, so an endpoint added with a fresh
+permission answers 403 to everyone — Super Admin included — on any environment seeded before
+that release. `attendee.export` and `payment.collect_cash` have both hit this; re-running the
+seeder is safe and idempotent.
 ⚠️ **`php artisan db:seed` is a local-only command.** `DatabaseSeeder` calls `DummyDataSeeder` (fake registrations, payments and tickets) *and* creates a hardcoded super admin whose password is literally `password`. On a live database, run the individual seeders you actually want — `RbacSeeder`, `EventSettingSeeder`, `TicketTypeSeeder`, `NotificationTemplateSeeder` — and make the first staff account with `admin:create-super-admin` below.
 
 **A staff member's own account** lives at `/account` in the SPA, behind `PATCH /admin/auth/me` (name, email, phone) and `POST /admin/auth/password`. **No permission gates either** — your own account is not something a role grants, and neither endpoint can reach anybody else's, so holding a session is the whole authorisation story. Both sit in the *fully authenticated* route group rather than the `2fa-setup` one: a setup token exists to finish enabling 2FA and must not be able to change the address you sign in with or the password it protects. Changing the password **revokes every other session** (a bearer token outlives the moment it was issued, so a password changed because a laptop went missing achieves nothing while tokens minted on it still work) and **clears the login lockout** (somebody who just proved they know the current password is not who the lockout is for). The current password is verified through `PasswordHash::matches`, not the framework's `current_password` rule, which calls `Hash::check()` directly and so would throw rather than fail on an unreadable stored hash. `UpdateStaffProfile` and `ChangeStaffPassword` (`app/Domain/Shared/Actions/`) write their own `ActivityLog` rows (D8) — the profile one only when something actually changed, and the password one records how many sessions went with it and never the password in any form.

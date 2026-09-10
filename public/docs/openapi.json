@@ -5046,6 +5046,151 @@
                 ]
             }
         },
+        "/admin/payments/{payment}/collect-cash": {
+            "post": {
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Record cash taken at the counter and issue the ticket",
+                "description": "Settles a `pending` or `awaiting_verification` payment against cash handed over in person, then queues ticket issuance — which is what sends the confirmation email, SMS and WhatsApp message carrying the QR. The amount must equal `amount_due_paisa` exactly; a counter sale is settled in full or not at all. A payment already `initiated` at a gateway is refused, because taking cash for one risks the attendee being charged twice.",
+                "operationId": "a5e7ad08509212fb809fa8deda3244f2",
+                "parameters": [
+                    {
+                        "name": "payment",
+                        "in": "path",
+                        "description": "Payment ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "amount_received_paisa"
+                                ],
+                                "properties": {
+                                    "amount_received_paisa": {
+                                        "description": "Must equal the payment's `amount_due_paisa`.",
+                                        "type": "integer",
+                                        "minimum": 0
+                                    },
+                                    "receipt_reference": {
+                                        "description": "The paper receipt book number, where the desk runs one.",
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 64
+                                    },
+                                    "note": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 200
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Cash recorded, payment succeeded, ticket queued",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "properties": {
+                                                "ulid": {
+                                                    "type": "string"
+                                                },
+                                                "payment_number": {
+                                                    "type": "string"
+                                                },
+                                                "method": {
+                                                    "type": "string",
+                                                    "example": "cash"
+                                                },
+                                                "channel": {
+                                                    "type": "string",
+                                                    "example": "manual"
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "succeeded"
+                                                },
+                                                "amount_paid_paisa": {
+                                                    "type": "integer"
+                                                },
+                                                "paid_at": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "nullable": true
+                                                },
+                                                "verified_by_name": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Missing payment.collect_cash permission"
+                    },
+                    "404": {
+                        "description": "Payment not found"
+                    },
+                    "422": {
+                        "description": "Validation error, or `cash_amount_mismatch` / `payment_not_collectable`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "string",
+                                            "example": "cash_amount_mismatch"
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "nullable": true
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/admin/payments/{payment}/verify-manual": {
             "post": {
                 "tags": [
@@ -5784,6 +5929,250 @@
                     },
                     "403": {
                         "description": "Missing registration.view_any permission"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Registrations"
+                ],
+                "summary": "Register an attendee at the counter, to be paid in cash",
+                "description": "Creates a registration on an attendee's behalf and a cash payment row in `pending`. It does **not** take the money: settle it with `POST /admin/payments/{payment}/collect-cash`, which is what issues the ticket and sends the confirmation. Requires an `Idempotency-Key` header, so a double-tapped button at a desk cannot create two registrations.",
+                "operationId": "e2c4df24b65f1f8820b382b7ac416a77",
+                "parameters": [
+                    {
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "description": "Unique per submission. A replay with the same body returns the original response.",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 64
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "full_name",
+                                    "full_name_bn",
+                                    "father_name",
+                                    "mobile",
+                                    "gender",
+                                    "occupation",
+                                    "current_address",
+                                    "participant_type",
+                                    "ticket_type_ulid",
+                                    "participation_type",
+                                    "adults_count",
+                                    "children_count"
+                                ],
+                                "properties": {
+                                    "full_name": {
+                                        "type": "string",
+                                        "maxLength": 150
+                                    },
+                                    "full_name_bn": {
+                                        "type": "string",
+                                        "maxLength": 150
+                                    },
+                                    "father_name": {
+                                        "type": "string",
+                                        "maxLength": 150
+                                    },
+                                    "mobile": {
+                                        "type": "string",
+                                        "maxLength": 20
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "nullable": true
+                                    },
+                                    "gender": {
+                                        "type": "string",
+                                        "enum": [
+                                            "male",
+                                            "female"
+                                        ]
+                                    },
+                                    "date_of_birth": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "nullable": true
+                                    },
+                                    "occupation": {
+                                        "type": "string",
+                                        "maxLength": 100
+                                    },
+                                    "designation": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 100
+                                    },
+                                    "organization": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 200
+                                    },
+                                    "current_address": {
+                                        "type": "string",
+                                        "maxLength": 255
+                                    },
+                                    "participant_type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "current_student",
+                                            "former_student",
+                                            "teacher",
+                                            "staff",
+                                            "guardian",
+                                            "guest",
+                                            "sponsor",
+                                            "other"
+                                        ]
+                                    },
+                                    "ssc_batch_year": {
+                                        "type": "integer",
+                                        "nullable": true
+                                    },
+                                    "current_class": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "ticket_type_ulid": {
+                                        "type": "string"
+                                    },
+                                    "event_session_ulid": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "participation_type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "single",
+                                            "couple",
+                                            "family"
+                                        ]
+                                    },
+                                    "adults_count": {
+                                        "type": "integer",
+                                        "maximum": 10,
+                                        "minimum": 1
+                                    },
+                                    "children_count": {
+                                        "description": "Every child attending, infants included. Which of them are free is decided server-side from each guest's age.",
+                                        "type": "integer",
+                                        "maximum": 10,
+                                        "minimum": 0
+                                    },
+                                    "guests": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "tshirt_required": {
+                                        "type": "boolean",
+                                        "nullable": true
+                                    },
+                                    "tshirt_size": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "special_notes": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 1000
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Registration created, with its pending cash payment under `payments`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "properties": {
+                                                "ulid": {
+                                                    "type": "string"
+                                                },
+                                                "registration_number": {
+                                                    "type": "string"
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "pending_payment"
+                                                },
+                                                "total_paisa": {
+                                                    "type": "integer"
+                                                },
+                                                "source": {
+                                                    "type": "string",
+                                                    "example": "admin_counter"
+                                                },
+                                                "payments": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object"
+                                                    }
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Idempotency-Key header missing"
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    },
+                    "403": {
+                        "description": "Missing registration.create permission"
+                    },
+                    "409": {
+                        "description": "Idempotency-Key reused with a different body, or a request with it is in flight"
+                    },
+                    "422": {
+                        "description": "Validation error, or the registration was refused: `sold_out`, `participant_type_not_allowed`, `email_already_registered`, `already_registered`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "code": {
+                                            "type": "string"
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "request_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
                     }
                 },
                 "security": [

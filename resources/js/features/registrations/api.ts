@@ -1,8 +1,16 @@
-import { api, toApiError } from '@/lib/api';
+import { ApiRequestError, api, toApiError } from '@/lib/api';
+import { randomId } from '@/lib/id';
 import type { PaginatedResponse } from '@/lib/pagination';
 import { unwrap } from '@/lib/pagination';
 import type { SortParams } from '@/lib/sorting';
-import type { Registration, RegistrationStatus, UpdateRegistrationPayload } from './types';
+import type {
+    CollectCashPayload,
+    CreateRegistrationPayload,
+    Registration,
+    RegistrationPayment,
+    RegistrationStatus,
+    UpdateRegistrationPayload,
+} from './types';
 
 export interface RegistrationFilters extends SortParams {
     search?: string;
@@ -50,5 +58,42 @@ export async function deleteRegistration(ulid: string): Promise<void> {
         await api.delete(`/admin/registrations/${ulid}`);
     } catch (e) {
         throw new Error(toApiError(e).message);
+    }
+}
+
+/**
+ * Registers somebody at the desk. Creates the record and a `pending` cash
+ * payment; it does **not** take the money — `collectCash()` does that, and
+ * that is what issues the ticket and sends the confirmation.
+ *
+ * The Idempotency-Key is generated here, once per submission, so a
+ * double-tapped button replays the first response rather than creating a
+ * second registration and a second cash liability.
+ *
+ * Throws ApiRequestError rather than a bare Error, because this endpoint's
+ * 422s are the ones worth reading: `already_registered` names the existing
+ * registration, and a validation failure names the field.
+ */
+export async function createRegistration(payload: CreateRegistrationPayload): Promise<Registration> {
+    try {
+        const { data } = await api.post('/admin/registrations', payload, {
+            headers: { 'Idempotency-Key': randomId() },
+        });
+        return unwrap<Registration>(data);
+    } catch (e) {
+        throw new ApiRequestError(e);
+    }
+}
+
+/**
+ * Records cash handed over and settles the payment, which queues the
+ * ticket and its email/SMS/WhatsApp confirmation.
+ */
+export async function collectCash(paymentUlid: string, payload: CollectCashPayload): Promise<RegistrationPayment> {
+    try {
+        const { data } = await api.post(`/admin/payments/${paymentUlid}/collect-cash`, payload);
+        return unwrap<RegistrationPayment>(data);
+    } catch (e) {
+        throw new ApiRequestError(e);
     }
 }

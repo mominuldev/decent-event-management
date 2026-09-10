@@ -235,6 +235,64 @@ class ComprehensivePermissionTest extends TestCase
         ])->assertStatus(200);
     }
 
+    public function test_registration_create_http(): void
+    {
+        $ticketType = TicketType::factory()->create([
+            'is_active' => true,
+            'allowed_participant_types' => [],
+            'quantity_total' => 100,
+            'quantity_sold' => 0,
+            'quantity_reserved' => 0,
+        ]);
+
+        $payload = [
+            'full_name' => 'Counter Walkup',
+            'full_name_bn' => 'কাউন্টার',
+            'father_name' => 'Karim Uddin',
+            'mobile' => '01799000123',
+            'gender' => 'male',
+            'occupation' => 'Teacher',
+            'current_address' => 'Dhaka',
+            'participant_type' => 'teacher',
+            'ticket_type_ulid' => $ticketType->ulid,
+            'participation_type' => 'single',
+            'adults_count' => 1,
+            'children_count' => 0,
+        ];
+
+        Sanctum::actingAs($this->volunteer, ['*'], 'web-admin');
+        $this->postJson(route('api.v1.admin.registrations.store'), $payload, [
+            'Idempotency-Key' => 'perm-deny-'.uniqid(),
+        ])->assertStatus(403);
+
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->postJson(route('api.v1.admin.registrations.store'), $payload, [
+            'Idempotency-Key' => 'perm-allow-'.uniqid(),
+        ])->assertStatus(201);
+    }
+
+    public function test_payment_collect_cash_http(): void
+    {
+        $registration = Registration::factory()->create(['status' => 'pending_payment']);
+        $payment = Payment::factory()->create([
+            'registration_id' => $registration->id,
+            'method' => 'cash',
+            'channel' => 'manual',
+            'status' => 'pending',
+            'amount_due_paisa' => 100000,
+        ]);
+
+        Sanctum::actingAs($this->volunteer, ['*'], 'web-admin');
+        $this->postJson(route('api.v1.admin.payments.collect-cash', ['payment' => $payment->ulid]), [
+            'amount_received_paisa' => 100000,
+        ])->assertStatus(403);
+
+        Sanctum::actingAs($this->eventManager, ['*'], 'web-admin');
+        $this->postJson(route('api.v1.admin.payments.collect-cash', ['payment' => $payment->ulid]), [
+            'amount_received_paisa' => 100000,
+        ])->assertStatus(200);
+    }
+
     public function test_payment_refund_http(): void
     {
         $payment = Payment::factory()->create(['status' => 'succeeded', 'amount_paid_paisa' => 100000]);

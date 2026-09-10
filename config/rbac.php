@@ -54,6 +54,12 @@ return [
         'payment.initiate',
         'payment.verify_manual',
         'payment.reject_manual',
+        // Taking cash at a desk. Separate from `payment.verify_manual`
+        // because they are different jobs: approving a bank transfer is
+        // back-office work done against a statement, collecting cash is
+        // front-of-house and may go to someone who should never be able to
+        // approve a transfer they cannot see the evidence for.
+        'payment.collect_cash',
         'payment.refund',
         'payment.view_transactions',
         'payment.view_raw_gateway_payload',
@@ -152,6 +158,7 @@ return [
 
             'payment.view_any', 'payment.view', 'payment.initiate',
             'payment.verify_manual', 'payment.reject_manual', 'payment.refund',
+            'payment.collect_cash',
             'payment.view_transactions', 'payment.reconcile', 'payment.export',
 
             'checkin.scan', 'checkin.admit', 'checkin.manual_override', 'checkin.undo',
