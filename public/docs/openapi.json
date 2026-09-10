@@ -6477,6 +6477,291 @@
                 ]
             }
         },
+        "/admin/reports/daily-sales": {
+            "get": {
+                "tags": [
+                    "Reports"
+                ],
+                "summary": "Daily takings, split into online and offline sales",
+                "description": "One row per day in the window, plus totals and a per-payment-method breakdown.\n\nA sale is **online** when its payment went through a gateway (`payments.channel = online`)\nand **offline** otherwise — counter cash and any other manually-settled payment. A payment\ncounts on the day it was paid, in the timezone named by the `report.timezone` setting, not\nthe day the registration was created. Refunds are reported against the day they were\nprocessed rather than folded back into the sale, so a day's takings never change after\nthe day has closed.\n\nEvery date in the window is returned, including days with no sales. With no `from`/`to`\nthe window is the last 30 days ending today.\n\nRequires `report.view_revenue`.",
+                "operationId": "566f19f5364770958e7b50d6f53f0f8e",
+                "parameters": [
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "description": "First day of the window, inclusive, in the reporting timezone.",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "description": "Last day of the window, inclusive.",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "ssc_batch_year",
+                        "in": "query",
+                        "description": "Only sales made by attendees of this SSC batch.",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "ticket_type_ulid",
+                        "in": "query",
+                        "description": "Only sales against this ticket type.",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Daily sales, newest day first.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "properties": {
+                                                "filters": {
+                                                    "description": "The window and filters actually applied, after defaults.",
+                                                    "properties": {
+                                                        "from": {
+                                                            "type": "string",
+                                                            "format": "date"
+                                                        },
+                                                        "to": {
+                                                            "type": "string",
+                                                            "format": "date"
+                                                        },
+                                                        "timezone": {
+                                                            "type": "string",
+                                                            "example": "Asia/Dhaka"
+                                                        },
+                                                        "ssc_batch_year": {
+                                                            "type": "integer",
+                                                            "nullable": true
+                                                        },
+                                                        "ticket_type_ulid": {
+                                                            "type": "string",
+                                                            "nullable": true
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "totals": {
+                                                    "description": "The same keys as a day row, summed across the window.",
+                                                    "type": "object"
+                                                },
+                                                "methods": {
+                                                    "description": "Takings per payment method, largest first.",
+                                                    "type": "array",
+                                                    "items": {
+                                                        "properties": {
+                                                            "method": {
+                                                                "type": "string",
+                                                                "example": "cash"
+                                                            },
+                                                            "channel": {
+                                                                "type": "string",
+                                                                "example": "manual"
+                                                            },
+                                                            "kind": {
+                                                                "type": "string",
+                                                                "enum": [
+                                                                    "online",
+                                                                    "offline"
+                                                                ]
+                                                            },
+                                                            "payments": {
+                                                                "type": "integer"
+                                                            },
+                                                            "paisa": {
+                                                                "type": "integer"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                },
+                                                "days": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "properties": {
+                                                            "date": {
+                                                                "type": "string",
+                                                                "format": "date"
+                                                            },
+                                                            "online_payments": {
+                                                                "type": "integer"
+                                                            },
+                                                            "online_paisa": {
+                                                                "type": "integer"
+                                                            },
+                                                            "online_persons": {
+                                                                "type": "integer"
+                                                            },
+                                                            "offline_payments": {
+                                                                "type": "integer"
+                                                            },
+                                                            "offline_paisa": {
+                                                                "type": "integer"
+                                                            },
+                                                            "offline_persons": {
+                                                                "type": "integer"
+                                                            },
+                                                            "total_payments": {
+                                                                "type": "integer"
+                                                            },
+                                                            "total_paisa": {
+                                                                "type": "integer"
+                                                            },
+                                                            "total_persons": {
+                                                                "type": "integer"
+                                                            },
+                                                            "refund_count": {
+                                                                "type": "integer"
+                                                            },
+                                                            "refunded_paisa": {
+                                                                "type": "integer"
+                                                            },
+                                                            "net_paisa": {
+                                                                "description": "Takings that day less refunds processed that day.",
+                                                                "type": "integer"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Missing report.view_revenue"
+                    },
+                    "422": {
+                        "description": "Invalid dates, or a window longer than 366 days"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/reports/daily-sales/export": {
+            "get": {
+                "tags": [
+                    "Reports"
+                ],
+                "summary": "Download the daily sales report as CSV, Excel or PDF",
+                "description": "Takes the same filters as `GET /admin/reports/daily-sales` and builds the file from\nexactly that report, so a download can never disagree with the screen it was launched\nfrom. Generated synchronously — the response *is* the file, not a queued job.\n\nThe three formats are different documents, not one document three times:\n\n- **csv** — one header row and one row per day, nothing else. No totals row and no\n  filter preamble: both would break a machine-readable file. Amounts are taka with two\n  decimals. The window is in the filename.\n- **xlsx** — a provenance block (window, day boundary, filters), the day grid with a\n  bold totals row, and a second sheet breaking takings down by payment method. Money\n  cells are numbers so `SUM()` works.\n- **pdf** — a printed takings sheet. Days with no activity are omitted and the header\n  says how many were left out.\n\nRequires `report.view_revenue` **and** the permission for the requested format\n(`report.export_csv`, `report.export_excel` or `report.export_pdf`). Both, because the\nformat permission governs taking files out of the system and the revenue permission\ngoverns seeing this data at all.",
+                "operationId": "76b66551b8efd7b1bddddd98dd6686af",
+                "parameters": [
+                    {
+                        "name": "format",
+                        "in": "query",
+                        "description": "File format.",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "csv",
+                                "xlsx",
+                                "pdf"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "description": "First day of the window, inclusive, in the reporting timezone.",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "description": "Last day of the window, inclusive.",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "ssc_batch_year",
+                        "in": "query",
+                        "description": "Only sales made by attendees of this SSC batch.",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "ticket_type_ulid",
+                        "in": "query",
+                        "description": "Only sales against this ticket type.",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The file, as an attachment. The filename carries the window and the generation timestamp.",
+                        "headers": {
+                            "Content-Disposition": {
+                                "description": "attachment; filename=\"daily-sales-2026-08-13_2026-09-11-20260911-104500.csv\"",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "content": {
+                            "application/octet-stream": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Missing report.view_revenue, or the permission for the requested format"
+                    },
+                    "422": {
+                        "description": "Invalid format or dates, or a window longer than 366 days"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/admin/reports/{reportKey}": {
             "get": {
                 "tags": [

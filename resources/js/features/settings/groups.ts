@@ -1,4 +1,4 @@
-import { Bell, CalendarDays, CreditCard, MessageSquare, Palette, ScanLine, Settings2, ShieldCheck, UserPlus, type LucideIcon } from 'lucide-react';
+import { BarChart3, Bell, CalendarDays, CreditCard, MessageSquare, Palette, ScanLine, Settings2, ShieldCheck, UserPlus, type LucideIcon } from 'lucide-react';
 import { titleCase } from '@/lib/format';
 
 interface GroupMeta {
@@ -51,6 +51,12 @@ const GROUP_META: Record<string, GroupMeta> = {
             'Whether staff sign-in needs an authenticator code as well as a password. Turning it on takes effect at the next login: anyone not yet enrolled is walked through setting up an authenticator before they can do anything else.',
         Icon: ShieldCheck,
     },
+    report: {
+        label: 'Reports',
+        description:
+            'Which local midnight closes a day in the daily sales report. Timestamps are stored in UTC, so this is what decides the date an evening sale is banked against.',
+        Icon: BarChart3,
+    },
     branding: {
         label: 'Branding',
         description: 'Logos, colours and copy shown across the public site.',
@@ -59,7 +65,7 @@ const GROUP_META: Record<string, GroupMeta> = {
 };
 
 /** Sections render in this order; anything unlisted follows, alphabetically. */
-const GROUP_ORDER = ['event', 'registration', 'payment', 'checkin', 'notification', 'sms', 'security', 'branding'];
+const GROUP_ORDER = ['event', 'registration', 'payment', 'checkin', 'notification', 'sms', 'report', 'security', 'branding'];
 
 export function groupMeta(group: string): GroupMeta {
     return GROUP_META[group] ?? { label: titleCase(group), description: '', Icon: Settings2 };

@@ -61,6 +61,10 @@ Route::get('notifications/sms-balance', [NotificationController::class, 'smsBala
 Route::apiResource('notifications', NotificationController::class)->only(['index', 'show']);
 Route::post('notifications/{notification:ulid}/resend', [NotificationController::class, 'resend'])->name('notifications.resend');
 
+// Registered before the `{reportKey}` binding, or `daily-sales` is swallowed
+// as a report key and answers the generic empty-array fallback instead.
+Route::get('reports/daily-sales', [ReportController::class, 'dailySales'])->name('reports.daily-sales');
+Route::get('reports/daily-sales/export', [ReportController::class, 'exportDailySales'])->name('reports.daily-sales.export');
 Route::get('reports/{reportKey}', [ReportController::class, 'show'])->name('reports.show');
 Route::post('reports/{reportKey}/export', [ReportController::class, 'export'])->name('reports.export');
 

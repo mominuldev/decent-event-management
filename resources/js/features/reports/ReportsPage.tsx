@@ -5,6 +5,7 @@ import { Badge, Button, Card, CardHeader, Select, Skeleton } from '@/components/
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useToast } from '@/components/Toast';
 import { formatGenericValue, titleCase } from '@/lib/format';
+import { DailySalesCard } from './DailySalesCard';
 import * as reportsApi from './api';
 import { REPORT_CATALOGUE, exportPermissionFor, type ExportFormat, type ReportExport, type ReportKey, type ReportRow } from './types';
 
@@ -126,6 +127,11 @@ export default function ReportsPage() {
                     Live report data with async exports to PDF, Excel, or CSV.
                 </p>
             </div>
+
+            {/* Its own card rather than a catalogue entry: it has a fixed
+                response shape and its own filters, so it does not go through
+                the generic row renderer the three catalogue reports share. */}
+            {can('report.view_revenue') && <DailySalesCard />}
 
             {visible.length === 0 ? (
                 <Card className="grid place-items-center px-6 py-16 text-center">

@@ -395,4 +395,19 @@ return [
         'default' => false,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Reports
+    |--------------------------------------------------------------------------
+    */
+
+    'report.timezone' => [
+        'group' => 'report',
+        'type' => 'string',
+        'is_public' => false,
+        'label' => 'Reporting day boundary timezone',
+        'description' => 'Which local midnight ends a day in the daily sales report. The app stores every timestamp in UTC, so leaving this at UTC would close each day at 6am Dhaka and bank an evening sale on the wrong date.',
+        'default' => 'Asia/Dhaka',
+    ],
+
 ];
