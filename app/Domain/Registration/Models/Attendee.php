@@ -113,6 +113,43 @@ class Attendee extends AuthUserBase
     }
 
     /**
+     * Confirm — or withdraw confirmation of — this attendee's identity.
+     *
+     * All three columns move together and none of them is `$fillable`: who
+     * vouched for an attendee is an authority fact, and an authority column
+     * must not be settable by any array that happens to carry the key (same
+     * discipline as `qr_codes.image_media_id` and `Refund`'s approval
+     * columns). Before this existed, `is_verified` was validated by
+     * `UpdateAttendeeRequest` and then silently dropped by mass assignment,
+     * so the admin console's Verified switch saved successfully and changed
+     * nothing at all.
+     *
+     * Withdrawing clears the attribution rather than leaving it behind: a row
+     * reading "not verified, verified by Rahim on 3 May" is a lie, and this
+     * table is read during reconciliation.
+     */
+    public function applyVerification(bool $verified, ?User $by = null): void
+    {
+        if ($verified === (bool) $this->is_verified) {
+            return;
+        }
+
+        $this->forceFill($verified
+            ? [
+                'is_verified' => true,
+                'verified_by_user_id' => $by?->getKey(),
+                'verified_at' => now(),
+            ]
+            : [
+                'is_verified' => false,
+                'verified_by_user_id' => null,
+                'verified_at' => null,
+            ]);
+
+        $this->save();
+    }
+
+    /**
      * @return BelongsTo<self, $this>
      */
     public function mergedInto(): BelongsTo

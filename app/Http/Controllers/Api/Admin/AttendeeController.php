@@ -101,6 +101,7 @@ class AttendeeController extends Controller
                                         new OAT\Property(property: 'emergency_contact_phone', type: 'string', nullable: true),
                                         new OAT\Property(property: 'notes', type: 'string', nullable: true),
                                         new OAT\Property(property: 'is_verified', type: 'boolean'),
+                                        new OAT\Property(property: 'verified_at', type: 'string', format: 'date-time', nullable: true),
                                         new OAT\Property(property: 'profile_photo_url', type: 'string', nullable: true),
                                         new OAT\Property(property: 'profile_photo_thumb_url', type: 'string', nullable: true),
                                         new OAT\Property(property: 'created_at', type: 'string', format: 'date-time'),
@@ -272,6 +273,7 @@ class AttendeeController extends Controller
                                     new OAT\Property(property: 'emergency_contact_phone', type: 'string', nullable: true),
                                     new OAT\Property(property: 'notes', type: 'string', nullable: true),
                                     new OAT\Property(property: 'is_verified', type: 'boolean'),
+                                    new OAT\Property(property: 'verified_at', type: 'string', format: 'date-time', nullable: true),
                                     new OAT\Property(property: 'profile_photo_url', type: 'string', nullable: true),
                                     new OAT\Property(property: 'profile_photo_thumb_url', type: 'string', nullable: true),
                                     new OAT\Property(property: 'created_at', type: 'string', format: 'date-time'),
@@ -357,6 +359,7 @@ class AttendeeController extends Controller
                                     new OAT\Property(property: 'email', type: 'string', format: 'email', nullable: true),
                                     new OAT\Property(property: 'participant_type', type: 'string'),
                                     new OAT\Property(property: 'is_verified', type: 'boolean'),
+                                    new OAT\Property(property: 'verified_at', type: 'string', format: 'date-time', nullable: true),
                                 ],
                                 type: 'object'
                             ),
@@ -373,7 +376,20 @@ class AttendeeController extends Controller
     public function update(UpdateAttendeeRequest $request, Attendee $attendee): AttendeeResource
     {
         $oldData = $attendee->toArray();
-        $attendee->update($request->validated());
+        $data = $request->validated();
+
+        // `is_verified` is deliberately not `$fillable` — see
+        // Attendee::applyVerification(), which moves it together with the
+        // attribution columns the audit trail depends on.
+        $verified = array_key_exists('is_verified', $data) ? (bool) $data['is_verified'] : null;
+        unset($data['is_verified']);
+
+        $attendee->update($data);
+
+        if ($verified !== null) {
+            $actor = $request->user();
+            $attendee->applyVerification($verified, $actor instanceof User ? $actor : null);
+        }
 
         ActivityLog::create([
             'log_name' => 'attendee',

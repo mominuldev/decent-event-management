@@ -43,6 +43,9 @@ class AttendeeResource extends JsonResource
             'emergency_contact_phone' => $this->emergency_contact_phone,
             'notes' => $this->notes,
             'is_verified' => $this->is_verified,
+            // Deliberately admin-only: PublicAttendeeResource publishes the
+            // boolean and nothing about who vouched for it or when.
+            'verified_at' => $this->verified_at?->toISOString(),
             // Short-TTL signed URLs (docs/06 §6.4), not the raw private-disk
             // path — `profilePhoto` lazy-loads here if a caller hasn't
             // eager-loaded it, which is fine for a single-resource response.

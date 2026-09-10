@@ -198,6 +198,11 @@
                                                     "is_verified": {
                                                         "type": "boolean"
                                                     },
+                                                    "verified_at": {
+                                                        "type": "string",
+                                                        "format": "date-time",
+                                                        "nullable": true
+                                                    },
                                                     "profile_photo_url": {
                                                         "type": "string",
                                                         "nullable": true
@@ -483,6 +488,11 @@
                                                 "is_verified": {
                                                     "type": "boolean"
                                                 },
+                                                "verified_at": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "nullable": true
+                                                },
                                                 "profile_photo_url": {
                                                     "type": "string",
                                                     "nullable": true
@@ -690,6 +700,11 @@
                                                 },
                                                 "is_verified": {
                                                     "type": "boolean"
+                                                },
+                                                "verified_at": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "nullable": true
                                                 }
                                             },
                                             "type": "object"
@@ -9089,6 +9104,11 @@
                                         },
                                         "is_verified": {
                                             "type": "boolean"
+                                        },
+                                        "verified_at": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "nullable": true
                                         },
                                         "profile_photo_url": {
                                             "type": "string",

@@ -478,7 +478,9 @@ function AttendeeDetail({ ulid, onClose }: { ulid: string; onClose: () => void }
                                 <div className="min-w-0">
                                     <div className="text-[13px] font-semibold text-text">Verified attendee</div>
                                     <p className="mt-0.5 text-[12px] text-text-muted">
-                                        Their identity has been confirmed by a member of staff.
+                                        {data.verified_at
+                                            ? `Identity confirmed by staff on ${fullDate(data.verified_at)}.`
+                                            : 'Their identity has been confirmed by a member of staff.'}
                                     </p>
                                 </div>
                                 <Switch

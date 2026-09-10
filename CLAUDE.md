@@ -1243,6 +1243,70 @@ SMS (billed against the prepaid balance) and a real email to whatever address th
 carries. The verification above sent one of each. Use an address and a number you own, or run
 the check against the test database instead.
 
+### ✅ The Verified attendee switch actually verifies now — 2026-09-11
+
+Reported as "I register but the backend attendee list shows Unverified". Two
+separate things, one of which was a real bug.
+
+**`attendees.is_verified` is staff identity confirmation, not a signal about
+the registration.** docs/03 §attendees defines it as *"Alumni identity confirmed
+by an Event Manager"* — it has nothing to do with payment, and nothing to do
+with confirming an email address or a mobile number. Nothing in the
+registration or payment path sets it and nothing should: `CreateRegistration`,
+`VerifyPayment`, `CollectCashPayment` and `IssueTicket` all leave it alone, so a
+fully paid, ticketed attendee reads `Unverified` until a human says otherwise.
+That part was working as designed.
+
+**The switch that is supposed to say otherwise did nothing.** `is_verified` is
+not in `Attendee::$fillable`, and `AttendeeController::update()` does
+`$attendee->update($request->validated())` — so mass assignment dropped it in
+silence, the endpoint answered 200, and the badge stayed `Unverified`. The
+column could only be changed with a direct `UPDATE`, which skips the audit
+trail entirely. This is the fourth appearance of the non-fillable-column trap
+this file already documents for `qr_codes.image_media_id`, `tickets.pdf_media_id`
+and `Refund`'s approval columns; the pattern is always the same — a silent drop
+with no error, on a save that reports success.
+
+- **`Attendee::applyVerification(bool, ?User)` moves all three columns
+  together.** `verified_by_user_id` and `verified_at` had never been written by
+  any code path at all, so even a working toggle would have left the record
+  saying *that* it was verified and nothing about *who* vouched for it — which
+  is the whole point of the row, per docs/05 §"Approval is a logged, attributed
+  act". Withdrawing verification **clears** the attribution rather than leaving
+  it behind: a row reading "not verified, verified by Rahim on 3 May" is a lie,
+  and this table is read during reconciliation.
+- **It stays outside `$fillable`, deliberately** — the fix is not to add it
+  there. An authority column must not be settable by any array that happens to
+  carry the key, same discipline as `Refund`'s approval columns. The controller
+  pulls it out of `validated()` explicitly and hands it to the model method.
+- **Re-saving the state it already holds is a no-op.** The form sends
+  `is_verified` on every save, so restamping on each PATCH would move the
+  attribution to whoever last edited a note and destroy the original date.
+  Two tests pin this and the unrelated-edit case.
+- **No new permission.** It stays on `attendee.update` (Event Manager holds it),
+  because a fresh entry in `config/rbac.php` would 403 for everyone including
+  Super Admin until someone remembered `db:seed --class=RbacSeeder` on the host
+  — the footgun `attendee.export` and `payment.collect_cash` both hit.
+- **The audit trail comes from the endpoint's existing before/after diff**,
+  which now actually shows the change; a second `ActivityLog` row for one
+  boolean on the same request would be duplicate noise. (This does not close
+  D8 — that log still lives in the controller.)
+- `verified_at` is published on `AttendeeResource` (admin and the attendee's own
+  `/attendee/me`) so the dialog can say when it was confirmed rather than only
+  that it was. **Not** on `PublicAttendeeResource`, whose key set is asserted
+  exactly: the directory publishes the boolean and nothing about who vouched
+  for it.
+- 8 tests in `tests/Feature/Admin/AttendeeVerificationTest.php`; 4 of them were
+  confirmed to fail against the previous code. Full suite **840 passing / 2
+  skipped**, Pint and PHPStan level 8 clean, SPA typecheck + build clean.
+  OpenAPI regenerated (still 124 paths — a response-shape change).
+
+**Not verified against the running app**, deliberately: the check is a write to
+the attendee table on a dev database holding real records, and the
+fail-against-old-code run is stronger evidence than one manual click. The
+existing rows on that database are untouched — anyone already marked verified
+keeps a NULL `verified_at`, since nothing backfills what was never recorded.
+
 ### 🚨 External Dependencies (start during Phase 2!)
 - [ ] **PayStation live merchant account** — the only gateway relationship now needed. Sandbox is self-service (credentials are published in their docs and are already the defaults here), so nothing is blocked until go-live; what is needed is a live `PAYSTATION_MERCHANT_ID`/`PAYSTATION_MERCHANT_PASSWORD` plus the IPN URL registered in their dashboard. See [§PayStation replaces SSLCommerz](#-paystation-replaces-sslcommerz--2026-09-10).
 - [ ] ~~Payment gateway merchant applications (bKash, Nagad, Rocket, SSLCommerz)~~ — **no longer on the critical path** (2026-09-10). PayStation aggregates all of these on one hosted checkout, so direct adapters are now an optional optimisation rather than a prerequisite for launch.

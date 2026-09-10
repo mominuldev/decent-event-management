@@ -25,6 +25,8 @@ export interface Attendee {
     emergency_contact_phone: string | null;
     notes: string | null;
     is_verified: boolean;
+    /** When staff confirmed the identity; null while unverified. */
+    verified_at: string | null;
     profile_photo_url?: string | null;
     /** Small rendition for avatars; falls back server-side to the full photo. */
     profile_photo_thumb_url?: string | null;
