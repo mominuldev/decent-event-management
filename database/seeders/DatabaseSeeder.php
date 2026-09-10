@@ -13,10 +13,10 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             RbacSeeder::class,
-            EventSettingSeeder::class,
+//            EventSettingSeeder::class,
             TicketTypeSeeder::class,
-            EventSessionSeeder::class,
-            GateSeeder::class,
+//            EventSessionSeeder::class,
+//            GateSeeder::class,
             // Before ContentSeeder: that seeder's menu pass resolves menu
             // items to pages by slug, and `home` is created here.
             HomePageSeeder::class,
@@ -24,7 +24,7 @@ class DatabaseSeeder extends Seeder
             EventPageSeeder::class,
             ContentSeeder::class,
             NotificationTemplateSeeder::class,
-            DummyDataSeeder::class,
+//            DummyDataSeeder::class,
             // Last, and its own class so `db:seed --class=SuperAdminSeeder`
             // creates the account without the demo data above it.
             SuperAdminSeeder::class,
