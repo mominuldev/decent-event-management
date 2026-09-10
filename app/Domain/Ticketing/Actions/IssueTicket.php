@@ -27,10 +27,14 @@ class IssueTicket
                 + $registration->children_count
                 + $registration->infants_count;
 
-            $batchYear = $attendee?->ssc_batch_year !== null ? (string) $attendee->ssc_batch_year : 'XXXX';
-
-            $seq = str_pad((string) $this->ticketNumbers->next((int) $ticketType?->id, $batchYear), 5, '0', STR_PAD_LEFT);
-            $ticketNumber = "DEC100-{$ticketType?->code}-{$batchYear}-{$seq}";
+            // `CEN-00001`, since 2026-09-11. It was
+            // `DEC100-CEN-2005-00001`: the `DEC100-` prefix said nothing
+            // (every ticket carried it) and the batch year is already on
+            // the row as `holder_batch_year`, so neither earned the 12
+            // characters they cost — on a ticket SMS billed by the
+            // 160-character GSM-7 segment, and quoted down a phone.
+            $seq = str_pad((string) $this->ticketNumbers->next((int) $ticketType?->id), 5, '0', STR_PAD_LEFT);
+            $ticketNumber = "{$ticketType?->code}-{$seq}";
 
             $ticket = Ticket::create([
                 'registration_id' => $registration->id,

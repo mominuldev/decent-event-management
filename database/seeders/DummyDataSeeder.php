@@ -121,7 +121,7 @@ class DummyDataSeeder extends Seeder
             // Create Issued Ticket
             $ticket = Ticket::create([
                 'ulid' => (string) Str::ulid(),
-                'ticket_number' => 'DEC100-'.$ticketType->code.'-'.now()->year.'-'.str_pad((string) $i, 5, '0', STR_PAD_LEFT),
+                'ticket_number' => $ticketType->code.'-'.str_pad((string) $i, 5, '0', STR_PAD_LEFT),
                 'registration_id' => $registration->id,
                 'attendee_id' => $attendee->id,
                 'ticket_type_id' => $ticketType->id,

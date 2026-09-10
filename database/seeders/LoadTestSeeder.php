@@ -200,7 +200,7 @@ class LoadTestSeeder extends Seeder
                 $ticketSeq++;
                 $ticketRows[] = [
                     'ulid' => (string) Str::ulid(),
-                    'ticket_number' => 'DEC100-GEN-'.now()->year.'-'.str_pad((string) $ticketSeq, 5, '0', STR_PAD_LEFT),
+                    'ticket_number' => 'GEN-'.str_pad((string) $ticketSeq, 5, '0', STR_PAD_LEFT),
                     'registration_id' => $registration->id,
                     'attendee_id' => $registration->attendee_id,
                     'ticket_type_id' => $registration->ticket_type_id,

@@ -186,7 +186,7 @@ class TicketEmailTest extends TestCase
     public function test_bangla_renders_its_own_numerals_except_in_the_ticket_number(): void
     {
         $ticket = $this->ticketWithQr([
-            'ticket_number' => 'DEC100-CEN-2005-00042',
+            'ticket_number' => 'CEN-00042',
             'admits_total' => 4,
             'holder_batch_year' => 1993,
         ]);
@@ -198,7 +198,7 @@ class TicketEmailTest extends TestCase
 
         // The number is quoted down a phone, typed into the admin console and
         // matched against a printed page — it stays Latin.
-        $this->assertStringContainsString('DEC100-CEN-2005-00042', $html);
+        $this->assertStringContainsString('CEN-00042', $html);
     }
 
     public function test_a_ticket_with_no_qr_row_sends_without_an_empty_panel(): void

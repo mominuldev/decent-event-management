@@ -5,11 +5,13 @@ namespace App\Domain\Ticketing\Services;
 use Illuminate\Support\Facades\DB;
 
 /**
+ * The counter behind a ticket number's `{TYPE}-{SEQ}` tail.
+ *
  * Replaces the interim `Ticket::…->lockForUpdate()->count() + 1` counter
  * (full-scans `tickets` on every issuance and can collide under
- * concurrency — docs/08 Phase 2 review). Locks one narrow row per
- * (ticket type, batch) pair instead of the whole `tickets` table, so
- * issuing tickets for different types/batches never blocks each other.
+ * concurrency — docs/08 Phase 2 review). Locks one narrow row per ticket
+ * type instead of the whole `tickets` table, so issuing tickets for
+ * different types never blocks each other.
  *
  * The idempotent upsert only guarantees the counter row exists; MySQL's
  * `LAST_INSERT_ID(expr)` trick to read the post-increment value back from
@@ -23,8 +25,26 @@ use Illuminate\Support\Facades\DB;
  */
 class TicketNumberGenerator
 {
-    public function next(int $ticketTypeId, string $batchLabel): int
+    /**
+     * Ticket numbers dropped their batch-year segment on 2026-09-11
+     * (`DEC100-CEN-2005-00001` -> `CEN-00001`), so one counter per ticket
+     * type is now the whole of what keeps a number unique — a per-batch
+     * counter would mint `CEN-00001` once for every batch year.
+     *
+     * `ticket_number_sequences.batch_label` is kept rather than dropped:
+     * the pre-2026-09-11 rows record where each old per-batch series got
+     * to, which is the only evidence of how the numbers already printed
+     * on issued tickets were allocated. Pinning it to a constant here,
+     * instead of leaving it a parameter, is what stops a future caller
+     * reintroducing a per-batch scope and colliding on
+     * `tickets.uk_tickets_number`.
+     */
+    public const string SCOPE_ALL_BATCHES = 'ALL';
+
+    public function next(int $ticketTypeId): int
     {
+        $batchLabel = self::SCOPE_ALL_BATCHES;
+
         return DB::transaction(function () use ($ticketTypeId, $batchLabel): int {
             DB::statement(
                 'INSERT INTO ticket_number_sequences (ticket_type_id, batch_label, seq, created_at, updated_at)

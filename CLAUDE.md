@@ -640,7 +640,7 @@ Every notification this system sends is now Bangla by default, end to end: the t
 - **`config/notifications.php` is the single decision.** `locales.default` (`NOTIFICATION_LOCALE`, `bn`) picks both the `notification_templates` row and the `lang/{locale}/emails.php` file the shell renders from. Any channel may override it — and `sms` is the one worth thinking about before you do: GSM-7 fits 160 characters per segment and Unicode only 70, so Bangla SMS costs roughly two to three times the segments for the same message. `SmsSegmentCalculator` already counts that correctly; the config comment says so at the place someone would change it.
 - **A missing translation no longer silences a whole class of notification.** `QueueNotification` writes *no outbox row at all* when it cannot find a template, so one untranslated (key, channel) pair would have taken that notification off the air with nothing in the delivery log to show for it. It now falls back to `locales.fallback_locale` and — this is the load-bearing half — stores **the locale it actually rendered**, not the one it asked for, so a resend reproduces the message that was sent.
 - **The shell's own words live in `lang/{en,bn}/emails.php`**, never in the view or the presentation. `NotificationMail` calls `$this->locale($bodyLocale)`, so Laravel wraps the whole render in `withLocale` and every `__()` resolves correctly. `MailDriver` sets the locale around `mailPresentation()` too, because the presentation is assembled *before* the mailable renders — without that, a Bangla email arrives with English gate details in the card beside its Bangla body. `test_the_shell_speaks_the_notification_own_language` renders the same ticket both ways and asserts neither language leaks into the other.
-- **Bengali numerals are a second step, and a selective one.** Carbon's `bn` locale translates month names and meridiems but leaves digits Latin, so `App\Domain\Shared\Support\BanglaNumerals` finishes the job — applied to dates, times, admit counts and batch years, and **deliberately not** to the ticket number. An identifier is not a number: it is quoted down a phone, typed into the admin console and matched against a printed page, and `DEC100-CEN-২০০৫-০০০০১` is unusable for all three. Same reasoning the attendee-directory PDF already applies to phone numbers.
+- **Bengali numerals are a second step, and a selective one.** Carbon's `bn` locale translates month names and meridiems but leaves digits Latin, so `App\Domain\Shared\Support\BanglaNumerals` finishes the job — applied to dates, times, admit counts and batch years, and **deliberately not** to the ticket number. An identifier is not a number: it is quoted down a phone, typed into the admin console and matched against a printed page, and `CEN-০০০০১` is unusable for all three. Same reasoning the attendee-directory PDF already applies to phone numbers.
 - **The greeting uses the reader's Bangla name.** Every outbox writer now passes `full_name_bn` alongside `full_name` (via the new `Attendee::banglaName()`, which falls back to the Latin name — the public form has required a Bangla name since 2026-08-16, but admin- and import-created rows still do not), and the `bn` template bodies interpolate that one. Greeting somebody by an empty string is the failure that fallback exists to prevent, and there is a test for it. The ticket card's attendee and ticket-type rows resolve the same way, in whichever direction the locale points.
 - `APP_LOCALE` is untouched and stays `en` — the admin console, the API and its error envelopes are unchanged. Only notifications moved.
 - **The seeded English templates stay complete.** They are the fallback, and a half-populated `en` set would surface as a silently-dropped notification rather than as an obvious gap.
@@ -1306,6 +1306,82 @@ the attendee table on a dev database holding real records, and the
 fail-against-old-code run is stronger evidence than one manual click. The
 existing rows on that database are untouched — anyone already marked verified
 keeps a NULL `verified_at`, since nothing backfills what was never recorded.
+
+### ✅ Ticket numbers are `CEN-00001` — 2026-09-11
+
+`DEC100-CEN-2005-00001` (21 characters) became **`CEN-00001`** (9): the ticket
+type's code and a 5-digit zero-padded sequence, nothing else.
+
+**Both dropped segments were dead weight.** `DEC100-` carried no information —
+*every* ticket in the system had it — and the batch year is already on the row
+as `tickets.holder_batch_year`, which is what the printed ticket and the gate
+list render. Neither earned the 12 characters they cost, and the number is
+spent in three places where length is real: the one-segment ticket SMS, the A5
+PDF, and being read down a phone.
+
+**The number is the human handle and never the credential.** Admission verifies
+the Ed25519 signature over the ticket's **ULID** (`DTM1.<ulid>.…`); the number
+is only searched in the admin console, printed, quoted and used as the media
+filename. Shortening it changes nothing about what admits anyone.
+
+- **The counter's scope had to move with it, and that is the load-bearing
+  part.** `TicketNumberGenerator` counted per (ticket type, batch year), so
+  every batch year had its own `00001` — fine while the year was *in* the
+  string, and a straight duplicate once it is not. It now counts per ticket
+  type, via `TicketNumberGenerator::SCOPE_ALL_BATCHES`. `next()` no longer
+  takes a batch argument at all: pinning the scope inside the generator is what
+  stops a future caller reintroducing a per-batch counter and hitting
+  `tickets.uk_tickets_number` raw. `ticket_number_sequences.batch_label` is
+  **kept**, not dropped — the pre-2026-09-11 rows are the only record of how
+  far each old series got, and the numbers they allocated are printed on
+  tickets people are holding.
+- **Contention rose, deliberately and by a known amount.** `CEN` is one type
+  holding 12,000 tickets that previously spread across ~50 batch-year rows;
+  every issuance now locks the same row. The transaction is two statements
+  long and issuance is queued on the `tickets` lane, so this is fine — but it
+  is no longer "different batches never block each other", and that is the
+  thing to look at first if issuance ever backs up.
+- **Migration `2026_09_11_100000_*` seeds the new per-type counter from the sum
+  of the old per-batch ones**, so a database that has already issued tickets
+  continues the series instead of restarting. Nothing breaks without it — the
+  two formats are different strings, so the unique index was never at risk —
+  what it avoids is a ticket list showing `DEC100-CEN-2005-00001` beside a
+  fresh `CEN-00001` and inviting someone to conclude the numbers are not
+  unique. It uses `insertOrIgnore`, so re-running never rewinds a live counter,
+  and `down()` is deliberately **empty**: deleting the row would re-mint
+  numbers already printed.
+- **Already-issued tickets keep their old numbers.** Tickets are immutable, the
+  unique index does not care about shape, and both formats coexist. Only
+  tickets issued from this deploy forward are short.
+- 5 tests in `tests/Feature/Ticketing/TicketNumberFormatTest.php` (the format
+  itself, two batch years sharing one series, no `XXXX` placeholder left
+  behind, per-type series, and `holder_batch_year` still snapshotted). **Four
+  of the five were confirmed to fail against the old code**, and the second
+  one is the reason the scope change is not optional: under the old generator
+  it minted three tickets numbered `DEC100-CEN-2005-00001`,
+  `DEC100-CEN-1998-00001` and `DEC100-CEN-XXXX-00001` — three `00001`s, which
+  the short format would collapse into one duplicated string. The fifth passes
+  either way by design: it guards the batch year still being *on the row* now
+  that it has left the number. Plus a
+  rewritten `TicketNumberGeneratorTest` — its
+  `test_each_batch_label_has_its_own_independent_counter` asserted exactly the
+  behaviour that would now mint duplicates, so it was replaced by its inverse
+  rather than deleted.
+
+**What it buys on SMS, measured rather than assumed:** the seeded ticket
+confirmation renders at **132 characters against 144**, both still one GSM-7
+segment. So no segment is saved *today* — what changes is headroom, from 16
+characters to 28. That matters because `event.name_en` and `event.venue_en` are
+seeded deliberately short (`NHS Centennial`, `School Campus`) precisely because
+there was so little room; a client renaming either one now has twice as much
+before the message tips to two segments and doubles the bill across 12,000
+sends.
+
+**Not verified against the running app**, deliberately — issuing a ticket on
+this dev box really sends an SMS against the prepaid balance and a real email
+(see the warning in the counter-sales section). The format is proven by tests
+that fail against the old code, and the migration was exercised against a
+simulated already-issued database.
 
 ### 🚨 External Dependencies (start during Phase 2!)
 - [ ] **PayStation live merchant account** — the only gateway relationship now needed. Sandbox is self-service (credentials are published in their docs and are already the defaults here), so nothing is blocked until go-live; what is needed is a live `PAYSTATION_MERCHANT_ID`/`PAYSTATION_MERCHANT_PASSWORD` plus the IPN URL registered in their dashboard. See [§PayStation replaces SSLCommerz](#-paystation-replaces-sslcommerz--2026-09-10).

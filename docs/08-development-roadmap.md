@@ -481,7 +481,7 @@ Implement the signing scheme, ticket assets, and the manifest endpoint the scann
 - [x] Payload encoding/decoding with version support ([06 §6.5](06-security-architecture.md#65-qr-code-security)) — `QrPayload`
 - [x] QR image rendering: ECC level M, 512px, generous quiet zone — `RenderTicketQrImage`
 - [x] Bilingual A5 PDF ticket with photo — `GenerateTicketPdf`, rendered by headless Chrome via `HtmlToPdfRenderer` since 2026-08-21. Conjunct shaping *and* the extractable text layer are both correct now; under mpdf the shaping looked right on the page while the text layer silently dropped every conjunct (see CLAUDE.md's Phase 6 close-out). Bold Bangla works, which it did not under mpdf's bundled FreeSerifBold. **Still not print-tested on low-quality output** — needs a real printer
-- [x] `TicketNumberGenerator` with the `DEC100-{TYPE}-{BATCH}-{SEQ}` format — race-safety proven under real concurrent-process load, not just reasoned about
+- [x] `TicketNumberGenerator` — race-safety proven under real concurrent-process load, not just reasoned about. Shipped as `DEC100-{TYPE}-{BATCH}-{SEQ}`; shortened to `{TYPE}-{SEQ}` (`CEN-00001`) on 2026-09-11, which also moved the counter's scope from (type, batch year) to type alone
 - [x] Void, reissue, and revocation flows with `manifest_version` bumping — predates this slice (`TicketController::void`/`reissue` already did this); unchanged here
 - [x] **Manifest endpoint** with ETag-based delta sync — the scanner's dependency; now a real `?since=` delta plus published signing keys
 - [~] Key rotation procedure — documented and tooled (`qr-signing:generate-key`, multi-key `QrSigner`, CLAUDE.md checklist); **not rehearsed on staging**, since no staging environment exists here

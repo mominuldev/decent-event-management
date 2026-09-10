@@ -180,7 +180,7 @@ erDiagram
     TICKETS {
         bigint id PK
         char ulid UK "carried in the QR payload"
-        string ticket_number UK "DEC100-ALM-1998-04217"
+        string ticket_number UK "ALM-04217"
         bigint registration_id FK
         bigint attendee_id FK
         bigint ticket_type_id FK

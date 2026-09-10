@@ -18,7 +18,7 @@ class TicketFactory extends Factory
     public function definition(): array
     {
         return [
-            'ticket_number' => 'DEC100-ALM-'.fake()->year().'-'.fake()->unique()->numerify('#####'),
+            'ticket_number' => 'ALM-'.fake()->unique()->numerify('#####'),
             'registration_id' => Registration::factory(),
             'attendee_id' => Attendee::factory(),
             'ticket_type_id' => TicketType::factory(),

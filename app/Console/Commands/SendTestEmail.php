@@ -25,7 +25,7 @@ use Throwable;
  * It does not write an outbox row and does not touch the kill switches —
  * this checks the transport, not the notification pipeline on top of it.
  *
- * `--ticket=DEC100-...` sends the real confirmation email for an existing
+ * `--ticket=CEN-00001` sends the real confirmation email for an existing
  * ticket instead of the plain probe — same shell, same inline QR — so the
  * message that reaches a gate can be checked in a real inbox without
  * pushing another registration through payment.

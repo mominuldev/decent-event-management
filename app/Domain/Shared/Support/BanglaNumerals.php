@@ -12,7 +12,7 @@ namespace App\Domain\Shared\Support;
  * Deliberately opt-in per call rather than applied to everything. An
  * identifier is not a number: a ticket number is quoted down a phone,
  * typed into the admin console and matched against a printed page, and
- * `DEC100-CEN-২০০৫-০০০০১` is unusable for all three. Convert dates,
+ * `CEN-০০০০১` is unusable for all three. Convert dates,
  * counts and durations; leave references, codes and money alone.
  */
 class BanglaNumerals

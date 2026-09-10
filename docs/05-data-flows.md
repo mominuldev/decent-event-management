@@ -257,7 +257,7 @@ sequenceDiagram
     EV->>J1: dispatch (payments queue)
     J1->>DB: Load registration + guests + ticket_type
     J1->>J1: admits_total = adults + children
-    J1->>J1: ticket_number = DEC100-{TYPE}-{BATCH}-{SEQ}
+    J1->>J1: ticket_number = {TYPE}-{SEQ}
 
     rect rgb(240,246,242)
     Note over J1,DB: Transaction
@@ -285,12 +285,23 @@ sequenceDiagram
 ### Ticket number format
 
 ```
-DEC100-ALM-1998-04217
-│      │   │    └── zero-padded per-type sequence
-│      │   └────── SSC batch year (0000 for non-alumni)
-│      └────────── ticket_type.code
-└───────────────── event prefix
+ALM-04217
+│   └── zero-padded 5-digit sequence, one series per ticket type
+└────── ticket_type.code
 ```
+
+Shortened on 2026-09-11 from `DEC100-ALM-1998-04217`. The `DEC100-` prefix
+carried no information — every ticket in the system had it — and the SSC
+batch year is already on the row as `tickets.holder_batch_year`, so neither
+earned the 12 characters they cost in the one-segment ticket SMS, on the
+printed ticket, and when the number is read down a phone.
+
+The number is the human handle only: admission verifies the Ed25519
+signature over the ticket's **ULID**, never this string. Because the batch
+year is no longer in it, `TicketNumberGenerator` counts per ticket type
+rather than per (type, batch year) — a per-batch counter would now mint
+`ALM-00001` once for every batch year. Numbers issued before the change keep
+their old form; the two shapes coexist under `tickets.uk_tickets_number`.
 
 Human-readable and diagnostic: a volunteer reading a number aloud at the gate immediately knows the person's category and batch, which matters when someone's phone is dead and the manual override path is being used. The unguessable identifier is the ULID; the ticket number is for humans and is never sufficient for admission on its own.
 

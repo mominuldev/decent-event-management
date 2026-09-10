@@ -277,7 +277,7 @@ Roles and permissions are **seeded from versioned config**, never created at run
 |---|---|:--:|---|
 | `id` | BIGINT UNSIGNED PK | | |
 | `ulid` | CHAR(26) | | Unique — **this is what the QR payload carries** |
-| `ticket_number` | VARCHAR(40) | | Unique: `DEC100-ALM-1998-04217` |
+| `ticket_number` | VARCHAR(40) | | Unique: `ALM-04217` — `{ticket_type.code}-{5-digit sequence}` since 2026-09-11, was `DEC100-ALM-1998-04217` |
 | `registration_id` | BIGINT UNSIGNED FK | | → `registrations.id` |
 | `attendee_id` | BIGINT UNSIGNED FK | | → `attendees.id` — denormalised for gate lookup |
 | `ticket_type_id` | BIGINT UNSIGNED FK | | → `ticket_types.id` |
