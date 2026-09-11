@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Plus, RefreshCw, Search, Trash2, XCircle } from 'lucide-react';
+import { Plus, RefreshCw, Search, Send, Trash2, XCircle } from 'lucide-react';
 import { Badge, Button, Card, CardHeader, Input, Label, Select, Skeleton, Textarea, type Tone } from '@/components/ui';
 import { Dialog, ConfirmDialog } from '@/components/Dialog';
 import { DataTable } from '@/components/DataTable';
@@ -12,6 +12,7 @@ import { totalOf } from '@/lib/pagination';
 import { shortDate } from '@/lib/format';
 import { PARTICIPANT_TYPES } from '@/features/attendees/types';
 import { useTableSorting } from '@/lib/sorting';
+import { ResendAllDialog, ResendTicketDialog } from './ResendDialogs';
 import * as ticketsApi from './api';
 import type { Ticket, TicketType, TicketTypePayload } from './types';
 
@@ -36,6 +37,7 @@ function TicketDetail({ ulid, onClose }: { ulid: string; onClose: () => void }) 
     const queryClient = useQueryClient();
     const [confirmVoid, setConfirmVoid] = useState(false);
     const [confirmReissue, setConfirmReissue] = useState(false);
+    const [resending, setResending] = useState(false);
 
     const { data, isLoading } = useQuery({
         queryKey: ['ticket', ulid],
@@ -62,6 +64,10 @@ function TicketDetail({ ulid, onClose }: { ulid: string; onClose: () => void }) 
     const isTerminal = data?.status === 'voided' || data?.status === 'refunded';
     const canVoid = can('ticket.void') && !isTerminal;
     const canReissue = can('ticket.reissue') && !isTerminal;
+    // A confirmation says "you are in, here is your QR", so it is not
+    // offered for a ticket the gate will turn away — same rule the server
+    // enforces in ResendTicketNotification.
+    const canResend = can('notification.resend') && !isTerminal;
 
     return (
         <Dialog open onClose={onClose} title={data?.ticket_number ?? 'Ticket'} description={data?.holder_name ?? undefined} className="max-w-lg">
@@ -90,6 +96,11 @@ function TicketDetail({ ulid, onClose }: { ulid: string; onClose: () => void }) 
 
                     <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
                         <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+                        {canResend && (
+                            <Button variant="outline" size="sm" onClick={() => setResending(true)}>
+                                <Send size={14} /> Resend
+                            </Button>
+                        )}
                         {canReissue && (
                             <Button variant="outline" size="sm" onClick={() => setConfirmReissue(true)}>
                                 <RefreshCw size={14} /> Reissue
@@ -102,6 +113,10 @@ function TicketDetail({ ulid, onClose }: { ulid: string; onClose: () => void }) 
                         )}
                     </div>
                 </div>
+            )}
+
+            {resending && data && (
+                <ResendTicketDialog ulid={ulid} ticketNumber={data.ticket_number} onClose={() => setResending(false)} />
             )}
 
             <ConfirmDialog
@@ -174,10 +189,12 @@ const ticketColumns: ColumnDef<Ticket, unknown>[] = [
 ];
 
 function TicketsTab() {
+    const { can } = useAuth();
     const [status, setStatus] = useState('');
     const [search, setSearch] = useState('');
     const [pageIndex, setPageIndex] = useState(0);
     const [selected, setSelected] = useState<string | null>(null);
+    const [resendingAll, setResendingAll] = useState(false);
     const pageSize = 20;
 
     const resetPage = useCallback(() => setPageIndex(0), []);
@@ -190,7 +207,19 @@ function TicketsTab() {
 
     return (
         <Card>
-            <CardHeader title="All tickets" />
+            <CardHeader
+                title="All tickets"
+                action={
+                    // Broadcast, not resend: messaging every holder at once is
+                    // a different act from resending to the person at the desk,
+                    // and it spends the prepaid SMS balance.
+                    can('notification.send_broadcast') ? (
+                        <Button variant="outline" size="sm" onClick={() => setResendingAll(true)}>
+                            <Send size={14} /> Resend to all
+                        </Button>
+                    ) : undefined
+                }
+            />
             <div className="flex flex-wrap items-end gap-3 px-5 pb-4 pt-4">
                 <div className="min-w-[200px] flex-1">
                     <Label htmlFor="ticket_search">Search</Label>
@@ -235,6 +264,12 @@ function TicketsTab() {
             />
 
             {selected && <TicketDetail ulid={selected} onClose={() => setSelected(null)} />}
+
+            {/* The same filters the table is showing, so the dialog's count and
+                the rows on screen cannot disagree. */}
+            {resendingAll && (
+                <ResendAllDialog filters={{ status, search }} onClose={() => setResendingAll(false)} />
+            )}
         </Card>
     );
 }

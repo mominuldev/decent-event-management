@@ -38,9 +38,22 @@ Route::post('registrations', [RegistrationController::class, 'store'])
 Route::get('attendees/export', [AttendeeController::class, 'export'])->name('attendees.export');
 Route::apiResource('attendees', AttendeeController::class)->except(['store']);
 Route::apiResource('ticket-types', TicketTypeController::class);
+// Before the apiResource: `tickets/resend-preview` would otherwise be
+// matched by its `tickets/{ticket:ulid}` show route and 404 as an unknown
+// ULID.
+Route::get('tickets/resend-preview', [TicketController::class, 'resendPreview'])->name('tickets.resend-preview');
+Route::post('tickets/resend-all', [TicketController::class, 'resendAll'])
+    ->middleware('idempotent:ticket.resend_all')
+    ->name('tickets.resend-all');
 Route::apiResource('tickets', TicketController::class)->only(['index', 'show']);
 Route::post('tickets/{ticket:ulid}/void', [TicketController::class, 'void'])->name('tickets.void');
 Route::post('tickets/{ticket:ulid}/reissue', [TicketController::class, 'reissue'])->name('tickets.reissue');
+// Idempotency-keyed on both resend routes: a resent SMS is billed against
+// the prepaid balance, so a double-tapped button must not send — and
+// charge — twice.
+Route::post('tickets/{ticket:ulid}/resend', [TicketController::class, 'resend'])
+    ->middleware('idempotent:ticket.resend')
+    ->name('tickets.resend');
 
 Route::apiResource('payments', PaymentController::class)->only(['index', 'show']);
 Route::post('payments/{payment:ulid}/verify-manual', [PaymentController::class, 'verifyManual'])->name('payments.verify-manual');

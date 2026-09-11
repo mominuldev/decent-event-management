@@ -4,7 +4,7 @@ namespace App\Jobs;
 
 use App\Domain\Notification\Channels\NotificationChannelResolver;
 use App\Domain\Notification\Models\Notification;
-use App\Domain\Shared\Models\EventSetting;
+use App\Domain\Notification\Support\ChannelKillSwitch;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -88,11 +88,15 @@ class SendNotificationJob implements ShouldQueue
         $this->release(self::BACKOFF_SECONDS[$notification->attempts - 1] ?? 21600);
     }
 
+    /**
+     * Checked here, at send time rather than enqueue time, so flipping a
+     * switch off cancels rows that are already queued. This is the only
+     * place the switch *gates* anything; `ChannelKillSwitch` is also read
+     * by the ticket-resend endpoint, but only to warn an operator before
+     * they queue into a channel that is off.
+     */
     private function channelEnabled(string $channel): bool
     {
-        $setting = EventSetting::query()->where('key', "notification.{$channel}_enabled")->first();
-
-        // No kill-switch row for this channel means nothing is gating it.
-        return $setting === null || $setting->typedValue() === true;
+        return app(ChannelKillSwitch::class)->enabled($channel);
     }
 }

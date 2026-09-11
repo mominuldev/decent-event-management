@@ -22,6 +22,19 @@ class QueueNotification
      * @param  array<int, string>  $channels  e.g. ['email', 'sms', 'whatsapp']
      * @param  array<string, mixed>  $payload  interpolated into the template as `{{key}}`
      * @param  string|null  $locale  overrides the per-channel default in `config/notifications.php`
+     * @param  string|null  $dedupeSuffix  widens the dedupe key so a deliberate
+     *                                     re-send is not swallowed as a duplicate.
+     *                                     Null — every caller but a resend — keeps
+     *                                     the original one-per-(subject, template,
+     *                                     channel) guarantee, which is what stops a
+     *                                     retried event double-sending.
+     * @return array<string, string> per requested channel: `queued`, `no_recipient`
+     *                               (the attendee has no address for it) or
+     *                               `no_template` (no active row for the channel and
+     *                               locale). Every existing caller ignores it; a
+     *                               resend reports it, because an operator who
+     *                               pressed a button and saw nothing happen needs to
+     *                               know it was the missing mobile number.
      */
     public function execute(
         Model $notifiable,
@@ -30,23 +43,38 @@ class QueueNotification
         Attendee $attendee,
         array $payload = [],
         ?string $locale = null,
-    ): void {
+        ?string $dedupeSuffix = null,
+    ): array {
+        $outcomes = [];
+
         foreach ($channels as $channel) {
             $recipient = $this->recipientFor($channel, $attendee);
 
             if ($recipient === null) {
+                $outcomes[$channel] = 'no_recipient';
+
                 continue;
             }
 
             $template = $this->template($templateKey, $channel, $locale ?? $this->localeFor($channel));
 
             if ($template === null) {
+                $outcomes[$channel] = 'no_template';
+
                 continue;
             }
 
-            $dedupeKey = implode(':', [$notifiable->getMorphClass(), $notifiable->getKey(), $templateKey, $channel]);
+            $dedupeKey = implode(':', array_filter([
+                $notifiable->getMorphClass(),
+                (string) $notifiable->getKey(),
+                $templateKey,
+                $channel,
+                $dedupeSuffix,
+            ]));
 
             if (Notification::query()->where('dedupe_key', $dedupeKey)->exists()) {
+                $outcomes[$channel] = 'duplicate';
+
                 continue;
             }
 
@@ -70,7 +98,11 @@ class QueueNotification
             ]);
 
             SendNotificationJob::dispatch($notification->id)->afterCommit();
+
+            $outcomes[$channel] = 'queued';
         }
+
+        return $outcomes;
     }
 
     /**
@@ -146,6 +178,25 @@ class QueueNotification
     private function localeFor(string $channel): string
     {
         return (string) (config("notifications.locales.{$channel}") ?? config('notifications.locales.default', 'en'));
+    }
+
+    /**
+     * The template row a given (key, channel) would actually be rendered
+     * from right now — the same lookup `execute()` uses, exposed because
+     * callers outside the outbox need to reason about the message before
+     * it is sent.
+     *
+     * The SMS cost estimate on the bulk-resend preview is the reason it is
+     * public: measuring "an active sms template for this key" rather than
+     * *the row that will be sent* picked the Bangla one on a database that
+     * has both, and reported two segments for a message that costs one.
+     * Resolving it here rather than reimplementing the locale rule is what
+     * keeps the number an operator is shown and the number they are billed
+     * the same number.
+     */
+    public function resolveTemplate(string $templateKey, string $channel, ?string $locale = null): ?NotificationTemplate
+    {
+        return $this->template($templateKey, $channel, $locale ?? $this->localeFor($channel));
     }
 
     /**

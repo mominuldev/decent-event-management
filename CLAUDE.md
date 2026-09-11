@@ -1383,6 +1383,122 @@ this dev box really sends an SMS against the prepaid balance and a real email
 that fail against the old code, and the migration was exercised against a
 simulated already-issued database.
 
+### ✅ A ticket confirmation can be resent — one holder, or all of them — 2026-09-11
+
+"I never got my ticket" had no answer. `Notification\Actions\ResendNotification`
+exists but clones an existing outbox row and only from `failed`/`bounced`, which
+is a different job: it retries a message this system composed and failed to
+deliver. The counter request is almost never that — the email arrived and was
+deleted (the row is `sent`, so ineligible), or no row was ever written because
+the attendee had no email address at issuance and has just given one.
+
+| | |
+|---|---|
+| `POST /admin/tickets/{ticket}/resend` | `notification.resend`, `idempotent:ticket.resend`. One ticket, on the channels asked for. |
+| `GET /admin/tickets/resend-preview` | `notification.send_broadcast`. Read-only: how many tickets a bulk send reaches and what the SMS costs. |
+| `POST /admin/tickets/resend-all` | `notification.send_broadcast`, `idempotent:ticket.resend_all`. Queues a fan-out over everything the filters select. |
+
+**Both permissions already existed and are already granted to Event Manager**, so
+this ships without `db:seed --class=RbacSeeder` on the host — unlike
+`attendee.export` and `payment.collect_cash`, which both hit that. They stayed
+separate deliberately: resending to the person at the desk and messaging every
+ticket-holder at once are different acts, and only the second one spends the
+prepaid SMS balance.
+
+- **The message is composed afresh, and the payload is shared.**
+  `Ticketing\Services\TicketNotificationPayload` is now the one definition of a
+  `ticket_delivered` message's `{{variables}}`, used by both the `TicketIssued`
+  listener and the resend. A resend that assembled its own would be a second
+  implementation of the message, and the first thing it would drift on is a
+  variable one supplies and the other does not — which is not an error but a
+  literal `{{event_name}}` delivered to a real person, since `interpolate()`
+  leaves an unrecognised placeholder verbatim. Values are read live, so a venue
+  corrected after the original send is what goes out.
+- **`QueueNotification::execute()` gained a `$dedupeSuffix`, and without it a
+  resend would have done nothing at all.** The outbox dedupes on (subject,
+  template, channel) — right for stopping a retried event double-sending, and it
+  would have swallowed every resend in silence: 200 to the operator, nothing to
+  the holder. That is the same shape as the attendee-login SMS bug (2026-08-22)
+  and this file's fourth recorded instance of it. `execute()` now also *returns*
+  a per-channel outcome (`queued` / `no_recipient` / `no_template` /
+  `duplicate`); the six existing callers ignore it.
+- **A voided or refunded ticket cannot be resent.** A confirmation says "you are
+  in, here is your QR" — sending one for a ticket the gate will reject is a
+  correctness rule, not tidiness. Enforced in the action and again in the bulk
+  query, which `whereIn`s the resendable statuses *after* the caller's filters,
+  so asking for `status=voided` selects nothing rather than overriding the rule.
+- **Email and SMS only.** `whatsapp` still resolves to `FakeWhatsAppDriver`, and
+  the automatic send queues it because a fake row costs nothing and starts
+  working the day a real driver lands. An *operator action* is different:
+  offering a button that fakes a send puts `sent` in the delivery log for a
+  message that never left the building, and the operator tells the ticket-holder
+  it did.
+- **Channels are required with no default**, on both endpoints. SMS is billed per
+  segment, so which channels go out is a decision made every time rather than
+  inherited from whatever the form last had selected.
+- **The bulk send cannot reach more people than were agreed to.** The preview
+  returns a count; `resend-all` requires it back as `expected_count` and answers
+  **409** if the roster moved while the dialog was open. The window is small and
+  the cost of ignoring it is a billed message for every ticket issued in it.
+- **Filters are shared, for the reason `AttendeeListFilters` already is.**
+  `Ticketing\Support\TicketListFilters` is now the single definition used by the
+  admin list, the preview and the fan-out — an operator who filters to 40 tickets
+  and presses "resend to all" must not reach a different 40. **Fixed in passing:**
+  the list's search did not escape `%`, `_` or `\`, so searching `%` matched every
+  row — which would have turned a filtered bulk send into an unfiltered one while
+  looking filtered.
+- **`ResendTicketNotificationsJob` is on the `reports` lane — its first
+  occupant.** It sends nothing itself; it walks the roster writing outbox rows,
+  each dispatching its own `SendNotificationJob` onto `notifications`. Putting
+  the walk on that lane would let one bulk resend hold a notification worker for
+  minutes while the messages it is creating queue behind it, which is exactly the
+  latency separation docs/01 §1.3 defines the lanes to prevent. It is **not
+  resumable** (the lane is `tries: 1`): a crash halfway leaves a partial send and
+  re-running resends to everyone already reached. Deliberate — making it
+  resumable means persisting a cursor, and the honest answer for a 12,000-row
+  send is to read the delivery log first.
+- **The bulk path writes one summary `ActivityLog` row, not one per ticket** —
+  filters and counts, never the rows, the same choice the attendee export makes.
+  12,000 near-identical entries would bury every other event in the log, and the
+  outbox already records each recipient, channel and delivery state in far more
+  detail. The single resend does log per ticket, from the Action (D8).
+- **The kill switch is still enforced only at send time.**
+  `Notification\Support\ChannelKillSwitch` is new and `SendNotificationJob` now
+  reads through it, but it gates nothing new: the resend endpoints use it only to
+  *report* that a channel is off, so an operator is told the row will be
+  cancelled rather than watching it vanish. The row is still written — it is the
+  record that somebody asked.
+- Admin SPA: a **Resend** button in the ticket detail dialog (hidden for a
+  terminal ticket, matching the server), and **Resend to all** in the ticket
+  list's header, gated on `notification.send_broadcast`. The bulk dialog shows
+  the recipient count, how many are reachable per channel, and — when SMS is
+  selected — the cost in taka behind a warning, before the button does anything.
+
+**A real bug the live check caught that no test would have.** The preview's SMS
+estimate queried "an active `sms` template for this key" and took whichever row
+MySQL returned first — the **Bangla** one, at 2 segments, for a message
+`notifications.locales.sms` sends in **English** at 1. A 2× over-estimate, in the
+direction that makes an affordable send look unaffordable (৳4.00 against ৳2.00 on
+the dev database's four tickets). Fixed by resolving through
+`QueueNotification::resolveTemplate()` — now public — so the estimate measures
+*the row that will actually be sent* rather than a row chosen by an equivalent
+rule. `test_the_sms_estimate_measures_the_language_that_will_actually_be_sent`
+was confirmed to fail against the first cut.
+
+17 tests in `tests/Feature/Admin/TicketResendTest.php`. Full suite **903 passing
+/ 2 skipped**, Pint and PHPStan level 8 clean, SPA typecheck + build clean.
+OpenAPI regenerated — **129 paths** (was 126).
+
+**Verified against the running app for the read-only and refusal paths only, and
+deliberately not for a send:** this dev box has live REVE credentials and a real
+SMTP mailer, so resending a ticket here really messages somebody and spends
+prepaid balance. Confirmed live: the preview counts 4 tickets and prices them
+correctly after the fix; `resend-preview` is not swallowed by the
+`tickets/{ticket:ulid}` show route; a mismatched `expected_count` answers 409; a
+missing `Idempotency-Key` answers 400; `whatsapp` answers 422 — and all four
+wrote **zero** notification rows. The minted token was revoked and the
+idempotency rows removed afterwards.
+
 ### 🚨 External Dependencies (start during Phase 2!)
 - [ ] **PayStation live merchant account** — the only gateway relationship now needed. Sandbox is self-service (credentials are published in their docs and are already the defaults here), so nothing is blocked until go-live; what is needed is a live `PAYSTATION_MERCHANT_ID`/`PAYSTATION_MERCHANT_PASSWORD` plus the IPN URL registered in their dashboard. See [§PayStation replaces SSLCommerz](#-paystation-replaces-sslcommerz--2026-09-10).
 - [ ] ~~Payment gateway merchant applications (bKash, Nagad, Rocket, SSLCommerz)~~ — **no longer on the critical path** (2026-09-10). PayStation aggregates all of these on one hosted checkout, so direct adapters are now an optional optimisation rather than a prerequisite for launch.
