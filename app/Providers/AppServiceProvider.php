@@ -183,6 +183,26 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('account-check', fn ($request) => [
             Limit::perHour(30)->by('ip:'.$request->ip()),
         ]);
+
+        // "Find my ticket" — the passwordless lookup. Tighter than every
+        // other bucket here, because it is the only route where guessing
+        // *succeeds*: sign-in needs a password or a code sent to the
+        // handset, while this needs a name, and a name can be worked out.
+        //
+        // Per identifier bounds an attack on one person: ten tries an hour
+        // against a known mobile number is not enough to walk a list of
+        // plausible spellings. Per IP bounds the other shape — one caller
+        // holding a list of numbers and trying one obvious name against
+        // each, which the per-identifier limit alone never notices.
+        //
+        // The name is not in either key on purpose. Keying on it would give
+        // every guess its own fresh bucket and make the limit meaningless,
+        // which is exactly backwards: the whole point is to bound guesses
+        // at the name.
+        RateLimiter::for('find-my-ticket', fn ($request) => [
+            Limit::perHour(10)->by('account:'.self::identifierKey($request)),
+            Limit::perHour(40)->by('ip:'.$request->ip()),
+        ]);
     }
 
     /**

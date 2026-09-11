@@ -9563,6 +9563,127 @@
                 ]
             }
         },
+        "/attendee/find-my-ticket": {
+            "post": {
+                "tags": [
+                    "Attendee Self-Service"
+                ],
+                "summary": "Open a passwordless lookup session from a mobile number or email address plus the registered name",
+                "description": "Grants a short-lived token that can read the attendee's own registrations and correct their profile, and nothing else — it is refused by every route gated on the `attendee` ability, including the QR payload, the ticket PDF, registration cancellation and password changes. Answers the same 404 for an unknown identifier as for a name that does not match, so it cannot be used to read back the name on a record.",
+                "operationId": "1939c331fbb48f650c1574ffb66d1f04",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "full_name"
+                                ],
+                                "properties": {
+                                    "mobile": {
+                                        "description": "Required unless `email` is given",
+                                        "type": "string"
+                                    },
+                                    "email": {
+                                        "description": "Required unless `mobile` is given",
+                                        "type": "string",
+                                        "format": "email"
+                                    },
+                                    "full_name": {
+                                        "description": "Either the Latin or the Bangla name on the registration; case, punctuation and spacing are ignored",
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Lookup session opened"
+                    },
+                    "404": {
+                        "description": "No registration matches those details"
+                    },
+                    "422": {
+                        "description": "Neither identifier was supplied, or one was malformed"
+                    },
+                    "429": {
+                        "description": "Too many lookups"
+                    }
+                }
+            }
+        },
+        "/attendee/find-my-ticket/me": {
+            "get": {
+                "tags": [
+                    "Attendee Self-Service"
+                ],
+                "summary": "The profile behind an open lookup session",
+                "operationId": "579026ba0333ae310f63c03817169ea2",
+                "responses": {
+                    "200": {
+                        "description": "The attendee profile"
+                    },
+                    "403": {
+                        "description": "The token is not a lookup token"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "patch": {
+                "tags": [
+                    "Attendee Self-Service"
+                ],
+                "summary": "Correct the profile behind an open lookup session",
+                "description": "Accepts every field the signed-in profile update accepts except `email`, which is one of the two identifiers this lookup matches on and the channel the ticket is delivered to.",
+                "operationId": "562f97f14d5bdb66c52addeb809b2cae",
+                "responses": {
+                    "200": {
+                        "description": "Profile updated"
+                    },
+                    "403": {
+                        "description": "The token is not a lookup token"
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/attendee/find-my-ticket/registrations": {
+            "get": {
+                "tags": [
+                    "Attendee Self-Service"
+                ],
+                "summary": "The registrations behind an open lookup session",
+                "description": "Ticket numbers and statuses only. The QR payload and the signed ticket-image URL are not loaded, so they cannot appear in the response — a lookup session may see *that* a ticket exists, never the code that admits its holder.",
+                "operationId": "87e6e06f31013a1701467ed81fb660b2",
+                "responses": {
+                    "200": {
+                        "description": "Registrations belonging to the looked-up attendee"
+                    },
+                    "403": {
+                        "description": "The token is not a lookup token"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/attendee/me": {
             "get": {
                 "tags": [

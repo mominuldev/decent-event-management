@@ -1575,6 +1575,165 @@ resend to all" message; a scalar `ulids` answers 422; a selected send whose
 `Idempotency-Key` answers 400. Notification rows were 26 before and 26 after.
 The token was revoked and the idempotency row removed afterwards.
 
+### ✅ Find my ticket: no password, and none is set at checkout either — 2026-09-11
+
+An attendee can check and correct their own registration by stating **the
+mobile number or email address they registered with, plus the name they
+registered under**. No password, no SMS, no code. The public site's
+`/find-my-ticket` is the page. In the same change the **password field left
+the registration form**, so nobody is asked to invent a credential at a
+ticket desk that they will not remember by the time it matters.
+
+**Nothing that existed was changed.** Password sign-in, the SMS code,
+`/login`, `/verify`, `/dashboard`, `/profile` and every route under
+`abilities:attendee` behave exactly as before; attendees who already have a
+password keep it and keep using it. `StoreRegistrationRequest` still accepts
+`password` (it was always `nullable`) — the form simply stops sending one,
+so a cached build of the public site keeps working.
+
+**⚠️ State plainly what this credential is.** Everywhere else an attendee
+proves *possession* — a password they chose, or a code sent to the handset
+on the record. Here they prove *knowledge of two facts about somebody*: a
+phone number and a name, *both of which this same site publishes together on
+the public attendees directory*. It is a real weakening, adopted at the
+product owner's request for a real reason (a century of alumni, many
+elderly, who abandon an OTP round trip and telephone the office instead).
+The code's job is not to relitigate that; it is to make sure the weaker
+credential buys **strictly less** than the stronger one. That is what the
+design below is almost entirely about.
+
+**The ability split is the whole safety argument.** The token minted by a
+lookup carries `attendee-lookup` and **not** `attendee`. Every pre-existing
+self-service route is gated on `abilities:attendee`, so one middleware check
+stands between a guessed name and the things that would actually hurt:
+
+| | |
+|---|---|
+| the QR payload and the ticket PDF | **refused** — these *are* admission, and a guess must never buy a walk-in on somebody else's ticket |
+| cancelling a registration | **refused** — it destroys a paid seat |
+| setting a password | **refused** — it would convert a lucky guess into permanent ownership of the account |
+| reading the profile and the registration | allowed |
+| correcting the profile | allowed, minus `email` |
+
+`test_a_lookup_token_is_refused_by_every_signed_in_route` asserts all seven
+in one place. **Do not widen either ability list to make a route reachable
+from both** — add the route to the lookup group instead, and decide
+explicitly that a guessed name may have it.
+
+- **`email` is withheld from the update path** (`UpdateLookupProfileRequest`
+  drops it from the ruleset, so `validated()` cannot carry it even by
+  accident). It is one of the two identifiers the lookup matches on *and*
+  where the ticket is delivered: a caller who guessed a name and could
+  repoint it would have turned a weak read into a resend of somebody else's
+  ticket to an inbox they own. `mobile` needed no handling — the parent
+  request never accepted it, because it is the sign-in channel. The page
+  shows both as plain text with a line saying why, rather than as disabled
+  boxes, which read as a fault.
+- **The registrations response cannot carry the QR even if someone tries.**
+  `TicketResource` publishes `qr_code_payload`/`qr_code_image_url` behind
+  `whenLoaded('qrCode')`, so the difference between this endpoint being safe
+  and it handing out admission credentials is *one relation in an eager-load
+  list*. The lookup controller therefore spells its own loads out rather than
+  delegating to `Attendee\RegistrationController::index()`, which today loads
+  an identical set — sharing it would mean a change made for the signed-in
+  dashboard silently widening the passwordless one. The test asserts on the
+  response **body**, not the eager-load list, because the body is what would
+  regress.
+- **Every failure answers identically** — wrong name, unknown number,
+  unknown address: same 404, same `code`, same message. Anything else makes
+  this a name oracle: feed it a mobile number, watch for the answer to
+  change, and read back the only secret the flow has. The copy follows the
+  same rule (`findMyTicket` in `copy.ts` says so at the top of the
+  namespace), and there is a test comparing the two bodies.
+- **The name is matched whole, after normalisation** —
+  `AttendeeNameMatch::normalise()` folds case, punctuation (`Md.` = `Md`) and
+  runs of whitespace, keeping `\p{M}` because Bengali carries much of its
+  content in combining marks. Either recorded name is accepted, Latin or
+  Bangla. **Never a prefix, a first name, or a fuzzy distance**: "Rahim"
+  opening "Rahim Uddin" would turn a guessable given name into a working
+  credential. The cost is that `Md. Rahim` does not open a record stored as
+  `Mohammad Rahim` — that is a support call, and a support call is the right
+  outcome for a caller who cannot state the registered name. The failure
+  screen offers Contact for exactly that reason.
+- **`throttle:find-my-ticket` is the control that actually bounds an
+  attack**, because this is the one route here where guessing *succeeds*.
+  10/hour per identifier (bounds an attack on one person) and 40/hour per IP
+  (bounds one caller trying an obvious name against a list of numbers, which
+  the per-identifier limit never notices). **The name is deliberately not in
+  either key** — keying on it would give every guess a fresh bucket and make
+  the limit meaningless, which is exactly backwards.
+- **Opening a session is audited**, unlike an ordinary sign-in, and for a
+  reason specific to this route: no SMS was sent and no password was used, so
+  without the row there would be nothing anywhere to say a passwordless
+  session had been opened on an account that is later found altered. It
+  records *which* identifier was used, never its value.
+- **60-minute token**, against 30 days for a real sign-in — the same trade
+  made the other way, because the credential is so much weaker.
+
+**Frontend (`centennial-celebration`):**
+
+- `/find-my-ticket` — one identifier field (`classifyIdentifier` sorts mobile
+  from email on the way to the wire, as the sign-in form already does) plus
+  the name. Then the registration summary, then the correction form.
+  Public: not in `middleware.ts`'s matcher, and `robots: noindex` because it
+  renders somebody's own record.
+- **Its own cookie (`cc_lookup_session`), not the sign-in one.** Sharing
+  would break twice: the header renders an account link off
+  `SESSION_HINT_COOKIE`, so a lookup would advertise itself as a signed-in
+  session and every link it offered would 403; and opening a lookup would
+  evict a real session, signing someone out of the stronger thing by using
+  the weaker one. `lookupFetch` is likewise its own function rather than a
+  flag on `attendeeFetch` — a bug sending a *sign-in* token through the
+  lookup prefix would simply work, and nothing would catch it.
+- Session state lives in React state, not the cookie, so **a refresh returns
+  to the form** — the right default for a page whose credential is a name and
+  which may be open on a shared phone. The hint cookie only decides whether
+  to *try* resuming; every request behind it is still authorised by Laravel.
+- Reachable from the footer's Resources column (first entry) and from the
+  sign-in page, which matters more now: since nobody gets a password at
+  checkout, most people arriving at `/login` have never had one, and for the
+  common errand a code costs money and is not needed at all.
+- The registration form's password fieldset became a one-line note naming
+  the page and the three things it asks for — all of which the reader is
+  typing on that very form, so there is nothing extra to remember. A
+  checkout that never mentions the way back leaves the reader assuming there
+  is none.
+
+20 tests in `tests/Feature/Attendee/FindMyTicketTest.php`. Full suite **932
+passing / 2 skipped**, Pint and PHPStan level 8 clean; public site `tsc`,
+ESLint (0 errors, 7 pre-existing warnings) and `next build` clean. OpenAPI
+regenerated — **132 paths** (was 129).
+
+**Verified against the running app** (this flow sends no SMS and no email, so
+it was safe to run here — unlike anything ticket-shaped; see the warning in
+the counter-sales section): a wrong name and an unknown number returned
+byte-identical 404 bodies; `01799-000777` in national form with the name
+typed as `  zzz,  LOOKUP   probe ` opened the record, as did the Bangla name
+and the email in mixed case; a PATCH carrying `occupation`, `father_name`
+**and** `email` applied the first two and left the address untouched; the
+same token answered **403** on `/attendee/me`, `/attendee/registrations` and
+`/attendee/auth/password`; and the audit row recorded `identifier: mobile`
+with the number nowhere in it. The probe attendee, its token and its audit
+rows were removed afterwards.
+
+**Still open:**
+
+- **Nothing resends the ticket from this page.** Someone who deleted the
+  confirmation email can see that a ticket exists and read its number, but
+  cannot get the QR back without signing in properly or ringing the office.
+  The admin-side resend exists (`POST /admin/tickets/{ticket}/resend`); a
+  public counterpart would need its own decision, because it sends to the
+  registered channel and spends prepaid SMS balance on a name-guessable
+  trigger.
+- **Existing passwords are now unreachable from the ticket form.** Nobody new
+  gets one, so the password sign-in slowly becomes a path only older accounts
+  use. If that is the intended end state, `/login`'s password half could
+  eventually go; it was left alone here because the ask was explicitly not to
+  change the existing feature.
+- The lookup does not check `is_verified`, deliberately — verification is
+  staff confirming an alumni identity, not a gate on reading one's own
+  record.
+
 ### 🚨 External Dependencies (start during Phase 2!)
 - [ ] **PayStation live merchant account** — the only gateway relationship now needed. Sandbox is self-service (credentials are published in their docs and are already the defaults here), so nothing is blocked until go-live; what is needed is a live `PAYSTATION_MERCHANT_ID`/`PAYSTATION_MERCHANT_PASSWORD` plus the IPN URL registered in their dashboard. See [§PayStation replaces SSLCommerz](#-paystation-replaces-sslcommerz--2026-09-10).
 - [ ] ~~Payment gateway merchant applications (bKash, Nagad, Rocket, SSLCommerz)~~ — **no longer on the critical path** (2026-09-10). PayStation aggregates all of these on one hosted checkout, so direct adapters are now an optional optimisation rather than a prerequisite for launch.

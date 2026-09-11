@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Admin\AuthController as AdminAuthController;
 use App\Http\Controllers\Api\Admin\TwoFactorController;
 use App\Http\Controllers\Api\Attendee\AuthController as AttendeeAuthController;
+use App\Http\Controllers\Api\Attendee\FindMyTicketController;
 use App\Http\Controllers\Api\SignedMediaController;
 use Illuminate\Support\Facades\Route;
 
@@ -88,7 +89,34 @@ Route::prefix('attendee')->name('attendee.')->group(function (): void {
     Route::post('auth/check', [AttendeeAuthController::class, 'check'])
         ->middleware('throttle:account-check')
         ->name('auth.check');
+
+    // "Find my ticket" — mobile-or-email plus the registered name, no
+    // password and no SMS. A deliberately weaker credential than either
+    // sign-in above, so it is answered with a deliberately weaker token:
+    // read the class docblock on FindMyTicketController before touching
+    // this or the group below. Its own limiter because the name is the
+    // only secret, and guessing at it is the attack this route has.
+    Route::post('find-my-ticket', [FindMyTicketController::class, 'lookup'])
+        ->middleware('throttle:find-my-ticket')
+        ->name('find-my-ticket');
 });
+
+// "Find my ticket" — a passwordless lookup session.
+//
+// `abilities:attendee-lookup`, never `attendee`, is what keeps this
+// separate from the group below: a lookup token fails that group's
+// `abilities:attendee` check, so it cannot reach the QR payload, the ticket
+// PDF, registration cancellation or the password endpoint. Do not widen
+// either ability list to make a route reachable from both — add the route
+// here instead, and decide explicitly that a guessed name may have it.
+Route::prefix('attendee/find-my-ticket')
+    ->name('attendee.find-my-ticket.')
+    ->middleware(['auth:attendee', 'abilities:'.FindMyTicketController::ABILITY])
+    ->group(function (): void {
+        Route::get('me', [FindMyTicketController::class, 'show'])->name('me.show');
+        Route::patch('me', [FindMyTicketController::class, 'update'])->name('me.update');
+        Route::get('registrations', [FindMyTicketController::class, 'registrations'])->name('registrations.index');
+    });
 
 // Attendee self-service — authenticated
 Route::prefix('attendee')->name('attendee.')->middleware(['auth:attendee', 'abilities:attendee'])->group(function (): void {
