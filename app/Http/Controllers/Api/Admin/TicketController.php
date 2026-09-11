@@ -500,14 +500,20 @@ class TicketController extends Controller
         path: '/admin/tickets/resend-preview',
         summary: 'How many tickets a bulk resend would reach, and what the SMS would cost',
         description: 'Read-only. Takes the same filters as the ticket list and narrows them to tickets '
-            .'whose QR still admits someone. The count it returns is what the caller must echo back as '
-            .'`expected_count` to confirm the send.',
+            .'whose QR still admits someone. Pass `ulids[]` to price a hand-picked selection instead; it '
+            .'composes with the other filters, so it can only ever narrow the set. The count it returns '
+            .'is what the caller must echo back as `expected_count` to confirm the send.',
         tags: ['Tickets'],
         security: [['bearerAuth' => []]],
         parameters: [
             new OAT\QueryParameter(name: 'status', schema: new OAT\Schema(type: 'string')),
             new OAT\QueryParameter(name: 'ticket_type_id', schema: new OAT\Schema(type: 'integer')),
             new OAT\QueryParameter(name: 'search', schema: new OAT\Schema(type: 'string')),
+            new OAT\QueryParameter(
+                name: 'ulids',
+                description: 'Hand-picked ticket ULIDs; at most 100. Present-but-empty selects nothing.',
+                schema: new OAT\Schema(type: 'array', items: new OAT\Items(type: 'string'), maxItems: 100)
+            ),
         ],
         responses: [
             new OAT\Response(
@@ -539,6 +545,12 @@ class TicketController extends Controller
     public function resendPreview(Request $request, QueueNotification $queueNotification): JsonResponse
     {
         abort_unless((bool) $request->user()?->can('notification.send_broadcast'), Response::HTTP_FORBIDDEN);
+
+        // The same rules the send itself applies. A preview that priced a
+        // selection the send would then refuse is worse than no preview:
+        // the operator agrees to a number and the confirm 422s with the
+        // dialog already dismissed.
+        $request->validate(TicketListFilters::ulidRules(), TicketListFilters::ulidMessages());
 
         $filters = (array) $request->query();
         $base = ResendTicketNotificationsJob::query($filters);
@@ -576,9 +588,11 @@ class TicketController extends Controller
 
     #[OAT\Post(
         path: '/admin/tickets/resend-all',
-        summary: 'Resend the ticket confirmation to every ticket matching a filter set',
+        summary: 'Resend the ticket confirmation to every ticket matching a filter set, or to a hand-picked selection',
         description: 'Queues a background fan-out on the `reports` lane; the response returns immediately '
-            .'with the number of tickets it will walk. Requires `expected_count` to match what '
+            .'with the number of tickets it will walk. Pass `ulids` to send to a hand-picked selection '
+            .'rather than a whole filter set — it narrows, never widens, and a present-but-empty list '
+            .'sends to nobody. Requires `expected_count` to match what '
             .'`/admin/tickets/resend-preview` currently reports, and an Idempotency-Key.',
         tags: ['Tickets'],
         security: [['bearerAuth' => []]],
@@ -597,6 +611,14 @@ class TicketController extends Controller
                         new OAT\Property(property: 'status', type: 'string', nullable: true),
                         new OAT\Property(property: 'ticket_type_id', type: 'integer', nullable: true),
                         new OAT\Property(property: 'search', type: 'string', nullable: true),
+                        new OAT\Property(
+                            property: 'ulids',
+                            description: 'Hand-picked ticket ULIDs; at most 100.',
+                            type: 'array',
+                            items: new OAT\Items(type: 'string'),
+                            maxItems: 100,
+                            nullable: true
+                        ),
                     ]
                 )
             )

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin;
 
 use App\Domain\Ticketing\Actions\ResendTicketNotification;
+use App\Domain\Ticketing\Support\TicketListFilters;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -39,6 +40,12 @@ class BulkResendTicketsRequest extends FormRequest
             'ticket_type_id' => ['nullable', 'integer', 'min:1'],
             'search' => ['nullable', 'string', 'max:200'],
 
+            // ...plus the tickets an operator hand-picked from it, which is
+            // just a narrower filter rather than a second code path: it
+            // reaches the same preview, the same count confirmation and the
+            // same fan-out job.
+            ...TicketListFilters::ulidRules(),
+
             // The count the operator was shown and agreed to. If the roster
             // moved between the preview and the confirm — someone issued
             // forty tickets while the dialog was open — the send is refused
@@ -56,6 +63,7 @@ class BulkResendTicketsRequest extends FormRequest
             'channels.required' => 'Choose at least one channel to resend on.',
             'channels.*.in' => 'Tickets can be resent by email or SMS only.',
             'expected_count.required' => 'Confirm the number of tickets this will send to.',
+            ...TicketListFilters::ulidMessages(),
         ];
     }
 
@@ -68,6 +76,7 @@ class BulkResendTicketsRequest extends FormRequest
             'status' => $this->input('status'),
             'ticket_type_id' => $this->input('ticket_type_id'),
             'search' => $this->input('search'),
+            'ulids' => $this->input('ulids'),
         ];
     }
 }

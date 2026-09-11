@@ -111,7 +111,8 @@ class ResendTicketNotificationsJob implements ShouldQueue
         ActivityLog::create([
             'log_name' => 'ticket',
             'event' => 'notifications_bulk_resent',
-            'description' => "Bulk-resent {$tallies['tickets']} ticket(s) on ".implode(', ', $this->channels),
+            'description' => ($this->isHandPicked() ? 'Resent ' : 'Bulk-resent ')
+                ."{$tallies['tickets']} ticket(s) on ".implode(', ', $this->channels),
             'causer_type' => $user->getMorphClass(),
             'causer_id' => $user->id,
             'subject_type' => null,
@@ -119,6 +120,11 @@ class ResendTicketNotificationsJob implements ShouldQueue
             // Filters and counts, never the rows — the point is to know who
             // sent what to how many, not to copy every ticket-holder's
             // details into the audit table.
+            //
+            // A hand-picked send is the one case where the filter *is* the
+            // list of tickets, and recording it is the point rather than a
+            // leak: ULIDs identify tickets, carry no personal detail, and
+            // are capped at TicketListFilters::MAX_ULIDS.
             'properties' => [
                 'filters' => $this->filters,
                 'channels' => $this->channels,
@@ -127,6 +133,12 @@ class ResendTicketNotificationsJob implements ShouldQueue
             'ip_address' => $this->ip,
             'request_id' => $this->requestId,
         ]);
+    }
+
+    /** Whether this send was aimed at tickets an operator picked by hand. */
+    private function isHandPicked(): bool
+    {
+        return is_array($this->filters['ulids'] ?? null) && $this->filters['ulids'] !== [];
     }
 
     /**

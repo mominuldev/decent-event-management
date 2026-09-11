@@ -1,8 +1,8 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Plus, RefreshCw, Search, Send, Trash2, XCircle } from 'lucide-react';
-import { Badge, Button, Card, CardHeader, Input, Label, Select, Skeleton, Textarea, type Tone } from '@/components/ui';
+import { Badge, Button, Card, CardHeader, IconButton, Input, Label, Select, Skeleton, Textarea, type Tone } from '@/components/ui';
 import { Dialog, ConfirmDialog } from '@/components/Dialog';
 import { DataTable } from '@/components/DataTable';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -18,6 +18,19 @@ import type { Ticket, TicketType, TicketTypePayload } from './types';
 
 function titleCase(s: string) {
     return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Mirrors `ResendTicketNotification::RESENDABLE_STATUSES`. A confirmation
+ * says "you are in, here is your QR", so it is never offered for a ticket
+ * the gate will turn away — the server enforces this, and the list matches
+ * it so the count on the selection bar cannot disagree with the count in
+ * the send dialog.
+ */
+const RESENDABLE_STATUSES = ['issued', 'active', 'partially_admitted', 'fully_admitted'];
+
+function isResendable(ticket: Pick<Ticket, 'status'>): boolean {
+    return RESENDABLE_STATUSES.includes(ticket.status);
 }
 
 const ticketStatusTone: Record<string, Tone> = {
@@ -64,10 +77,7 @@ function TicketDetail({ ulid, onClose }: { ulid: string; onClose: () => void }) 
     const isTerminal = data?.status === 'voided' || data?.status === 'refunded';
     const canVoid = can('ticket.void') && !isTerminal;
     const canReissue = can('ticket.reissue') && !isTerminal;
-    // A confirmation says "you are in, here is your QR", so it is not
-    // offered for a ticket the gate will turn away — same rule the server
-    // enforces in ResendTicketNotification.
-    const canResend = can('notification.resend') && !isTerminal;
+    const canResend = can('notification.resend') && data !== undefined && isResendable(data);
 
     return (
         <Dialog open onClose={onClose} title={data?.ticket_number ?? 'Ticket'} description={data?.holder_name ?? undefined} className="max-w-lg">
@@ -188,13 +198,61 @@ const ticketColumns: ColumnDef<Ticket, unknown>[] = [
     },
 ];
 
+/**
+ * A row checkbox, and the header one that takes the whole page. Plain
+ * `<input type="checkbox">` like every other checkbox in this dashboard
+ * (the CMS tabs, Finance) rather than a new primitive — the tri-state the
+ * header needs is a DOM property, not a class.
+ */
+function RowCheck({
+    checked,
+    indeterminate,
+    disabled,
+    label,
+    onChange,
+}: {
+    checked: boolean;
+    indeterminate?: boolean;
+    disabled?: boolean;
+    label: string;
+    onChange: (next: boolean) => void;
+}) {
+    return (
+        <input
+            type="checkbox"
+            aria-label={label}
+            title={disabled ? 'Voided and refunded tickets cannot be resent.' : label}
+            checked={checked}
+            disabled={disabled}
+            ref={(el) => {
+                if (el) el.indeterminate = Boolean(indeterminate) && !checked;
+            }}
+            // The row itself opens the detail dialog; ticking a box must not.
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => onChange(e.target.checked)}
+            className="size-4 cursor-pointer accent-accent disabled:cursor-not-allowed disabled:opacity-40"
+        />
+    );
+}
+
 function TicketsTab() {
     const { can } = useAuth();
+    const { push } = useToast();
     const [status, setStatus] = useState('');
     const [search, setSearch] = useState('');
     const [pageIndex, setPageIndex] = useState(0);
     const [selected, setSelected] = useState<string | null>(null);
     const [resendingAll, setResendingAll] = useState(false);
+    // Hand-picked tickets, by ULID. Kept as a Set on the page rather than in
+    // the table, so it survives paging and filtering — an operator can tick
+    // two holders on page 1 and a third on page 4 and send to exactly those.
+    // The selection bar keeps that visible, since a pick that has scrolled
+    // out of the current filter is otherwise invisible.
+    const [picked, setPicked] = useState<Set<string>>(new Set());
+    const [resendingPicked, setResendingPicked] = useState(false);
+    // The per-row send button's target — the whole Ticket, not just its
+    // ULID, so the dialog can name the ticket without a second fetch.
+    const [resendingRow, setResendingRow] = useState<Ticket | null>(null);
     const pageSize = 20;
 
     const resetPage = useCallback(() => setPageIndex(0), []);
@@ -204,6 +262,104 @@ function TicketsTab() {
         queryKey: ['tickets', status, search, sortParams, pageIndex],
         queryFn: () => ticketsApi.fetchTickets({ status, search, ...sortParams, page: pageIndex + 1, per_page: pageSize }),
     });
+
+    const rows = useMemo(() => data?.data ?? [], [data]);
+    const canBroadcast = can('notification.send_broadcast');
+    const canResendOne = can('notification.resend');
+
+    // Only tickets the server would actually accept — so "3 selected" and
+    // the dialog's own count start out agreeing.
+    const pageSelectable = useMemo(() => rows.filter(isResendable).map((t) => t.ulid), [rows]);
+    const pagePickedCount = pageSelectable.filter((u) => picked.has(u)).length;
+
+    const pick = useCallback((ulids: string[], on: boolean) => {
+        if (!on) {
+            setPicked((prev) => {
+                const next = new Set(prev);
+                ulids.forEach((u) => next.delete(u));
+                return next;
+            });
+            return;
+        }
+
+        const next = new Set(picked);
+        // Only the ones not already picked count against the cap — otherwise
+        // ticking the header on a page that is half-selected reports an
+        // overflow that is not there.
+        const incoming = ulids.filter((u) => !next.has(u));
+        // The cap is the preview's, which is a GET: the selection has to fit
+        // in a URL. Add what fits rather than refusing the click, and say so —
+        // silently dropping the tail is how an operator comes to believe they
+        // sent to more people than they did.
+        const room = Math.max(0, ticketsApi.MAX_SELECTED_TICKETS - next.size);
+        incoming.slice(0, room).forEach((u) => next.add(u));
+        setPicked(next);
+
+        // Outside the updater deliberately: a state updater must be pure, and
+        // React runs it twice in development, which would double the toast.
+        if (incoming.length > room) {
+            push('critical', `You can select at most ${ticketsApi.MAX_SELECTED_TICKETS} tickets at a time. Filter the list and use "Resend to all" to reach more.`);
+        }
+    }, [picked, push]);
+
+    const columns = useMemo<ColumnDef<Ticket, unknown>[]>(() => {
+        const cols = [...ticketColumns];
+
+        if (canBroadcast) {
+            cols.unshift({
+                id: 'pick',
+                enableSorting: false,
+                header: () => (
+                    <RowCheck
+                        label="Select every resendable ticket on this page"
+                        checked={pageSelectable.length > 0 && pagePickedCount === pageSelectable.length}
+                        indeterminate={pagePickedCount > 0}
+                        disabled={pageSelectable.length === 0}
+                        onChange={(on) => pick(pageSelectable, on)}
+                    />
+                ),
+                cell: (ctx) => {
+                    const row = ctx.row.original;
+                    return (
+                        <RowCheck
+                            label={`Select ${row.ticket_number}`}
+                            checked={picked.has(row.ulid)}
+                            disabled={!isResendable(row)}
+                            onChange={(on) => pick([row.ulid], on)}
+                        />
+                    );
+                },
+            });
+        }
+
+        if (canResendOne) {
+            cols.push({
+                id: 'row_actions',
+                header: '',
+                enableSorting: false,
+                cell: (ctx) => {
+                    const row = ctx.row.original;
+                    if (!isResendable(row)) return null;
+                    return (
+                        <IconButton
+                            aria-label={`Resend ${row.ticket_number}`}
+                            title="Resend this confirmation"
+                            onClick={(e) => {
+                                // Without this the row's own handler opens the
+                                // detail dialog behind the resend one.
+                                e.stopPropagation();
+                                setResendingRow(row);
+                            }}
+                        >
+                            <Send size={15} />
+                        </IconButton>
+                    );
+                },
+            });
+        }
+
+        return cols;
+    }, [canBroadcast, canResendOne, pageSelectable, pagePickedCount, picked, pick]);
 
     return (
         <Card>
@@ -245,9 +401,26 @@ function TicketsTab() {
                 </div>
             </div>
 
+            {/* A pick can sit on a page the operator has since navigated away
+                from, or outside the filter they have since typed. The bar is
+                what keeps it visible — and the only way to clear it. */}
+            {picked.size > 0 && (
+                <div className="flex flex-wrap items-center gap-3 border-y border-info-border bg-info-bg px-5 py-2.5">
+                    <span className="text-[13px] font-medium text-info-fg">
+                        {picked.size} ticket{picked.size === 1 ? '' : 's'} selected
+                    </span>
+                    <Button size="sm" onClick={() => setResendingPicked(true)}>
+                        <Send size={14} /> Resend to selected
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())}>
+                        Clear selection
+                    </Button>
+                </div>
+            )}
+
             <DataTable
-                columns={ticketColumns}
-                data={data?.data ?? []}
+                columns={columns}
+                data={rows}
                 getRowId={(r) => r.ulid}
                 isLoading={isLoading}
                 isError={isError}
@@ -265,10 +438,26 @@ function TicketsTab() {
 
             {selected && <TicketDetail ulid={selected} onClose={() => setSelected(null)} />}
 
+            {/* Straight from the row, skipping the detail dialog — the common
+                case is one holder at a desk saying they never got theirs. */}
+            {resendingRow && (
+                <ResendTicketDialog
+                    ulid={resendingRow.ulid}
+                    ticketNumber={resendingRow.ticket_number}
+                    onClose={() => setResendingRow(null)}
+                />
+            )}
+
             {/* The same filters the table is showing, so the dialog's count and
                 the rows on screen cannot disagree. */}
             {resendingAll && (
-                <ResendAllDialog filters={{ status, search }} onClose={() => setResendingAll(false)} />
+                <ResendAllDialog scope={{ status, search }} onClose={() => setResendingAll(false)} />
+            )}
+
+            {/* The picks and nothing else — deliberately no status or search,
+                so what was ticked is the whole of what gets sent to. */}
+            {resendingPicked && picked.size > 0 && (
+                <ResendAllDialog scope={{ ulids: [...picked] }} onClose={() => setResendingPicked(false)} />
             )}
         </Card>
     );

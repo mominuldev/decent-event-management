@@ -6,7 +6,7 @@ import { Dialog } from '@/components/Dialog';
 import { useToast } from '@/components/Toast';
 import { money } from '@/lib/cn';
 import * as ticketsApi from './api';
-import type { TicketFilters } from './api';
+import type { ResendScope } from './api';
 
 /**
  * Email and SMS only. `whatsapp` still resolves to a fake driver, and an
@@ -134,25 +134,33 @@ export function ResendTicketDialog({
 }
 
 /**
- * The bulk send. Deliberately more work to press than the single one: it
- * spends the prepaid SMS balance, so the recipient count and the cost are
- * shown before the button does anything, and the count is echoed back to
- * the server so a roster that moved while this was open is refused rather
- * than silently sent to.
+ * The many-at-once send — either every ticket a filter set selects, or the
+ * ones an operator ticked in the list. They are one dialog because they are
+ * one mechanism: a selection is just a narrower filter, so both reach the
+ * same preview, the same count confirmation and the same fan-out.
+ *
+ * Deliberately more work to press than the single resend: it spends the
+ * prepaid SMS balance, so the recipient count and the cost are shown before
+ * the button does anything, and the count is echoed back to the server so a
+ * roster that moved while this was open is refused rather than silently
+ * sent to.
  */
 export function ResendAllDialog({
-    filters,
+    scope,
     onClose,
 }: {
-    filters: Pick<TicketFilters, 'status' | 'ticket_type_id' | 'search'>;
+    scope: ResendScope;
     onClose: () => void;
 }) {
     const { push } = useToast();
     const [channels, setChannels] = useState<string[]>(['email']);
 
+    const picked = scope.ulids?.length ?? 0;
+    const targeted = picked > 0;
+
     const { data: preview, isLoading, isError } = useQuery({
-        queryKey: ['ticket-resend-preview', filters],
-        queryFn: () => ticketsApi.fetchResendPreview(filters),
+        queryKey: ['ticket-resend-preview', scope],
+        queryFn: () => ticketsApi.fetchResendPreview(scope),
         // No caching: the number the operator agrees to must be current, and
         // the server re-checks it anyway.
         staleTime: 0,
@@ -160,7 +168,7 @@ export function ResendAllDialog({
     });
 
     const mutation = useMutation({
-        mutationFn: () => ticketsApi.resendAllTickets(filters, channels, preview?.tickets ?? -1),
+        mutationFn: () => ticketsApi.resendAllTickets(scope, channels, preview?.tickets ?? -1),
         onSuccess: (data) => {
             push('success', `Queued a resend to ${data.tickets} ticket(s). Progress appears in Notifications.`);
             onClose();
@@ -168,7 +176,7 @@ export function ResendAllDialog({
         onError: (e: Error) => push('critical', e.message),
     });
 
-    const filtered = Boolean(filters.status || filters.search || filters.ticket_type_id);
+    const filtered = Boolean(scope.status || scope.search || scope.ticket_type_id);
     const smsCost = preview && channels.includes('sms') ? preview.sms_cost_paisa_total : 0;
 
     const reach = useMemo(() => {
@@ -183,8 +191,14 @@ export function ResendAllDialog({
         <Dialog
             open
             onClose={onClose}
-            title="Resend to all tickets"
-            description={filtered ? 'Sends to the tickets the current filters select.' : 'Sends to every ticket that can still admit someone.'}
+            title={targeted ? `Resend to ${picked} selected ticket${picked === 1 ? '' : 's'}` : 'Resend to all tickets'}
+            description={
+                targeted
+                    ? 'Sends to the tickets ticked in the list, and to nobody else.'
+                    : filtered
+                        ? 'Sends to the tickets the current filters select.'
+                        : 'Sends to every ticket that can still admit someone.'
+            }
             className="max-w-md"
             footer={
                 <div className="flex justify-end gap-2">
@@ -210,9 +224,19 @@ export function ResendAllDialog({
                         <div className="rounded-md border border-border bg-surface-2 px-3 py-3">
                             <div className="tnum text-[22px] font-semibold text-text">{preview.tickets}</div>
                             <div className="text-[12.5px] text-text-muted">
-                                ticket{preview.tickets === 1 ? '' : 's'} match{preview.tickets === 1 ? 'es' : ''}
-                                {filtered ? ' the current filters' : ''}. Voided and refunded tickets are never included.
+                                ticket{preview.tickets === 1 ? '' : 's'} will be sent to
+                                {!targeted && filtered ? ', matching the current filters' : ''}. Voided and refunded
+                                tickets are never included.
                             </div>
+                            {/* A ticket can be voided between ticking it and pressing
+                                send. Say so here rather than letting the number quietly
+                                disagree with the count on the selection bar. */}
+                            {targeted && preview.tickets !== picked && (
+                                <div className="mt-1.5 text-[12.5px] text-warning-fg">
+                                    {picked - preview.tickets} of the {picked} you selected can no longer be resent to —
+                                    they have been voided or refunded since you ticked them.
+                                </div>
+                            )}
                             {reach && <div className="mt-2 text-[12.5px] text-text-muted">Reaches {reach}.</div>}
                         </div>
 

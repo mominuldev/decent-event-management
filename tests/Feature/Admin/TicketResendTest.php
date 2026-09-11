@@ -13,6 +13,7 @@ use App\Domain\Shared\Models\User;
 use App\Domain\Ticketing\Actions\ResendTicketNotification;
 use App\Domain\Ticketing\Models\Ticket;
 use App\Domain\Ticketing\Models\TicketType;
+use App\Domain\Ticketing\Support\TicketListFilters;
 use App\Jobs\ResendTicketNotificationsJob;
 use Database\Seeders\EventSettingSeeder;
 use Database\Seeders\NotificationTemplateSeeder;
@@ -413,5 +414,220 @@ class TicketResendTest extends TestCase
         $this->assertSame(2, $log->properties['tallies']['tickets']);
         $this->assertSame(2, $log->properties['tallies']['queued']);
         $this->assertSame('active', $log->properties['filters']['status']);
+    }
+
+    /* ------------------------------------------ a hand-picked selection */
+
+    /**
+     * The selection is just a narrower filter, so it reaches the same
+     * preview, the same count confirmation and the same fan-out job — there
+     * is no second code path that could disagree with the first about who
+     * gets a message.
+     */
+    public function test_the_preview_prices_only_the_tickets_that_were_picked(): void
+    {
+        $this->seed(NotificationTemplateSeeder::class);
+        $this->as();
+        $picked = $this->ticket();
+        $this->ticket();
+        $this->ticket();
+
+        $this->getJson('/api/v1/admin/tickets/resend-preview?ulids[]='.$picked->ulid)
+            ->assertOk()
+            ->assertJsonPath('data.tickets', 1)
+            ->assertJsonPath('data.with_email', 1);
+    }
+
+    public function test_the_fan_out_sends_to_the_picked_tickets_and_to_nobody_else(): void
+    {
+        $this->seed(NotificationTemplateSeeder::class);
+        $user = $this->as();
+        $picked = $this->ticket();
+        $alsoPicked = $this->ticket();
+        $notPicked = $this->ticket();
+
+        (new ResendTicketNotificationsJob(
+            filters: ['ulids' => [$picked->ulid, $alsoPicked->ulid]],
+            channels: ['email'],
+            requestedByUserId: (int) $user->id,
+        ))->handle(app(ResendTicketNotification::class));
+
+        $this->assertSame(1, Notification::query()->where('notifiable_id', $picked->id)->count());
+        $this->assertSame(1, Notification::query()->where('notifiable_id', $alsoPicked->id)->count());
+        $this->assertSame(0, Notification::query()->where('notifiable_id', $notPicked->id)->count());
+    }
+
+    /**
+     * The one rule that makes the whole feature safe to hand an operator:
+     * an empty selection sends to nobody. Present-but-empty has to mean
+     * "none" rather than "no filter", or a client bug that posts a cleared
+     * selection becomes a message — and an SMS charge — for the entire
+     * roster.
+     *
+     * Only the JSON send can express this; a query string cannot carry an
+     * empty array at all, so the preview simply never sees the case. That
+     * asymmetry is covered rather than ignored: `expected_count` is what
+     * catches a preview that counted the whole roster because the
+     * selection vanished on the way, and the test below proves it.
+     */
+    public function test_an_empty_selection_sends_to_nobody_rather_than_to_everybody(): void
+    {
+        Queue::fake();
+        $this->seed(NotificationTemplateSeeder::class);
+        $user = $this->as();
+        $this->ticket();
+        $this->ticket();
+
+        $this->send('/api/v1/admin/tickets/resend-all', [
+            'channels' => ['email'],
+            'ulids' => [],
+            'expected_count' => 0,
+        ])
+            ->assertStatus(202)
+            ->assertJsonPath('data.tickets', 0);
+
+        (new ResendTicketNotificationsJob(
+            filters: ['ulids' => []],
+            channels: ['email'],
+            requestedByUserId: (int) $user->id,
+        ))->handle(app(ResendTicketNotification::class));
+
+        $this->assertSame(0, Notification::query()->count());
+    }
+
+    /**
+     * A selection that went missing between the preview and the confirm —
+     * dropped by a serializer, cleared by a stray render — would otherwise
+     * turn a three-ticket send into a whole-roster one. The count the
+     * operator agreed to is what refuses it.
+     */
+    public function test_a_selection_lost_on_the_way_is_refused_rather_than_sent_to_everyone(): void
+    {
+        Queue::fake();
+        $this->seed(NotificationTemplateSeeder::class);
+        $this->as();
+        $this->ticket();
+        $this->ticket();
+        $this->ticket();
+
+        $this->send('/api/v1/admin/tickets/resend-all', [
+            'channels' => ['email'],
+            // The operator was shown 1 — the selection is simply not here.
+            'expected_count' => 1,
+        ])
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'recipient_count_changed');
+
+        Queue::assertNothingPushed();
+    }
+
+    /** A scalar is a malformed selection, not a one-ticket one. */
+    public function test_a_selection_that_is_not_a_list_is_refused(): void
+    {
+        $this->seed(NotificationTemplateSeeder::class);
+        $this->as();
+        $ticket = $this->ticket();
+
+        $this->getJson('/api/v1/admin/tickets/resend-preview?ulids='.$ticket->ulid)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('ulids');
+    }
+
+    /**
+     * A selection composes with the filters rather than replacing them, so
+     * there is no combination of parameters that reaches somebody who was
+     * not picked — picking a voided ticket, or one outside the current
+     * filter, selects nothing rather than overriding the rule.
+     */
+    public function test_a_selection_can_only_narrow_never_widen(): void
+    {
+        $this->seed(NotificationTemplateSeeder::class);
+        $user = $this->as();
+        $active = $this->ticket();
+        $voided = $this->ticket(['status' => 'voided']);
+        $admitted = $this->ticket(['status' => 'fully_admitted']);
+        // Inside the filter, outside the selection — the half that proves
+        // the pick narrows rather than merely agreeing with the filter.
+        $unpickedButActive = $this->ticket();
+
+        (new ResendTicketNotificationsJob(
+            // All three picked, but the filter admits only the active one.
+            filters: ['status' => 'active', 'ulids' => [$active->ulid, $admitted->ulid, $voided->ulid]],
+            channels: ['email'],
+            requestedByUserId: (int) $user->id,
+        ))->handle(app(ResendTicketNotification::class));
+
+        $this->assertSame(1, Notification::query()->where('notifiable_id', $active->id)->count());
+        $this->assertSame(0, Notification::query()->where('notifiable_id', $admitted->id)->count());
+        $this->assertSame(0, Notification::query()->where('notifiable_id', $voided->id)->count());
+        $this->assertSame(0, Notification::query()->where('notifiable_id', $unpickedButActive->id)->count());
+    }
+
+    public function test_a_picked_selection_still_has_to_match_the_count_the_operator_agreed_to(): void
+    {
+        Queue::fake();
+        $this->seed(NotificationTemplateSeeder::class);
+        $this->as();
+        $a = $this->ticket();
+        $b = $this->ticket();
+
+        // Voided between the preview and the confirm: the selection can only
+        // ever shrink, but the operator still agreed to a number.
+        $b->forceFill(['status' => 'voided'])->save();
+
+        $this->send('/api/v1/admin/tickets/resend-all', [
+            'channels' => ['email'],
+            'ulids' => [$a->ulid, $b->ulid],
+            'expected_count' => 2,
+        ])
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'recipient_count_changed');
+
+        Queue::assertNothingPushed();
+    }
+
+    public function test_more_tickets_than_the_cap_are_refused_by_both_the_preview_and_the_send(): void
+    {
+        Queue::fake();
+        $this->seed(NotificationTemplateSeeder::class);
+        $this->as();
+
+        $tooMany = array_map(fn (): string => (string) Str::ulid(), range(1, TicketListFilters::MAX_ULIDS + 1));
+
+        $this->getJson('/api/v1/admin/tickets/resend-preview?'.http_build_query(['ulids' => $tooMany]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('ulids');
+
+        $this->send('/api/v1/admin/tickets/resend-all', [
+            'channels' => ['email'],
+            'ulids' => $tooMany,
+            'expected_count' => 0,
+        ])->assertStatus(422)->assertJsonValidationErrors('ulids');
+
+        Queue::assertNothingPushed();
+    }
+
+    /**
+     * Recording the ULIDs is the point of a hand-picked send rather than a
+     * leak — they identify tickets, carry no personal detail, and are
+     * capped — where the filters-only case deliberately records no rows.
+     */
+    public function test_a_hand_picked_send_records_which_tickets_it_reached(): void
+    {
+        $this->seed(NotificationTemplateSeeder::class);
+        $user = $this->as();
+        $picked = $this->ticket();
+        $this->ticket();
+
+        (new ResendTicketNotificationsJob(
+            filters: ['ulids' => [$picked->ulid]],
+            channels: ['email'],
+            requestedByUserId: (int) $user->id,
+        ))->handle(app(ResendTicketNotification::class));
+
+        $log = ActivityLog::query()->where('event', 'notifications_bulk_resent')->firstOrFail();
+        $this->assertSame([$picked->ulid], $log->properties['filters']['ulids']);
+        $this->assertSame(1, $log->properties['tallies']['tickets']);
+        $this->assertStringStartsWith('Resent 1 ticket', (string) $log->description);
     }
 }

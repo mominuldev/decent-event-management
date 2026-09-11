@@ -1499,6 +1499,82 @@ missing `Idempotency-Key` answers 400; `whatsapp` answers 422 — and all four
 wrote **zero** notification rows. The minted token was revoked and the
 idempotency rows removed afterwards.
 
+#### Pick the tickets to resend to, and a Send button on every row — 2026-09-11
+
+Two ways in, added after the first cut shipped with only "one ticket, from its
+detail dialog" and "every ticket the filters select". Neither adds an endpoint.
+
+- **A checkbox on every row**, a **selection bar** (`N selected` · Resend to
+  selected · Clear), and a header checkbox that takes the whole page.
+- **A send icon on every row**, opening the existing single-ticket dialog
+  without going through the detail dialog first — the common case is one holder
+  at a desk saying they never got theirs.
+
+**A selection is just a narrower filter**, and that is the whole design.
+`TicketListFilters` gained a `ulids` clause, so a hand-picked send reaches the
+same `resend-preview`, the same `expected_count` confirmation and the same
+`ResendTicketNotificationsJob` as a filter-set send. There is no second code
+path that could disagree with the first about who gets a message, and no second
+dialog: `ResendAllDialog` takes a `ResendScope` and retitles itself. Because it
+composes with the other filters rather than replacing them, **there is no
+combination of parameters that reaches somebody who was not picked** — picking a
+voided ticket, or one outside the current filter, selects nothing rather than
+overriding the rule.
+
+- **Present-but-empty means "none", not "no filter".** `whereIn` on an empty
+  list already answers nothing; what matters is that *presence* is what triggers
+  the clause, so a client that posts a cleared selection sends to nobody rather
+  than to the entire roster. Only the JSON send can express this — **a query
+  string cannot carry an empty array**, so the preview never sees the case and
+  an emptied selection silently becomes "no filter" on the way. That asymmetry
+  is covered rather than ignored: `expected_count` is what catches a preview
+  that counted the whole roster, and `test_a_selection_lost_on_the_way_is_refused_rather_than_sent_to_everyone`
+  proves it. The SPA also never asks the preview with an empty list.
+- **The cap is 100 (`TicketListFilters::MAX_ULIDS`), and it is the preview's
+  URL, not the send's capacity.** The preview is a GET, so the selection travels
+  in the query string — 100 ULIDs is ~3.4 KB, comfortably inside the 8 KB
+  request line most servers accept, where 200 would not be. The 422 says to
+  filter and use "resend to all" instead rather than leaving the operator to
+  guess. Client-side, ticking past the cap adds what fits and **says so**:
+  silently dropping the tail is how somebody comes to believe they sent to more
+  people than they did.
+- **Only resendable rows are tickable** (`RESENDABLE_STATUSES` mirrored in the
+  SPA), so "3 selected" and the dialog's own count start out agreeing. They can
+  still diverge — a ticket voided between the tick and the send — so the dialog
+  names the difference instead of quietly showing a smaller number.
+- **The selection survives paging and filtering**, kept as a `Set` on the page
+  rather than in the table. That is what makes it useful across a 20-row page,
+  and it is why the selection bar exists: a pick that has scrolled out of the
+  current filter is otherwise invisible and unclearable.
+- **A hand-picked send records which tickets it reached**, where the
+  filters-only case deliberately records no rows. That is not a reversal of the
+  audit rule: ULIDs identify tickets, carry no personal detail, and are capped —
+  and for a targeted send the list *is* the filter, so recording it is the point.
+- **Fixed in passing — a real bug in the shared `DataTable`.** Every
+  non-sortable header was wrapped in `<button disabled>`, which makes its whole
+  subtree non-interactive: the select-every-row checkbox would have rendered
+  correctly and never fired. Non-sortable headers now render a plain `span`,
+  which is also the only valid markup for a header that contains a control.
+- Two SPA flaws fixed before they shipped: the pick handler called a toast from
+  inside a `setState` updater (impure, and React runs it twice in development,
+  so the cap warning would have doubled), and it counted already-selected rows
+  against the cap, so ticking the header on a half-selected page reported an
+  overflow that was not there.
+
+9 tests (26 in the file), two confirmed to fail against the previous code. Full
+suite **912 passing / 2 skipped**, Pint and PHPStan level 8 clean, SPA typecheck
++ build clean. OpenAPI regenerated (still 129 paths — `ulids` is a
+request-shape addition to two documented endpoints).
+
+**Verified live, read-only and refusal paths only** (same reason as above — this
+box really sends): the preview reports 4 for the whole roster at ৳2.00, 1 at
+৳0.50 for one picked ticket, 2 at ৳1.00 for two, and 0 for a ULID that does not
+exist; 100 picked answers 200 and 101 answers 422 with the "filter and use
+resend to all" message; a scalar `ulids` answers 422; a selected send whose
+`expected_count` does not match answers 409 naming both numbers; and one with no
+`Idempotency-Key` answers 400. Notification rows were 26 before and 26 after.
+The token was revoked and the idempotency row removed afterwards.
+
 ### 🚨 External Dependencies (start during Phase 2!)
 - [ ] **PayStation live merchant account** — the only gateway relationship now needed. Sandbox is self-service (credentials are published in their docs and are already the defaults here), so nothing is blocked until go-live; what is needed is a live `PAYSTATION_MERCHANT_ID`/`PAYSTATION_MERCHANT_PASSWORD` plus the IPN URL registered in their dashboard. See [§PayStation replaces SSLCommerz](#-paystation-replaces-sslcommerz--2026-09-10).
 - [ ] ~~Payment gateway merchant applications (bKash, Nagad, Rocket, SSLCommerz)~~ — **no longer on the critical path** (2026-09-10). PayStation aggregates all of these on one hosted checkout, so direct adapters are now an optional optimisation rather than a prerequisite for launch.

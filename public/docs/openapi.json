@@ -7737,7 +7737,7 @@
                     "Tickets"
                 ],
                 "summary": "How many tickets a bulk resend would reach, and what the SMS would cost",
-                "description": "Read-only. Takes the same filters as the ticket list and narrows them to tickets whose QR still admits someone. The count it returns is what the caller must echo back as `expected_count` to confirm the send.",
+                "description": "Read-only. Takes the same filters as the ticket list and narrows them to tickets whose QR still admits someone. Pass `ulids[]` to price a hand-picked selection instead; it composes with the other filters, so it can only ever narrow the set. The count it returns is what the caller must echo back as `expected_count` to confirm the send.",
                 "operationId": "9ebf35048e7993676e5138d049032d50",
                 "parameters": [
                     {
@@ -7759,6 +7759,18 @@
                         "in": "query",
                         "schema": {
                             "type": "string"
+                        }
+                    },
+                    {
+                        "name": "ulids",
+                        "in": "query",
+                        "description": "Hand-picked ticket ULIDs; at most 100. Present-but-empty selects nothing.",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "maxItems": 100
                         }
                     }
                 ],
@@ -7817,8 +7829,8 @@
                 "tags": [
                     "Tickets"
                 ],
-                "summary": "Resend the ticket confirmation to every ticket matching a filter set",
-                "description": "Queues a background fan-out on the `reports` lane; the response returns immediately with the number of tickets it will walk. Requires `expected_count` to match what `/admin/tickets/resend-preview` currently reports, and an Idempotency-Key.",
+                "summary": "Resend the ticket confirmation to every ticket matching a filter set, or to a hand-picked selection",
+                "description": "Queues a background fan-out on the `reports` lane; the response returns immediately with the number of tickets it will walk. Pass `ulids` to send to a hand-picked selection rather than a whole filter set — it narrows, never widens, and a present-but-empty list sends to nobody. Requires `expected_count` to match what `/admin/tickets/resend-preview` currently reports, and an Idempotency-Key.",
                 "operationId": "918321eab0bf67a9f9c6c4892cdd117d",
                 "parameters": [
                     {
@@ -7865,6 +7877,15 @@
                                     "search": {
                                         "type": "string",
                                         "nullable": true
+                                    },
+                                    "ulids": {
+                                        "description": "Hand-picked ticket ULIDs; at most 100.",
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "nullable": true,
+                                        "maxItems": 100
                                     }
                                 },
                                 "type": "object"

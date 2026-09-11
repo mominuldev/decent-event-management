@@ -104,25 +104,32 @@ export function DataTable<T>({
                                             aria-sort={sortDir ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined}
                                             className={cn(cellPad, 'font-semibold first:sticky first:left-0 first:bg-surface')}
                                         >
-                                            {header.isPlaceholder ? null : (
+                                            {header.isPlaceholder ? null : sortable ? (
                                                 <button
                                                     type="button"
-                                                    disabled={!sortable}
                                                     onClick={header.column.getToggleSortingHandler()}
-                                                    title={sortable ? `Sort by ${headerText(header.column.columnDef.header)}` : undefined}
+                                                    title={`Sort by ${headerText(header.column.columnDef.header)}`}
                                                     className={cn(
-                                                        'inline-flex items-center gap-1',
-                                                        sortable && 'cursor-pointer hover:text-text',
+                                                        'inline-flex cursor-pointer items-center gap-1 hover:text-text',
                                                         sortDir && 'text-text',
                                                     )}
                                                 >
                                                     {flexRender(header.column.columnDef.header, header.getContext())}
-                                                    {sortable && sortDir === 'asc' && <ChevronUp size={13} />}
-                                                    {sortable && sortDir === 'desc' && <ChevronDown size={13} />}
+                                                    {sortDir === 'asc' && <ChevronUp size={13} />}
+                                                    {sortDir === 'desc' && <ChevronDown size={13} />}
                                                     {/* Held by an unsorted-but-sortable header so adding the
                                                         chevron on sort does not shift the label sideways. */}
-                                                    {sortable && !sortDir && <ChevronsUpDown size={13} className="opacity-35" />}
+                                                    {!sortDir && <ChevronsUpDown size={13} className="opacity-35" />}
                                                 </button>
+                                            ) : (
+                                                // A plain span, not a disabled button. A disabled button makes
+                                                // its whole subtree non-interactive, so a header that renders a
+                                                // control of its own — the tickets table's select-every-row
+                                                // checkbox — would look right and never fire. Interactive
+                                                // content nested in a button is invalid markup besides.
+                                                <span className="inline-flex items-center gap-1">
+                                                    {flexRender(header.column.columnDef.header, header.getContext())}
+                                                </span>
                                             )}
                                         </th>
                                     );

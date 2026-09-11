@@ -105,6 +105,22 @@ export async function resendTicket(ulid: string, channels: string[]): Promise<Re
     }
 }
 
+/**
+ * What a bulk resend is aimed at: a filter set, a hand-picked list of
+ * tickets, or both. The two are the same mechanism server-side — a
+ * selection is just a narrower filter — so the preview, the count
+ * confirmation and the fan-out are shared rather than duplicated.
+ */
+export interface ResendScope {
+    status?: string;
+    ticket_type_id?: number | '';
+    search?: string;
+    ulids?: string[];
+}
+
+/** Matches TicketListFilters::MAX_ULIDS; the preview is a GET, so the selection travels in the URL. */
+export const MAX_SELECTED_TICKETS = 100;
+
 export interface ResendPreview {
     tickets: number;
     with_email: number;
@@ -114,12 +130,17 @@ export interface ResendPreview {
     channels_disabled: string[];
 }
 
-export async function fetchResendPreview(filters: Pick<TicketFilters, 'status' | 'ticket_type_id' | 'search'>): Promise<ResendPreview> {
+export async function fetchResendPreview(scope: ResendScope): Promise<ResendPreview> {
     const { data } = await api.get('/admin/tickets/resend-preview', {
         params: {
-            status: filters.status || undefined,
-            ticket_type_id: filters.ticket_type_id || undefined,
-            search: filters.search || undefined,
+            status: scope.status || undefined,
+            ticket_type_id: scope.ticket_type_id || undefined,
+            search: scope.search || undefined,
+            // A query string cannot carry an empty array, so an emptied
+            // selection would silently become "no filter" — i.e. the whole
+            // roster. Never ask: the caller must not open this dialog with
+            // nothing picked, and expected_count catches it if it somehow does.
+            ulids: scope.ulids?.length ? scope.ulids : undefined,
         },
     });
     return unwrap<ResendPreview>(data);
@@ -132,7 +153,7 @@ export interface BulkResendResult {
 }
 
 export async function resendAllTickets(
-    filters: Pick<TicketFilters, 'status' | 'ticket_type_id' | 'search'>,
+    scope: ResendScope,
     channels: string[],
     expectedCount: number,
 ): Promise<BulkResendResult> {
@@ -145,9 +166,12 @@ export async function resendAllTickets(
                 // dialog was open the server answers 409 rather than sending
                 // to more people than were agreed to.
                 expected_count: expectedCount,
-                status: filters.status || undefined,
-                ticket_type_id: filters.ticket_type_id || undefined,
-                search: filters.search || undefined,
+                status: scope.status || undefined,
+                ticket_type_id: scope.ticket_type_id || undefined,
+                search: scope.search || undefined,
+                // Sent as-is, empty array included: JSON can express "none",
+                // and the server reads a present-but-empty list as nobody.
+                ulids: scope.ulids,
             },
             { headers: { 'Idempotency-Key': randomId() } },
         );
