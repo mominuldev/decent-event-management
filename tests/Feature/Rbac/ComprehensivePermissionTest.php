@@ -253,6 +253,10 @@ class ComprehensivePermissionTest extends TestCase
             'gender' => 'male',
             'occupation' => 'Teacher',
             'current_address' => 'Dhaka',
+            'post_office' => 'Dhanmondi',
+            'upazila' => 'Dhanmondi',
+            'address_district' => 'Dhaka',
+            'date_of_birth' => '1988-04-17',
             'participant_type' => 'teacher',
             'ticket_type_ulid' => $ticketType->ulid,
             'participation_type' => 'single',
@@ -365,7 +369,7 @@ class ComprehensivePermissionTest extends TestCase
         $this->postJson(route('api.v1.admin.ticket-types.store'), [
             'name' => 'Test Type',
             'code' => 'TEST',
-            'base_price_paisa' => 100000,
+            'base_price_tk' => 100000,
             'quantity_total' => 100,
         ])->assertStatus(403);
 
@@ -373,7 +377,7 @@ class ComprehensivePermissionTest extends TestCase
         $response = $this->postJson(route('api.v1.admin.ticket-types.store'), [
             'name' => 'Test Type',
             'code' => 'TEST',
-            'base_price_paisa' => 100000,
+            'base_price_tk' => 100000,
             'quantity_total' => 100,
         ]);
         $this->assertNotEquals(403, $response->status());

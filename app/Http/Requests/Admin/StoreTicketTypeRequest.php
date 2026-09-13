@@ -36,13 +36,13 @@ class StoreTicketTypeRequest extends FormRequest
             'name' => ['required', 'string', 'max:100'],
             'name_bn' => ['nullable', 'string', 'max:200'],
             'description' => ['nullable', 'string', 'max:1000'],
-            'base_price_paisa' => ['required', 'integer', 'min:0'],
-            'additional_adult_price_paisa' => ['required', 'integer', 'min:0'],
-            'additional_child_price_paisa' => ['required', 'integer', 'min:0'],
+            'base_price_tk' => ['required', 'integer', 'min:0'],
+            'additional_adult_price_tk' => ['required', 'integer', 'min:0'],
+            'additional_child_price_tk' => ['required', 'integer', 'min:0'],
             // Null means this type has no student rate and a current
-            // student pays `base_price_paisa` like everyone else. 0 is a
+            // student pays `base_price_tk` like everyone else. 0 is a
             // real price (a free student ticket), not "unset".
-            'current_student_price_paisa' => ['nullable', 'integer', 'min:0'],
+            'current_student_price_tk' => ['nullable', 'integer', 'min:0'],
             'currency' => ['nullable', 'string', 'size:3'],
             'base_admits' => ['required', 'integer', 'min:1', 'max:20'],
             'max_admits' => ['required', 'integer', 'min:1', 'max:20', 'gte:base_admits'],

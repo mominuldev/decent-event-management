@@ -17,7 +17,7 @@ class TicketTypeFactory extends Factory
         return [
             'code' => strtoupper(fake()->unique()->lexify('???')),
             'name' => fake()->words(2, true),
-            'base_price_paisa' => fake()->numberBetween(50000, 500000),
+            'base_price_tk' => fake()->numberBetween(50000, 500000),
             'base_admits' => 1,
             'max_admits' => 1,
             'allowed_participant_types' => ['former_student', 'current_student'],

@@ -31,7 +31,7 @@ class PaymentVerifyEndpointTest extends TestCase
     private function registrationWithPayment(string $paymentStatus = 'pending'): Registration
     {
         $attendee = Attendee::factory()->create();
-        $ticketType = TicketType::factory()->create(['base_price_paisa' => 100000]);
+        $ticketType = TicketType::factory()->create(['base_price_tk' => 100000]);
 
         $registration = Registration::factory()->for($ticketType)->for($attendee)->create([
             'status' => 'pending_payment',

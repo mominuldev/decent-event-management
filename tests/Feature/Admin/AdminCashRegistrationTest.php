@@ -76,6 +76,10 @@ class AdminCashRegistrationTest extends TestCase
             'gender' => 'male',
             'occupation' => 'Engineer',
             'current_address' => 'House 12, Road 5, Dhanmondi, Dhaka',
+            'post_office' => 'Dhanmondi',
+            'upazila' => 'Dhanmondi',
+            'address_district' => 'Dhaka',
+            'date_of_birth' => '1988-04-17',
             'participant_type' => 'former_student',
             'ssc_batch_year' => 2004,
             'ticket_type_ulid' => $this->centennialType()->ulid,
@@ -193,16 +197,19 @@ class AdminCashRegistrationTest extends TestCase
         $this->assertSame(0, Registration::count());
     }
 
-    public function test_the_counter_form_requires_the_same_four_profile_fields_the_public_form_does(): void
+    public function test_the_counter_form_requires_the_same_three_profile_fields_the_public_form_does(): void
     {
         $this->actAsAdmin();
 
         $payload = $this->payload();
+        // full_name_bn is omitted too, and must *not* appear in the errors:
+        // it stopped being required on 2026-09-13.
         unset($payload['full_name_bn'], $payload['father_name'], $payload['occupation'], $payload['current_address']);
 
         $this->createAtCounter($payload)
             ->assertStatus(422)
-            ->assertJsonValidationErrors(['full_name_bn', 'father_name', 'occupation', 'current_address']);
+            ->assertJsonValidationErrors(['father_name', 'occupation', 'current_address'])
+            ->assertJsonMissingValidationErrors('full_name_bn');
     }
 
     public function test_a_second_registration_for_the_same_person_is_refused_and_names_the_one_that_exists(): void

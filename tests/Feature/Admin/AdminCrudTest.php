@@ -60,9 +60,9 @@ class AdminCrudTest extends TestCase
         $createResponse = $this->postJson(route('api.v1.admin.ticket-types.store'), [
             'code' => 'VIP',
             'name' => 'VIP Admission',
-            'base_price_paisa' => 500000,
-            'additional_adult_price_paisa' => 200000,
-            'additional_child_price_paisa' => 100000,
+            'base_price_tk' => 500000,
+            'additional_adult_price_tk' => 200000,
+            'additional_child_price_tk' => 100000,
             'currency' => 'BDT',
             'base_admits' => 1,
             'max_admits' => 5,
@@ -85,10 +85,10 @@ class AdminCrudTest extends TestCase
         $createResponse = $this->postJson(route('api.v1.admin.ticket-types.store'), [
             'code' => 'CENX',
             'name' => 'Centennial',
-            'base_price_paisa' => 250000,
-            'additional_adult_price_paisa' => 200000,
-            'additional_child_price_paisa' => 200000,
-            'current_student_price_paisa' => 50000,
+            'base_price_tk' => 250000,
+            'additional_adult_price_tk' => 200000,
+            'additional_child_price_tk' => 200000,
+            'current_student_price_tk' => 50000,
             'base_admits' => 1,
             'max_admits' => 9,
             'quantity_total' => 100,
@@ -96,20 +96,20 @@ class AdminCrudTest extends TestCase
         ]);
 
         $createResponse->assertStatus(201)
-            ->assertJsonPath('data.current_student_price_paisa', 50000);
+            ->assertJsonPath('data.current_student_price_tk', 50000);
 
         $ulid = $createResponse->json('data.ulid');
 
         // Clearing it back to null is how an admin withdraws the tier —
         // it must be reachable, not just settable.
         $this->patchJson(route('api.v1.admin.ticket-types.update', ['ticket_type' => $ulid]), [
-            'current_student_price_paisa' => null,
+            'current_student_price_tk' => null,
         ])->assertStatus(200)
-            ->assertJsonPath('data.current_student_price_paisa', null);
+            ->assertJsonPath('data.current_student_price_tk', null);
 
         $this->assertDatabaseHas('ticket_types', [
             'code' => 'CENX',
-            'current_student_price_paisa' => null,
+            'current_student_price_tk' => null,
         ]);
     }
 
@@ -123,17 +123,17 @@ class AdminCrudTest extends TestCase
         Sanctum::actingAs($this->admin, ['admin'], 'web-admin');
 
         $ticketType = TicketType::factory()->create([
-            'base_price_paisa' => 250000,
-            'current_student_price_paisa' => 50000,
+            'base_price_tk' => 250000,
+            'current_student_price_tk' => 50000,
             'quantity_sold' => 3,
         ]);
 
         $this->patchJson(route('api.v1.admin.ticket-types.update', ['ticket_type' => $ticketType->ulid]), [
-            'current_student_price_paisa' => 10000,
+            'current_student_price_tk' => 10000,
         ])->assertStatus(422)
             ->assertJsonPath('code', 'update_prevented');
 
-        $this->assertSame(50000, (int) $ticketType->fresh()->current_student_price_paisa);
+        $this->assertSame(50000, (int) $ticketType->fresh()->current_student_price_tk);
     }
 
     public function test_admin_can_update_event_settings(): void

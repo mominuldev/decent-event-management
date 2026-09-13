@@ -7,6 +7,17 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
+ * The full attendee record, for a caller entitled to the whole of it.
+ *
+ * Four audiences share this resource and they are not equally trusted: the
+ * admin console, an attendee's own signed-in session, a passwordless "find
+ * my ticket" lookup — and, through {@see RegistrationResource}, the
+ * **unauthenticated** `GET /public/registrations/{ulid}`, which anyone
+ * holding a registration ULID may read. `nid_number` is the field where
+ * that stops being a theoretical distinction, so it is published to an
+ * allowlist of two abilities rather than withheld from a list of callers
+ * somebody has to remember to extend — see {@see self::showsNationalId()}.
+ *
  * @mixin Attendee
  */
 class AttendeeResource extends JsonResource
@@ -27,6 +38,12 @@ class AttendeeResource extends JsonResource
             'email' => $this->email,
             'gender' => $this->gender,
             'date_of_birth' => $this->date_of_birth?->toISOString(),
+            // Absent entirely for a caller outside the allowlist, rather
+            // than masked: a partial government ID number is still real
+            // digits of one, and the boolean beside it answers the only
+            // question the person actually has ("is mine on file?").
+            'nid_number' => $this->when(self::showsNationalId($request), fn () => $this->nid_number),
+            'nid_number_set' => $this->nid_number !== null && $this->nid_number !== '',
             'occupation' => $this->occupation,
             'designation' => $this->designation,
             'organization' => $this->organization,
@@ -37,6 +54,8 @@ class AttendeeResource extends JsonResource
             'tshirt_size' => $this->tshirt_size,
             'address_district' => $this->address_district,
             'current_address' => $this->current_address,
+            'post_office' => $this->post_office,
+            'upazila' => $this->upazila,
             'country' => $this->country,
             'blood_group' => $this->blood_group,
             'emergency_contact_name' => $this->emergency_contact_name,
@@ -57,5 +76,45 @@ class AttendeeResource extends JsonResource
             'profile_photo_thumb_url' => $this->profilePhoto?->smallest()->temporarySignedUrl(),
             'created_at' => $this->created_at?->toISOString(),
         ];
+    }
+
+    /**
+     * Whether this caller may read the attendee's National ID number.
+     *
+     * An allowlist of exactly two token abilities — staff (`admin`) and the
+     * attendee's own signed-in session (`attendee`) — and deliberately not
+     * a list of callers to withhold it from. The first draft of this was
+     * written the other way round, as "everyone except a lookup session",
+     * and it published every registrant's NID on
+     * `GET /public/registrations/{ulid}`: that endpoint is unauthenticated,
+     * embeds this resource through {@see RegistrationResource}, and so had
+     * no token to fail the check. A denylist is only ever as complete as
+     * the last person to think about it.
+     *
+     * The two callers it excludes on purpose:
+     *
+     *  - **No token at all** — the public registration poll above.
+     *  - **`attendee-lookup`** — a "find my ticket" session, authorised by a
+     *    mobile number or email address plus the registered name, and the
+     *    public attendees directory publishes a name. That token is designed
+     *    to buy strictly less than a real sign-in (it cannot read the QR,
+     *    cancel a registration, or set a password), and a government ID
+     *    number belongs on the same side of that line: the other personal
+     *    details it can read describe the person, while this one is the
+     *    number used to *prove* they are that person elsewhere.
+     *
+     * Checked on the ability rather than on a route or a guard, so a new
+     * endpoint returning this resource inherits the rule instead of having
+     * to remember it.
+     */
+    private static function showsNationalId(Request $request): bool
+    {
+        $token = $request->user()?->currentAccessToken();
+
+        if ($token === null) {
+            return false;
+        }
+
+        return $token->can('admin') || $token->can('attendee');
     }
 }

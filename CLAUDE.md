@@ -268,12 +268,12 @@ The public site's `/tickets#register` page (repo `centennial-celebration`, sibli
 
 | | |
 |---|---|
-| registrant | `base_price_paisa` — ৳2,500 |
-| each extra adult | `additional_adult_price_paisa` — ৳2,000 |
-| each extra child | `additional_child_price_paisa` — ৳2,000 |
+| registrant | `base_price_tk` — ৳2,500 |
+| each extra adult | `additional_adult_price_tk` — ৳2,000 |
+| each extra child | `additional_child_price_tk` — ৳2,000 |
 | child under 2 | free, **still admitted** |
 
-A third tier was added 2026-08-21 — a current student pays `current_student_price_paisa` for their own seat, not `base_price_paisa`. See [§A third price tier](#-a-third-price-tier-what-a-current-student-pays--2026-08-21).
+A third tier was added 2026-08-21 — a current student pays `current_student_price_tk` for their own seat, not `base_price_tk`. See [§A third price tier](#-a-third-price-tier-what-a-current-student-pays--2026-08-21).
 
 **The real schema gap this exposed.** A child under 2 attends free but still walks through the gate. `children_count` was read by two things at once — pricing in `CreateRegistration`, and `admits_total` in `IssueTicket` (`adults + children`) — so excluding a free infant to get the price right would have under-counted the admits and the gate would have turned the infant away. Migration `2026_08_14_100000_*` adds `registrations.infants_count` (never priced, always admitted; `admits_total = adults + children + infants`) and `ticket_types.child_free_under_age` (`NULL` on every pre-existing type, so their pricing is byte-identical).
 
@@ -304,7 +304,7 @@ A third tier was added 2026-08-21 — a current student pays `current_student_pr
 **Still open:**
 
 - ~~The public flow initiates payment on the default `bkash` method.~~ **Closed 2026-08-14**, and the default is now `paystation` (2026-09-10); see [§PayStation replaces SSLCommerz](#-paystation-replaces-sslcommerz--2026-09-10).
-- **The registrant pays ৳2,500 and each added member ৳2,000.** Under the superseded family ticket every head paid a flat ৳2,000, so a family of four now costs ৳8,500 rather than ৳8,000. This is a seeder-only change (`base_price_paisa`) if the flat reading was intended — no code depends on the three rates differing.
+- **The registrant pays ৳2,500 and each added member ৳2,000.** Under the superseded family ticket every head paid a flat ৳2,000, so a family of four now costs ৳8,500 rather than ৳8,000. This is a seeder-only change (`base_price_tk`) if the flat reading was intended — no code depends on the three rates differing.
 - The seat-hold copy says "while the payment window is open"; the real TTL is `payment.intent_ttl_minutes` (default **30**). Someone should set that deliberately.
 - No bilingual (BN) rendering on the ticket page; `name_bn` is seeded but the page renders English only.
 
@@ -486,19 +486,19 @@ Full suite **478 passing / 2 skipped** (the two benchmark harnesses, skipped unl
 
 ### ✅ A third price tier: what a current student pays — 2026-08-21
 
-`ticket_types` gained **`current_student_price_paisa`**, so the centennial ticket now carries three rates instead of two, all editable in the admin console:
+`ticket_types` gained **`current_student_price_tk`**, so the centennial ticket now carries three rates instead of two, all editable in the admin console:
 
 | | |
 |---|---|
-| everyone else | `base_price_paisa` — ৳2,500 |
-| a current student | `current_student_price_paisa` — ৳500 |
-| each extra adult / child | `additional_adult_price_paisa` / `additional_child_price_paisa` — ৳2,000 |
+| everyone else | `base_price_tk` — ৳2,500 |
+| a current student | `current_student_price_tk` — ৳500 |
+| each extra adult / child | `additional_adult_price_tk` / `additional_child_price_tk` — ৳2,000 |
 | child under 2 | free, still admitted |
 
 Prices already came from the backend — the public `/tickets` page has read `/public/ticket-types` rather than a constants file since 2026-08-14. What did not exist was a student rate on the row the centennial page sells: `current_student` is in `CENTENNIAL_AUDIENCE`, so a student was billed the full ৳2,500. The standalone `STU` type that does carry a student price is a different row the public page never offers.
 
 - **The discount covers the registrant's own seat only.** Family a student brings is charged the standard extra-adult/child rates, so the discount follows the student rather than their whole party. `test_a_current_students_family_pays_the_standard_member_rates` pins the arithmetic rather than just the base line, because family pricing sharing a code path with the base seat is exactly how a "student family rate" would appear by accident.
-- **`TicketType::basePriceFor(?string $participantType)` is the single definition** of which price column applies to a buyer. `CreateRegistration` asks it instead of reading `base_price_paisa`, so an admin-created or imported registration cannot quietly bill a different rate than the public checkout does.
+- **`TicketType::basePriceFor(?string $participantType)` is the single definition** of which price column applies to a buyer. `CreateRegistration` asks it instead of reading `base_price_tk`, so an admin-created or imported registration cannot quietly bill a different rate than the public checkout does.
 - **NULL means "no student rate", 0 means "free student ticket"** — the column is nullable rather than defaulting to 0, and every check compares against `null` rather than testing truthiness. Every ticket type that predates this is NULL, so their pricing is byte-identical. Same discipline as `child_free_under_age`.
 - **It joins the post-sale price lock.** `TicketTypeController::update()`'s `$restrictedKeys` gained it alongside the other three — leaving it out would have left one editable money column on a tier that has already sold.
 - **⚠️ The seeded ৳500 is a starting value, not a client decision.** It is carried over from the standalone `STU` type, the only current-student price this system has ever had. Set the real figure in the admin console (Tickets → Centennial Ticket → Current student price) or in `TicketTypeSeeder` before first seeding a production database. Note that `TicketTypeSeeder` uses `updateOrCreate`, so a re-seed overwrites an admin-chosen price — pre-existing behaviour for all four price columns, not new here.
@@ -1733,6 +1733,273 @@ rows were removed afterwards.
 - The lookup does not check `is_verified`, deliberately — verification is
   staff confirming an alumni identity, not a gate on reading one's own
   record.
+
+### ✅ Registration collects a postal address, a date of birth, an NID and a blood group — 2026-09-13
+
+Six more fields on the registration form. **Only two are new columns** —
+`date_of_birth`, `blood_group` and `address_district` have existed since the
+table was created and were simply never collected at registration:
+`address_district` and `blood_group` were settable only from the attendee's own
+profile screen, and `date_of_birth` was accepted by both create paths as
+`nullable` and sent by no form at all.
+
+| field | column | public form | counter form | admin edit | self-service |
+|---|---|---|---|---|---|
+| `post_office` | **new** VARCHAR(100) | required | required | nullable | nullable |
+| `upazila` | **new** VARCHAR(100) | required | required | nullable | nullable |
+| `address_district` | existing VARCHAR(80) | required | required | nullable | nullable |
+| `date_of_birth` | existing `date` | required | required | nullable | nullable |
+| `nid_number` | **new** VARCHAR(32) | optional | optional | nullable | nullable |
+| `blood_group` | existing VARCHAR(8) | optional | optional | nullable | nullable |
+
+> Updated later the same day: the NID box now also accepts a birth registration number, and
+> `full_name_bn` is no longer required at registration — see the section that follows.
+
+**The two optional ones are optional on purpose, and it is not a soft call.**
+An under-18 current student has no NID at all, and an alumnus registering from
+a phone will not have the card to hand — refusing the whole registration over
+it costs more than the field is worth. A forced blood group is a *guessed* one,
+and a wrong blood group on a record that exists to be read in an emergency is
+worse than a blank.
+
+**All three address parts are free text, not pickers.** There are ~495
+upazilas and ~9,900 post offices, both renamed, split and reassigned by
+government notification; nothing here parses an address, and a bundled lookup
+table would eventually refuse a place that really exists — and offer an
+overseas alumnus nothing to choose at all. Same reasoning the 2026-08-16
+migration gives for `current_address` being prose. The columns stay nullable
+while the public form requires them, for the same reason as well: required is a
+rule about what the form may submit from now on, and every row that predates
+this has nothing truthful to backfill with.
+
+**The NID does not go everywhere the rest of the record goes, and that is the
+load-bearing part of this change.**
+
+- **`AttendeeResource` publishes it to an allowlist of two token abilities** —
+  `admin` (staff) and `attendee` (the person's own signed-in session) —
+  through `showsNationalId()`. Everyone else gets no key at all, plus
+  `nid_number_set`, a boolean that answers the only question the person
+  actually has. A partial number is not a compromise worth making: masked
+  digits are still real digits of a government ID.
+- **The first cut of that check was a denylist** ("everyone except a lookup
+  session") **and it published every registrant's NID on the unauthenticated
+  `GET /public/registrations/{ulid}`** — that endpoint embeds this resource
+  through `RegistrationResource` and has no token to fail a check.
+  `test_the_public_registration_response_exposes_the_address_but_never_the_nid`
+  caught it and is why the rule is an allowlist now. A denylist is only ever as
+  complete as the last person to think about it.
+- **`UpdateLookupProfileRequest` drops `nid_number` from its ruleset**, beside
+  the `email` it already dropped. A "find my ticket" session is authorised by a
+  mobile number plus the registered name — and the public attendees directory
+  publishes a name — so it cannot read the value, and letting it *write* one
+  would silently replace a number the caller was never shown, in the one field
+  that exists to confirm an alumnus is who they say they are.
+- **`PublicAttendeeResource` carries none of the new fields.** `address_district`
+  *is* published there and has been since that resource was written; the finer
+  parts of the same address are not, because a post office and upazila beside a
+  name narrow a stranger to a village.
+
+**`App\Domain\Registration\Support\NationalId` owns the format**, and is
+deliberately *not* part of `AttendeeIdentity` — that class is explicitly about
+the two identifiers an attendee is *deduplicated* on, and nothing resolves an
+attendee by NID. Same call the SMS work made when it put `Msisdn` beside it
+rather than inside it. Bangladesh has issued exactly three widths — **10**
+(smart card), **13** (older card) and **17** (birth-registration derived) — and
+`Rules\NationalIdNumber` accepts those and nothing else. Being strict is
+affordable *because* the field is optional: the cost of refusing an unusual
+value is a blank box, where the cost of accepting anything is typos in the one
+field meant to verify identity.
+
+- **The value is normalised to digits before it is validated**, by
+  `NormalisesNationalId` on all four write paths. Without that step a number
+  typed with the spaces printed on the card would be refused for being 12
+  characters long. An answer with no digits in it at all (`""`, `N/A`) becomes
+  NULL rather than a string — a column holding both NULL and `''` for one fact
+  is a filter everyone gets wrong exactly once.
+- **No unique index on `nid_number`**, deliberately. A repeated NID is a strong
+  duplicate-person signal and worth a report, but not a fact to act on at
+  registration time: the field is optional and one mistyped digit would collide
+  with a stranger, turning a typo into a refused registration for whoever typed
+  second. Dedupe stays on the normalised mobile number (ADR-08).
+
+**`date_of_birth` is bounded at both ends** — `before:today` and
+`after:1900-01-01`. No *minimum age*: the registrant may be a current student
+of any age, so the only impossible answer is a future one. The 1900 floor is a
+typo guard, because a mistyped century is otherwise stored without complaint
+and printed in the directory. Both frontends compute the picker's `max` in
+**local time, not UTC**: for a reader in Dhaka the UTC date is yesterday until
+6am, so `toISOString()` would refuse a legitimate answer and, worse, make the
+input's own bound disagree with the message the schema produces.
+
+**A current student is not asked for a batch year at all** (same day, at the
+client's request). `ssc_batch_year` was `required_if:participant_type,current_student,former_student`;
+it is now `former_student` only, and both frontends hide the field for a
+current student rather than showing it optional — they have not sat SSC, so
+there is nothing truthful to put in it. `BATCH_YEAR_REQUIRED_FOR` in the public
+site's `features/registration/labels.ts` and `BATCH_YEAR_PARTICIPANT_TYPES` in
+the admin SPA are both `['former_student']` and drive show *and* send. The
+public payload builder also gates `ssc_batch_year` on the participant type,
+not only on presence: react-hook-form keeps a hidden field's value, so a year
+picked as a former student before switching type would otherwise travel with
+it. The server still accepts a year from a current student (`nullable`), so an
+admin correcting a legacy record is unaffected.
+`test_a_current_student_may_register_without_a_batch_year_but_a_former_student_may_not`
+pins both directions. Verified live: a current student with no year → 201 with
+`ssc_batch_year: null`; a former student with no year → 422.
+
+**`Attendee::BLOOD_GROUPS` is now the one list**, shared by all four requests
+and mirrored in both SPAs, replacing the inline array the self-service profile
+was the only path to have. A fixed list rather than free text because this is
+read in an emergency: `O positive`, `o+ve` and `O+` are one answer to a person
+and three unsearchable strings to whoever is filtering for a donor.
+
+**Fixed in passing — the public registration endpoint's spec said nothing was
+required.** Each property in that OpenAPI block carried its own
+`required: ['x']` argument, which swagger-php emits *inside* the property node
+where no consumer looks — so the published spec marked the whole request body
+optional while `StoreRegistrationRequest` refused sixteen missing fields. It
+now carries a schema-level `required` array (the admin counter endpoint always
+had one). This matters more than it looks: the outstanding Phase 2 sign-off is
+the frontend lead's review of exactly this spec.
+
+**Fixed in passing — a real 500.** `address_district` is VARCHAR(80) and the
+attendee profile request validated it at `max:100`, so an 81–100 character
+value reached MySQL and died there instead of returning a field-level 422 —
+exactly the mismatch the name fields once had at `max:200` against
+VARCHAR(150). All four paths now validate `max:80`, and
+`test_an_over_length_district_is_a_validation_error_not_a_database_error` pins
+it.
+
+**Both SPAs:** the admin attendee dialog gained an Identity section (date of
+birth, blood group, NID) and the three postal-address controls, and the three
+values that were read-only `DetailRow`s became editable rather than being
+duplicated; the counter registration dialog gained all six, because the counter
+request mirrors the public one and would otherwise 422 on every walk-up. The
+public ticket form, its review step, the self-service profile and the
+find-my-ticket correction form all collect them, bilingually — the lookup form
+shows *"NID: on file"* in the locked-identifiers strip beside mobile and email
+rather than offering a control the server would discard.
+
+20 tests in `tests/Feature/Public/AttendeeAddressAndIdentityFieldsTest.php`,
+plus the four newly-required fields added to 15 registration payload fixtures
+across nine files. Full suite **951 passing / 2 skipped**, Pint and PHPStan
+level 8 clean, admin SPA typecheck + build clean, public site `tsc`, ESLint (0
+errors, 7 pre-existing warnings) and `next build` clean. OpenAPI regenerated
+(still 132 paths — request/response shape changes to documented endpoints).
+
+**Verified against the running app**, refusals included: a registration
+carrying all six stored and returned them, with `nid_number` **absent** from
+the unauthenticated response while `nid_number_set` was true; `1990 1234 5678
+90123` stored as `19901234567890123`; and 422s for the four missing required
+fields, blank address parts, a 12-digit NID, a future date of birth, a blood
+group outside the catalogue, and an 81-character district. The probe rows were
+removed afterwards and `CEN.quantity_sold` restored — note that `tryReserve()`
+moves `quantity_reserved`, never `quantity_sold`, which is easy to over-correct
+when cleaning up a `pending_payment` registration by hand.
+
+**Still open:**
+
+- **The attendee exports are untouched.** The `.xlsx` roster and the printed
+  PDF directory carry the same seven columns as before. The PDF is built to a
+  client-supplied reference and is handed around physically, so an NID does not
+  belong on it; adding columns to either also disturbs the measured row-height
+  and photo-fit assertions. Decide deliberately rather than by extension.
+- **Nothing searches on the new fields.** `AttendeeListFilters` still matches
+  `full_name`/`mobile`/`email` only. Finding a walk-up by NID at a desk is the
+  obvious next want, and it is one clause — but it also puts a government ID
+  into a `LIKE` scan, so it should be asked for rather than assumed.
+- **`GET /public/registrations/{ulid}` returns the whole attendee record** —
+  mobile, email, date of birth, and now the postal address — to anyone holding
+  the ULID. That is pre-existing (the unguessable ULID *is* the credential, and
+  the endpoint exists for the post-gateway poll), not introduced here; the NID
+  is the one field deliberately kept out of it.
+- **Found, not fixed — a second live 500 of the same class as the district
+  one:** `attendees.country` is `CHAR(2)` while the attendee profile request
+  validates `max:100`, and the public site's profile form offers a free-text
+  Country box capped at 100. Typing `Bangladesh` reaches MySQL and dies there.
+  Fixing it properly means a country picker rather than a tighter rule, which
+  is why it was left alone.
+
+### ✅ The NID box takes a birth certificate number too, and the Bangla name is no longer asked for — 2026-09-13
+
+Two follow-ups to the identity fields added the same day.
+
+**`nid_number` is "NID or Birth Certificate No."** — one optional field that accepts either.
+The reason is the one the original section already gave for making it optional: an under-18
+current student has no NID at all. They do have a birth certificate, and the number on it is
+the only government identifier they can offer, so refusing it left the box permanently empty
+for exactly the audience the student price tier exists for.
+
+- **`NationalId::LENGTHS` is `[10, 13, 16, 17]`.** The three NID widths are unchanged; a birth
+  registration number (BDRIS) is 17 digits online — the same `year + 13` shape the oldest NID
+  inherited — and **16 digits on a certificate issued before 2013**, which BDRIS tells the holder
+  to pad with a `0` after the year. The 16-digit form is stored **as typed, not padded**: nothing
+  here looks the number up, and rewriting a government identifier on the way in stores a value
+  that no longer matches the paper in the person's hand.
+- **The column and API field keep the name `nid_number`**, and so do `NationalId`,
+  `NationalIdNumber` and `NormalisesNationalId`. Both frontends and all four write paths already
+  carry that name; what changed is the label, the hint, the validation message (`10, 13, 16 or
+  17 digits — check the number printed on the card or certificate`), the OpenAPI descriptions
+  and the Zod mirrors in the public site. Every allowlist rule from the original section still
+  holds — it is still absent from the public directory and from the unauthenticated registration
+  response, and still unwritable from a find-my-ticket session.
+- The width test gained a 16-digit case; the 12-digit refusal is unchanged.
+
+**The Bangla name is no longer collected at registration.** `full_name_bn` left the public ticket
+form (`StepDetails`, its Zod schema, the review step and the payload builder) and the counter
+dialog, and `StoreRegistrationRequest`/`StoreAdminRegistrationRequest` moved it from `required`
+to `nullable`. This reverses the 2026-08-16 decision at the product owner's request, and it is
+deliberately the *narrow* removal:
+
+- **The column stays, and so does every renderer.** The ticket PDF (`holder_name_bn`), the Bangla
+  email greeting (`Attendee::banglaName()`), the public directory card, the printed directory
+  export and `AttendeeNameMatch` all already fell back to `full_name` when the Bangla name was
+  blank — the 2026-08-21 sections record each fallback — so a registrant who never gives one
+  simply sees their Latin name in those places. Nothing was deleted and no existing attendee
+  loses the name they gave.
+- **It is still accepted, not refused**, so a cached build of the public site that sends it keeps
+  working, and an admin import can supply one. A blank string reaches the column as NULL. **A
+  returning registrant who gave a Bangla name earlier keeps it** when the omission arrives —
+  `CreateRegistration` already did `$data['full_name_bn'] ?? $attendee->full_name_bn` — and
+  `test_the_bangla_name_is_optional_and_a_returning_registrant_keeps_theirs` pins all three.
+- **It can still be entered and corrected** in the admin attendee dialog, the self-service profile
+  and the find-my-ticket correction form; those were left alone on purpose. Removing it from the
+  forms that *edit* records would make every existing Bangla name uneditable while it goes on
+  being printed on tickets.
+- The one place the fallback now matters at scale is the Bangla email greeting: a new registrant
+  is addressed by their Latin name inside an otherwise Bangla message. That is the trade the
+  removal makes; if it reads badly, the greeting template is editable from the console.
+
+Full suite **952 passing / 2 skipped**, Pint and PHPStan level 8 clean, admin SPA typecheck +
+build clean, public site `tsc`, ESLint (0 errors) and `next build` clean. OpenAPI regenerated
+(still 132 paths — `full_name_bn` left both create endpoints' `required` lists).
+
+### ✅ Ticket-type price columns renamed `*_price_paisa` → `*_price_tk` — 2026-09-13
+
+`ticket_types.base_price_paisa`, `additional_adult_price_paisa`, `additional_child_price_paisa`
+and `current_student_price_paisa` are now `base_price_tk`, `additional_adult_price_tk`,
+`additional_child_price_tk` and `current_student_price_tk` — in the database, the API
+(`/public/ticket-types`, the admin ticket-type endpoints, the nested `ticket_type` on a
+registration), the admin SPA and the public site (`centennial-celebration`).
+
+**⚠️ This is a rename only. The value is still integer paisa** (250000 = ৳2,500), exactly like
+every other money column in the system — the `_tk` suffix is the requested name, not a change
+of unit, and the OpenAPI descriptions say "Amount in paisa" on every one of them for that
+reason. Do not divide by 100 on read or multiply on write anywhere new; `money2paisa()` in the
+admin SPA and `pricing.ts` in the public site are unchanged and still correct.
+
+- Migration `2026_09_13_110000_*` renames the columns in place (`RENAME COLUMN`, no data
+  rewrite) and is guarded so a re-run is a no-op; `down()` restores the old names. The two
+  historical migrations that created the `_paisa` columns are untouched, because production
+  has already run them.
+- **The renames are written out literally, not looped** — Larastan builds each model's column
+  list by statically reading migration files and cannot follow `renameColumn($from, $to)`
+  through variables, which showed up as 18 "undefined property" errors on the first cut.
+- Both frontends must deploy together with the backend: an old public-site build reads
+  `base_price_paisa` off the API and will render every ticket price as `undefined`.
+- No new tests — the existing 951 exercise every renamed field. Full suite green, Pint and
+  PHPStan level 8 clean, admin SPA typecheck + build clean, public site `tsc` and ESLint (0
+  errors) clean. OpenAPI regenerated (still 132 paths — a field rename on documented endpoints).
 
 ### 🚨 External Dependencies (start during Phase 2!)
 - [ ] **PayStation live merchant account** — the only gateway relationship now needed. Sandbox is self-service (credentials are published in their docs and are already the defaults here), so nothing is blocked until go-live; what is needed is a live `PAYSTATION_MERCHANT_ID`/`PAYSTATION_MERCHANT_PASSWORD` plus the IPN URL registered in their dashboard. See [§PayStation replaces SSLCommerz](#-paystation-replaces-sslcommerz--2026-09-10).

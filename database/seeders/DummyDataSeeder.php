@@ -173,7 +173,7 @@ class DummyDataSeeder extends Seeder
                 'participant_type' => fake()->randomElement($ticketType->allowed_participant_types ?? ['former_student']),
             ]);
 
-            $subtotal = $ticketType->base_price_paisa;
+            $subtotal = $ticketType->base_price_tk;
             $regNum = 'REG-100Y-'.str_pad((string) ($confirmedCount + $i), 6, '0', STR_PAD_LEFT);
 
             $registration = Registration::create([
@@ -226,9 +226,9 @@ class DummyDataSeeder extends Seeder
                 'children_count' => 0,
                 'infants_count' => 0,
                 'status' => 'cancelled',
-                'subtotal_paisa' => $ticketType->base_price_paisa,
+                'subtotal_paisa' => $ticketType->base_price_tk,
                 'discount_paisa' => 0,
-                'total_paisa' => $ticketType->base_price_paisa,
+                'total_paisa' => $ticketType->base_price_tk,
                 'currency' => 'BDT',
                 'source' => 'web',
                 'submitted_at' => now()->subDays(5),
@@ -273,9 +273,9 @@ class DummyDataSeeder extends Seeder
 
         $extraAdults = max(0, $adults - $baseAdmits);
 
-        $subtotal = (int) $ticketType->base_price_paisa
-            + ($extraAdults * (int) $ticketType->additional_adult_price_paisa)
-            + ($children * (int) $ticketType->additional_child_price_paisa);
+        $subtotal = (int) $ticketType->base_price_tk
+            + ($extraAdults * (int) $ticketType->additional_adult_price_tk)
+            + ($children * (int) $ticketType->additional_child_price_tk);
 
         return [
             'adults' => $adults,

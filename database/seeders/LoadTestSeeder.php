@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Domain\Registration\Models\Attendee;
 use App\Domain\Ticketing\Models\TicketType;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +26,29 @@ class LoadTestSeeder extends Seeder
     private const int REGISTRATION_COUNT = 20000;
 
     private const int CHUNK_SIZE = 1000;
+
+    /**
+     * Real district / upazila / post-office triples — see AttendeeFactory,
+     * which holds the same pool for the same reason. Duplicated rather than
+     * shared because this seeder deliberately writes raw rows and imports
+     * nothing from the factory layer.
+     *
+     * @var list<array{address_district: string, upazila: string, post_office: string}>
+     */
+    private const ADDRESSES = [
+        ['address_district' => 'Dhaka', 'upazila' => 'Savar', 'post_office' => 'Savar'],
+        ['address_district' => 'Dhaka', 'upazila' => 'Dhamrai', 'post_office' => 'Dhamrai'],
+        ['address_district' => 'Gazipur', 'upazila' => 'Kaliakair', 'post_office' => 'Kaliakair'],
+        ['address_district' => 'Chattogram', 'upazila' => 'Hathazari', 'post_office' => 'Hathazari'],
+        ['address_district' => 'Chattogram', 'upazila' => 'Patiya', 'post_office' => 'Patiya'],
+        ['address_district' => 'Sylhet', 'upazila' => 'Beanibazar', 'post_office' => 'Beanibazar'],
+        ['address_district' => 'Rajshahi', 'upazila' => 'Bagmara', 'post_office' => 'Bhabaniganj'],
+        ['address_district' => 'Khulna', 'upazila' => 'Dumuria', 'post_office' => 'Dumuria'],
+        ['address_district' => 'Barishal', 'upazila' => 'Bakerganj', 'post_office' => 'Bakerganj'],
+        ['address_district' => 'Cumilla', 'upazila' => 'Laksam', 'post_office' => 'Laksam'],
+        ['address_district' => 'Mymensingh', 'upazila' => 'Trishal', 'post_office' => 'Trishal'],
+        ['address_district' => 'Rangpur', 'upazila' => 'Mithapukur', 'post_office' => 'Mithapukur'],
+    ];
 
     public function run(): void
     {
@@ -86,11 +110,22 @@ class LoadTestSeeder extends Seeder
                     // `attendee0@…` all over again.
                     'email' => fake()->boolean(60) ? strtolower($ulid).'@example.test' : null,
                     'gender' => fake()->randomElement(['male', 'female']),
+                    // Set on every row, matching AttendeeFactory and the
+                    // public form's own rules — a volume fixture whose rows
+                    // all look like legacy records measures the wrong thing.
+                    'date_of_birth' => fake()->dateTimeBetween('-70 years', '-15 years')->format('Y-m-d'),
+                    'nid_number' => fake()->boolean(55) ? fake()->numerify('##########') : null,
+                    'blood_group' => fake()->boolean(65)
+                        ? fake()->randomElement(Attendee::BLOOD_GROUPS)
+                        : null,
                     'participant_type' => $participantType,
                     'ssc_batch_year' => $needsBatchYear ? fake()->numberBetween(1971, 2024) : null,
                     'tshirt_required' => fake()->boolean(70) ? 1 : 0,
                     'tshirt_size' => fake()->randomElement(['S', 'M', 'L', 'XL', 'XXL']),
                     'current_address' => fake()->buildingNumber().', '.fake()->streetName().', '.fake()->city(),
+                    // A district/upazila/post-office triple picked together,
+                    // so the address is internally consistent.
+                    ...self::ADDRESSES[array_rand(self::ADDRESSES)],
                     'country' => 'BD',
                     'is_verified' => fake()->boolean(40) ? 1 : 0,
                     'created_at' => $now,

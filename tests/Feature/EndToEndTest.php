@@ -38,7 +38,7 @@ class EndToEndTest extends TestCase
 
         $ticketType = TicketType::factory()->create([
             'name' => 'General Alumni',
-            'base_price_paisa' => 100000,
+            'base_price_tk' => 100000,
             'quantity_total' => 100,
             'quantity_reserved' => 0,
             'quantity_sold' => 0,
@@ -69,6 +69,10 @@ class EndToEndTest extends TestCase
             'father_name' => 'Abdul Karim',
             'occupation' => 'Engineer',
             'current_address' => 'House 12, Road 5, Dhanmondi, Dhaka',
+            'post_office' => 'Dhanmondi',
+            'upazila' => 'Dhanmondi',
+            'address_district' => 'Dhaka',
+            'date_of_birth' => '1988-04-17',
             'participant_type' => 'former_student',
             'ssc_batch_year' => 2010,
             'ticket_type_ulid' => $ticketType->ulid,
@@ -95,8 +99,8 @@ class EndToEndTest extends TestCase
         $payment = Payment::factory()->create([
             'registration_id' => $registration->id,
             'attendee_id' => $attendee->id,
-            'amount_due_paisa' => $ticketType->base_price_paisa,
-            'amount_paid_paisa' => $ticketType->base_price_paisa,
+            'amount_due_paisa' => $ticketType->base_price_tk,
+            'amount_paid_paisa' => $ticketType->base_price_tk,
             'status' => 'awaiting_verification',
             'manual_trx_id' => 'TRX-E2E-TEST-001',
             'currency' => 'BDT',
@@ -246,7 +250,7 @@ class EndToEndTest extends TestCase
 
         $ticketType = TicketType::factory()->create([
             'name' => 'General Alumni',
-            'base_price_paisa' => 100000,
+            'base_price_tk' => 100000,
             'quantity_total' => 100,
             'quantity_reserved' => 0,
             'quantity_sold' => 0,
@@ -277,6 +281,10 @@ class EndToEndTest extends TestCase
             'father_name' => 'Abdul Karim',
             'occupation' => 'Engineer',
             'current_address' => 'House 12, Road 5, Dhanmondi, Dhaka',
+            'post_office' => 'Dhanmondi',
+            'upazila' => 'Dhanmondi',
+            'address_district' => 'Dhaka',
+            'date_of_birth' => '1988-04-17',
             'participant_type' => 'former_student',
             'ssc_batch_year' => 2011,
             'ticket_type_ulid' => $ticketType->ulid,
@@ -399,7 +407,7 @@ class EndToEndTest extends TestCase
 
         $ticketType = TicketType::factory()->create([
             'name' => 'Family Package',
-            'base_price_paisa' => 300000,
+            'base_price_tk' => 300000,
             'quantity_total' => 50,
             'quantity_sold' => 0,
             'is_active' => true,
@@ -423,6 +431,10 @@ class EndToEndTest extends TestCase
             'father_name' => 'Abdul Karim',
             'occupation' => 'Engineer',
             'current_address' => 'House 12, Road 5, Dhanmondi, Dhaka',
+            'post_office' => 'Dhanmondi',
+            'upazila' => 'Dhanmondi',
+            'address_district' => 'Dhaka',
+            'date_of_birth' => '1988-04-17',
             'participant_type' => 'former_student',
             'ssc_batch_year' => 2015,
             'ticket_type_ulid' => $ticketType->ulid,
@@ -448,7 +460,7 @@ class EndToEndTest extends TestCase
     public function test_flow_handles_idempotency_key(): void
     {
         $ticketType = TicketType::factory()->create([
-            'base_price_paisa' => 100000,
+            'base_price_tk' => 100000,
             'is_active' => true,
             'is_public' => true,
             'sale_starts_at' => now()->subDay(),
@@ -463,6 +475,10 @@ class EndToEndTest extends TestCase
             'father_name' => 'Abdul Karim',
             'occupation' => 'Engineer',
             'current_address' => 'House 12, Road 5, Dhanmondi, Dhaka',
+            'post_office' => 'Dhanmondi',
+            'upazila' => 'Dhanmondi',
+            'address_district' => 'Dhaka',
+            'date_of_birth' => '1988-04-17',
             'participant_type' => 'former_student',
             'ssc_batch_year' => 2012,
             'ticket_type_ulid' => $ticketType->ulid,
@@ -510,7 +526,7 @@ class EndToEndTest extends TestCase
 
         $ticketType = TicketType::factory()->create([
             'name' => 'Couple Package',
-            'base_price_paisa' => 200000,
+            'base_price_tk' => 200000,
             'quantity_total' => 50,
             'quantity_sold' => 0,
             'is_active' => true,
@@ -527,6 +543,10 @@ class EndToEndTest extends TestCase
             'father_name' => 'Abdul Karim',
             'occupation' => 'Engineer',
             'current_address' => 'House 12, Road 5, Dhanmondi, Dhaka',
+            'post_office' => 'Dhanmondi',
+            'upazila' => 'Dhanmondi',
+            'address_district' => 'Dhaka',
+            'date_of_birth' => '1988-04-17',
             'participant_type' => 'former_student',
             'ssc_batch_year' => 2008,
             'ticket_type_ulid' => $ticketType->ulid,
@@ -565,7 +585,7 @@ class EndToEndTest extends TestCase
 
         $ticketType = TicketType::factory()->create([
             'name' => 'Sponsor',
-            'base_price_paisa' => 1000000,
+            'base_price_tk' => 1000000,
             'quantity_total' => 100,
             'quantity_sold' => 0,
             'is_active' => true,
@@ -583,6 +603,10 @@ class EndToEndTest extends TestCase
             'father_name' => 'Abdul Karim',
             'occupation' => 'Engineer',
             'current_address' => 'House 12, Road 5, Dhanmondi, Dhaka',
+            'post_office' => 'Dhanmondi',
+            'upazila' => 'Dhanmondi',
+            'address_district' => 'Dhaka',
+            'date_of_birth' => '1988-04-17',
             'participant_type' => 'sponsor',
             'ticket_type_ulid' => $ticketType->ulid,
             'participation_type' => 'single',
@@ -626,7 +650,7 @@ class EndToEndTest extends TestCase
 
         $ticketType = TicketType::factory()->create([
             'name' => 'VIP Guest',
-            'base_price_paisa' => 500000,
+            'base_price_tk' => 500000,
             'quantity_total' => 200,
             'quantity_sold' => 0,
             'is_active' => true,
@@ -644,6 +668,10 @@ class EndToEndTest extends TestCase
             'father_name' => 'Abdul Karim',
             'occupation' => 'Engineer',
             'current_address' => 'House 12, Road 5, Dhanmondi, Dhaka',
+            'post_office' => 'Dhanmondi',
+            'upazila' => 'Dhanmondi',
+            'address_district' => 'Dhaka',
+            'date_of_birth' => '1988-04-17',
             'participant_type' => 'guest',
             'ticket_type_ulid' => $ticketType->ulid,
             'participation_type' => 'single',

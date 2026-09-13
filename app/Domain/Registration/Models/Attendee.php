@@ -31,6 +31,7 @@ class Attendee extends AuthUserBase
         'email',
         'gender',
         'date_of_birth',
+        'nid_number',
         'occupation',
         'designation',
         'organization',
@@ -42,12 +43,27 @@ class Attendee extends AuthUserBase
         'tshirt_size',
         'address_district',
         'current_address',
+        'post_office',
+        'upazila',
         'country',
         'blood_group',
         'emergency_contact_name',
         'emergency_contact_phone',
         'notes',
     ];
+
+    /**
+     * The blood groups a form may offer, shared by every write path so the
+     * public form, the counter form, the admin edit and the attendee's own
+     * profile cannot drift into accepting different sets.
+     *
+     * A fixed list rather than free text because this is read in an
+     * emergency: `O positive`, `o+ve` and `O+` are one answer to a person
+     * and three unsearchable strings to whoever is filtering for a donor.
+     *
+     * @var list<string>
+     */
+    public const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
     protected $hidden = [
         'auth_token_hash',

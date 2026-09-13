@@ -51,6 +51,10 @@ class CentennialTicketFlowTest extends TestCase
             'father_name' => 'Abdul Karim',
             'occupation' => 'Engineer',
             'current_address' => 'House 12, Road 5, Dhanmondi, Dhaka',
+            'post_office' => 'Dhanmondi',
+            'upazila' => 'Dhanmondi',
+            'address_district' => 'Dhaka',
+            'date_of_birth' => '1988-04-17',
             'participant_type' => 'former_student',
             'ssc_batch_year' => 2004,
             'ticket_type_ulid' => $ticketType->ulid,
@@ -255,9 +259,9 @@ class CentennialTicketFlowTest extends TestCase
     public function test_a_ticket_type_without_the_rule_bills_infants_as_before(): void
     {
         $ticketType = TicketType::factory()->create([
-            'base_price_paisa' => 100000,
-            'additional_adult_price_paisa' => 50000,
-            'additional_child_price_paisa' => 25000,
+            'base_price_tk' => 100000,
+            'additional_adult_price_tk' => 50000,
+            'additional_child_price_tk' => 25000,
             'base_admits' => 1,
             'max_admits' => 6,
             'child_free_under_age' => null,
@@ -354,8 +358,8 @@ class CentennialTicketFlowTest extends TestCase
     public function test_a_ticket_type_without_a_student_rate_bills_a_student_the_base_price(): void
     {
         $ticketType = TicketType::factory()->create([
-            'base_price_paisa' => 100000,
-            'current_student_price_paisa' => null,
+            'base_price_tk' => 100000,
+            'current_student_price_tk' => null,
             'base_admits' => 1,
             'max_admits' => 4,
             'is_active' => true,
@@ -378,8 +382,8 @@ class CentennialTicketFlowTest extends TestCase
     public function test_a_zero_student_rate_is_a_free_ticket_not_an_absent_rule(): void
     {
         $ticketType = TicketType::factory()->create([
-            'base_price_paisa' => 100000,
-            'current_student_price_paisa' => 0,
+            'base_price_tk' => 100000,
+            'current_student_price_tk' => 0,
             'base_admits' => 1,
             'max_admits' => 4,
             'is_active' => true,
@@ -401,7 +405,7 @@ class CentennialTicketFlowTest extends TestCase
         $response = $this->getJson(route('api.v1.public.ticket-types.index'));
 
         $response->assertStatus(200)
-            ->assertJsonFragment(['code' => 'CEN', 'current_student_price_paisa' => 50000]);
+            ->assertJsonFragment(['code' => 'CEN', 'current_student_price_tk' => 50000]);
     }
 
     public function test_every_allowed_participant_type_may_buy_the_one_ticket(): void
@@ -466,7 +470,7 @@ class CentennialTicketFlowTest extends TestCase
     public function test_a_ticket_with_no_restriction_sells_to_anyone(): void
     {
         $ticketType = TicketType::factory()->create([
-            'base_price_paisa' => 100000,
+            'base_price_tk' => 100000,
             'allowed_participant_types' => [],
             'is_active' => true,
             'is_public' => true,

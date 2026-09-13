@@ -9,6 +9,14 @@ export interface Attendee {
     email: string | null;
     gender: string | null;
     date_of_birth: string | null;
+    /**
+     * Absent — not null — for a caller the API will not show it to: an
+     * unauthenticated public reader or a find-my-ticket lookup session. The
+     * admin console always holds an `admin` token, so it always gets it.
+     */
+    nid_number?: string | null;
+    /** Whether one is on file, readable even where the number itself is not. */
+    nid_number_set: boolean;
     occupation: string | null;
     designation: string | null;
     organization: string | null;
@@ -19,6 +27,8 @@ export interface Attendee {
     tshirt_size: string | null;
     address_district: string | null;
     current_address: string | null;
+    post_office: string | null;
+    upazila: string | null;
     country: string | null;
     blood_group: string | null;
     emergency_contact_name: string | null;
@@ -41,6 +51,14 @@ export interface UpdateAttendeePayload {
     email?: string | null;
     occupation?: string | null;
     current_address?: string | null;
+    post_office?: string | null;
+    upazila?: string | null;
+    address_district?: string | null;
+    /** ISO date (YYYY-MM-DD) — the API refuses a future one. */
+    date_of_birth?: string | null;
+    /** 10, 13 or 17 digits; punctuation is stripped server-side. */
+    nid_number?: string | null;
+    blood_group?: string | null;
     participant_type?: ParticipantType;
     ssc_batch_year?: number | null;
     is_verified?: boolean;
@@ -67,3 +85,13 @@ export const PARTICIPANT_TYPES: { value: ParticipantType; label: string }[] = [
     { value: 'sponsor', label: 'Sponsor' },
     { value: 'other', label: 'Other' },
 ];
+
+/**
+ * The blood groups the API accepts, mirroring `Attendee::BLOOD_GROUPS`.
+ * A fixed list rather than free text because this is read in an emergency —
+ * `O positive` and `O+` are one answer to a person and two unsearchable
+ * strings to whoever is filtering for a donor.
+ */
+export const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const;
+
+export type BloodGroup = (typeof BLOOD_GROUPS)[number];

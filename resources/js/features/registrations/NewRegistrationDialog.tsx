@@ -7,6 +7,7 @@ import { useToast } from '@/components/Toast';
 import { ApiRequestError } from '@/lib/api';
 import { money } from '@/lib/cn';
 import { randomId } from '@/lib/id';
+import { BLOOD_GROUPS } from '@/features/attendees/types';
 import { fetchTicketTypes } from '@/features/tickets/api';
 import type { TicketType } from '@/features/tickets/types';
 import * as registrationsApi from './api';
@@ -42,21 +43,33 @@ function titleCase(s: string) {
 
 type GuestDraft = RegistrationGuestPayload & { key: string };
 
+/**
+ * Ceiling for the date-of-birth picker, matching the API's `before:today`.
+ * Module-load rather than per render — the server refuses a future date
+ * regardless, so a dialog left open across midnight costs nothing.
+ */
+const TODAY = new Date().toISOString().slice(0, 10);
+
 function emptyGuest(): GuestDraft {
     return { key: randomId(), full_name: '', relation: 'spouse', age_group: 'adult', age: null };
 }
 
 const EMPTY_FORM = {
     full_name: '',
-    full_name_bn: '',
     father_name: '',
     mobile: '',
     email: '',
     gender: 'male' as 'male' | 'female',
+    date_of_birth: '',
+    nid_number: '',
+    blood_group: '',
     occupation: '',
     designation: '',
     organization: '',
     current_address: '',
+    post_office: '',
+    upazila: '',
+    address_district: '',
     participant_type: 'former_student',
     ssc_batch_year: '',
     ticket_type_ulid: '',
@@ -167,15 +180,23 @@ export function NewRegistrationDialog({
     const submitDetails = () => {
         const payload: CreateRegistrationPayload = {
             full_name: form.full_name.trim(),
-            full_name_bn: form.full_name_bn.trim(),
             father_name: form.father_name.trim(),
             mobile: form.mobile.trim(),
             email: form.email.trim() || null,
             gender: form.gender,
+            date_of_birth: form.date_of_birth,
+            // Optional at the desk — an under-18 student has no NID (they may
+            // give their birth registration number instead), and a guessed
+            // blood group is worse than a blank one.
+            nid_number: form.nid_number.trim() || null,
+            blood_group: form.blood_group || null,
             occupation: form.occupation.trim(),
             designation: form.designation.trim() || null,
             organization: form.organization.trim() || null,
             current_address: form.current_address.trim(),
+            post_office: form.post_office.trim(),
+            upazila: form.upazila.trim(),
+            address_district: form.address_district.trim(),
             participant_type: form.participant_type,
             ssc_batch_year: needsBatchYear && form.ssc_batch_year ? Number(form.ssc_batch_year) : null,
             ticket_type_ulid: form.ticket_type_ulid,
@@ -295,7 +316,7 @@ export function NewRegistrationDialog({
                                     <option value="">Select…</option>
                                     {sellableTypes.map((t) => (
                                         <option key={t.ulid} value={t.ulid}>
-                                            {t.name} — {money(t.base_price_paisa)}
+                                            {t.name} — {money(t.base_price_tk)}
                                         </option>
                                     ))}
                                 </Select>
@@ -323,16 +344,6 @@ export function NewRegistrationDialog({
                                     id="full-name"
                                     value={form.full_name}
                                     onChange={(e) => set('full_name', e.target.value)}
-                                />
-                            </Field>
-                            {/* The name the ticket PDF and the confirmation
-                                email actually print. */}
-                            <Field id="full-name-bn" label="Name in Bangla" error={err('full_name_bn')}>
-                                <Input
-                                    id="full-name-bn"
-                                    lang="bn"
-                                    value={form.full_name_bn}
-                                    onChange={(e) => set('full_name_bn', e.target.value)}
                                 />
                             </Field>
                             <Field id="father-name" label="Father's name" error={err('father_name')}>
@@ -412,6 +423,68 @@ export function NewRegistrationDialog({
                                 onChange={(e) => set('current_address', e.target.value)}
                             />
                         </Field>
+                        {/* Free text, not pickers — upazilas and post offices
+                            are renamed and reassigned by notification, and a
+                            stale list would refuse a place that exists. */}
+                        <div className="grid gap-3 sm:grid-cols-3">
+                            <Field id="post-office" label="Post office" error={err('post_office')}>
+                                <Input
+                                    id="post-office"
+                                    value={form.post_office}
+                                    onChange={(e) => set('post_office', e.target.value)}
+                                />
+                            </Field>
+                            <Field id="upazila" label="Upazila" error={err('upazila')}>
+                                <Input
+                                    id="upazila"
+                                    value={form.upazila}
+                                    onChange={(e) => set('upazila', e.target.value)}
+                                />
+                            </Field>
+                            <Field id="address-district" label="District" error={err('address_district')}>
+                                <Input
+                                    id="address-district"
+                                    value={form.address_district}
+                                    onChange={(e) => set('address_district', e.target.value)}
+                                />
+                            </Field>
+                        </div>
+                    </FormSection>
+
+                    <FormSection title="Identity" description="Never shown on the public directory. Date of birth is required; the other two are asked for only if they have them to hand.">
+                        <div className="grid gap-3 sm:grid-cols-3">
+                            <Field id="date-of-birth" label="Date of birth" error={err('date_of_birth')}>
+                                <Input
+                                    id="date-of-birth"
+                                    type="date"
+                                    max={TODAY}
+                                    value={form.date_of_birth}
+                                    onChange={(e) => set('date_of_birth', e.target.value)}
+                                />
+                            </Field>
+                            <Field id="blood-group" label="Blood group" optional error={err('blood_group')}>
+                                <Select id="blood-group" value={form.blood_group} onChange={(e) => set('blood_group', e.target.value)}>
+                                    <option value="">Not known</option>
+                                    {BLOOD_GROUPS.map((group) => (
+                                        <option key={group} value={group}>{group}</option>
+                                    ))}
+                                </Select>
+                            </Field>
+                            <Field
+                                id="nid-number"
+                                label="NID or birth certificate no."
+                                optional
+                                hint="NID (10, 13 or 17 digits) or birth registration number (16 or 17)."
+                                error={err('nid_number')}
+                            >
+                                <Input
+                                    id="nid-number"
+                                    inputMode="numeric"
+                                    value={form.nid_number}
+                                    onChange={(e) => set('nid_number', e.target.value)}
+                                />
+                            </Field>
+                        </div>
                     </FormSection>
 
                     <FormSection

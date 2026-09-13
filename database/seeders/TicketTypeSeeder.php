@@ -29,13 +29,11 @@ class TicketTypeSeeder extends Seeder
     public function run(): void
     {
         $types = [
-            ['code' => 'ALM', 'name' => 'Alumni', 'base_admits' => 1, 'max_admits' => 1, 'base_price_paisa' => 150000, 'allowed_participant_types' => ['former_student'], 'quantity_total' => 8000],
-            ['code' => 'STU', 'name' => 'Current Student', 'base_admits' => 1, 'max_admits' => 1, 'base_price_paisa' => 50000, 'allowed_participant_types' => ['current_student'], 'quantity_total' => 3000],
-            ['code' => 'TCH', 'name' => 'Teacher', 'base_admits' => 1, 'max_admits' => 1, 'base_price_paisa' => 0, 'allowed_participant_types' => ['teacher'], 'quantity_total' => 200],
-            ['code' => 'STF', 'name' => 'Staff', 'base_admits' => 1, 'max_admits' => 1, 'base_price_paisa' => 0, 'allowed_participant_types' => ['staff'], 'quantity_total' => 200],
-            ['code' => 'VIP', 'name' => 'VIP Guest', 'base_admits' => 2, 'max_admits' => 2, 'base_price_paisa' => 500000, 'allowed_participant_types' => ['guest'], 'quantity_total' => 200, 'requires_approval' => true, 'is_public' => false],
-            ['code' => 'FAM', 'name' => 'Family', 'base_admits' => 4, 'max_admits' => 6, 'base_price_paisa' => 400000, 'additional_adult_price_paisa' => 100000, 'additional_child_price_paisa' => 50000, 'allowed_participant_types' => ['former_student', 'current_student', 'teacher', 'staff'], 'quantity_total' => 4000],
-            ['code' => 'SPN', 'name' => 'Sponsor', 'base_admits' => 2, 'max_admits' => 4, 'base_price_paisa' => 1000000, 'allowed_participant_types' => ['sponsor'], 'quantity_total' => 100, 'requires_approval' => true, 'is_public' => false],
+            ['code' => 'ALM', 'name' => 'Alumni', 'base_admits' => 1, 'max_admits' => 1, 'base_price_tk' => 1520, 'allowed_participant_types' => ['former_student'], 'quantity_total' => 2500],
+            ['code' => 'STU', 'name' => 'Current Student', 'base_admits' => 1, 'max_admits' => 1, 'base_price_tk' => 1020, 'allowed_participant_types' => ['current_student'], 'quantity_total' => 1700],
+            ['code' => 'TCH', 'name' => 'Teacher', 'base_admits' => 1, 'max_admits' => 1, 'base_price_tk' => 1520, 'allowed_participant_types' => ['teacher'], 'quantity_total' => 200],
+            ['code' => 'STF', 'name' => 'Staff', 'base_admits' => 1, 'max_admits' => 1, 'base_price_tk' => 1520, 'allowed_participant_types' => ['staff'], 'quantity_total' => 15],
+            ['code' => 'VIP', 'name' => 'VIP Guest', 'base_admits' => 2, 'max_admits' => 2, 'base_price_tk' => 3060, 'allowed_participant_types' => ['guest'], 'quantity_total' => 200, 'requires_approval' => true, 'is_public' => false],
 
             // The two centennial categories the public ticket page sells.
             // These are the money authority for that page — it renders these
@@ -53,17 +51,17 @@ class TicketTypeSeeder extends Seeder
             // "family ticket" to pick and no way to pick the wrong one.
             //
             // The tiered columns carry the whole rule:
-            //   registrant        → base_price_paisa          (৳2,500)
-            //   a current student → current_student_price     (৳500)
-            //   each extra adult  → additional_adult_price    (৳2,000)
-            //   each extra child  → additional_child_price    (৳2,000)
+            //   registrant        → base_price_tk          (৳1,520)
+            //   a current student → current_student_price     (৳1,020)
+            //   each extra adult  → additional_adult_price    (৳1,020)
+            //   each extra child  → additional_child_price    (৳1,020)
             //   child under 2     → free, still admitted
             //
             // The student rate applies to the student's own seat only —
             // family they bring pays the standard extra rates, so the
             // discount follows the student, not their whole party.
             //
-            // ⚠️ ৳500 is carried over from the standalone STU ticket type
+            // ⚠️ 1020 is carried over from the standalone STU ticket type
             // above, which is the only current-student price this system has
             // ever had. It is a starting value, not a client decision: set
             // the real one in the admin console (Tickets → Centennial
@@ -81,7 +79,7 @@ class TicketTypeSeeder extends Seeder
             // deliberately absent: they have their own VIP/SPN types, which
             // are is_public=false and requires_approval=true, and must not
             // become self-serve at the centennial price.
-            ['code' => 'CEN', 'name' => 'Centennial Ticket', 'name_bn' => 'শতবর্ষ টিকিট', 'base_admits' => 1, 'max_admits' => 9, 'base_price_paisa' => 250000, 'additional_adult_price_paisa' => 200000, 'additional_child_price_paisa' => 200000, 'current_student_price_paisa' => 50000, 'child_free_under_age' => 2, 'allowed_participant_types' => self::CENTENNIAL_AUDIENCE, 'quantity_total' => 12000, 'includes_tshirt' => true],
+            ['code' => 'CEN', 'name' => 'Centennial Ticket', 'name_bn' => 'শতবর্ষ টিকিট', 'base_admits' => 1, 'max_admits' => 9, 'base_price_tk' => 1520, 'additional_adult_price_tk' => 1020, 'additional_child_price_tk' => 1020, 'current_student_price_tk' => 1020, 'child_free_under_age' => 1, 'allowed_participant_types' => self::CENTENNIAL_AUDIENCE, 'quantity_total' => 2540, 'includes_tshirt' => true],
         ];
 
         foreach ($types as $i => $type) {

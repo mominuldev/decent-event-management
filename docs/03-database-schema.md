@@ -238,9 +238,10 @@ Roles and permissions are **seeded from versioned config**, never created at run
 | `name` | VARCHAR(100) | | e.g. "Alumni Ticket" |
 | `name_bn` | VARCHAR(100) | ✓ | |
 | `description` | TEXT | ✓ | |
-| `base_price_paisa` | BIGINT UNSIGNED | | |
-| `additional_adult_price_paisa` | BIGINT UNSIGNED | | Default 0 |
-| `additional_child_price_paisa` | BIGINT UNSIGNED | | Default 0 |
+| `base_price_tk` | BIGINT UNSIGNED | | **Integer paisa** despite the `_tk` suffix (renamed from `base_price_paisa` 2026-09-13; 250000 = ৳2,500) |
+| `additional_adult_price_tk` | BIGINT UNSIGNED | | Default 0. Integer paisa |
+| `additional_child_price_tk` | BIGINT UNSIGNED | | Default 0. Integer paisa |
+| `current_student_price_tk` | BIGINT UNSIGNED | ✓ | Integer paisa; NULL = no student rate, 0 = free |
 | `currency` | CHAR(3) | | Default `BDT` |
 | `base_admits` | TINYINT UNSIGNED | | 1 single, 2 couple, 4 family |
 | `max_admits` | TINYINT UNSIGNED | | Upper bound per ticket |

@@ -3,12 +3,16 @@
 namespace App\Http\Requests\Attendee;
 
 use App\Domain\Registration\Models\Attendee;
+use App\Domain\Registration\Rules\NationalIdNumber;
 use App\Domain\Registration\Support\AttendeeIdentity;
+use App\Http\Requests\Concerns\NormalisesNationalId;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class UpdateProfileRequest extends FormRequest
 {
+    use NormalisesNationalId;
+
     public function authorize(): bool
     {
         return true;
@@ -16,6 +20,8 @@ class UpdateProfileRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $this->normaliseNationalIdInput();
+
         if ($this->has('email')) {
             $this->merge(['email' => AttendeeIdentity::normaliseEmail($this->input('email'))]);
         }
@@ -43,15 +49,23 @@ class UpdateProfileRequest extends FormRequest
             'whatsapp_number' => ['nullable', 'string', 'max:20'],
             'email' => ['nullable', 'email', 'max:254', Rule::unique('attendees', 'email')->ignore($attendeeId)],
             'father_name' => ['nullable', 'string', 'max:150'],
+            'date_of_birth' => ['nullable', 'date', 'before:today', 'after:1900-01-01'],
+            'nid_number' => ['nullable', 'string', new NationalIdNumber],
             'occupation' => ['nullable', 'string', 'max:100'],
             'designation' => ['nullable', 'string', 'max:100'],
             'organization' => ['nullable', 'string', 'max:200'],
             'tshirt_required' => ['sometimes', 'boolean'],
             'tshirt_size' => ['required_if:tshirt_required,true', 'nullable', 'string', Rule::in(['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'])],
-            'address_district' => ['nullable', 'string', 'max:100'],
+            // max:80, not max:100: the column is VARCHAR(80), so the longer
+            // limit let an over-length district reach MySQL and die there —
+            // a 500 where a field-level 422 belongs. The same mismatch the
+            // name fields had at max:200 against VARCHAR(150).
+            'address_district' => ['nullable', 'string', 'max:80'],
             'current_address' => ['nullable', 'string', 'max:255'],
+            'post_office' => ['nullable', 'string', 'max:100'],
+            'upazila' => ['nullable', 'string', 'max:100'],
             'country' => ['nullable', 'string', 'max:100'],
-            'blood_group' => ['nullable', 'string', Rule::in(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])],
+            'blood_group' => ['nullable', 'string', Rule::in(Attendee::BLOOD_GROUPS)],
             'emergency_contact_name' => ['nullable', 'string', 'max:200'],
             'emergency_contact_phone' => ['nullable', 'string', 'max:20'],
             'notes' => ['nullable', 'string', 'max:1000'],

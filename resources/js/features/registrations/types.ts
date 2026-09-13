@@ -63,10 +63,10 @@ export interface Registration {
         ulid?: string;
         name?: string;
         code?: string;
-        base_price_paisa?: number;
-        additional_adult_price_paisa?: number;
-        additional_child_price_paisa?: number;
-        current_student_price_paisa?: number | null;
+        base_price_tk?: number;
+        additional_adult_price_tk?: number;
+        additional_child_price_tk?: number;
+        current_student_price_tk?: number | null;
         base_admits?: number;
     } | null;
     guests?: RegistrationGuest[];
@@ -115,16 +115,25 @@ export interface RegistrationGuestPayload {
  */
 export interface CreateRegistrationPayload {
     full_name: string;
-    full_name_bn: string;
+    /** Optional and not collected at the desk since 2026-09-13; the server
+     *  falls back to `full_name` wherever a Bangla name is rendered. */
+    full_name_bn?: string | null;
     father_name: string;
     mobile: string;
     email?: string | null;
     gender: 'male' | 'female';
-    date_of_birth?: string | null;
+    /** ISO date (YYYY-MM-DD). Required since 2026-09-13, on this path too. */
+    date_of_birth: string;
+    /** 10, 13 or 17 digits; punctuation is stripped server-side. Optional. */
+    nid_number?: string | null;
+    blood_group?: string | null;
     occupation: string;
     designation?: string | null;
     organization?: string | null;
     current_address: string;
+    post_office: string;
+    upazila: string;
+    address_district: string;
     participant_type: string;
     ssc_batch_year?: number | null;
     current_class?: string | null;
@@ -162,7 +171,11 @@ export const PARTICIPANT_TYPES = [
 export type ParticipantType = (typeof PARTICIPANT_TYPES)[number];
 
 /** `ssc_batch_year` is `required_if` these two, server-side. */
-export const BATCH_YEAR_PARTICIPANT_TYPES: string[] = ['current_student', 'former_student'];
+/**
+ * Who sees the SSC batch year field — mirrors the server's `required_if`. A
+ * current student has not sat SSC yet, so they are not asked (2026-09-13).
+ */
+export const BATCH_YEAR_PARTICIPANT_TYPES: string[] = ['former_student'];
 
 export interface UpdateRegistrationPayload {
     status?: RegistrationStatus;

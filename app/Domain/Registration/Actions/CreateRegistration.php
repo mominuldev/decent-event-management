@@ -75,10 +75,15 @@ class CreateRegistration
                     'email' => $email ?? $attendee->email,
                     'gender' => $data['gender'],
                     'date_of_birth' => $data['date_of_birth'] ?? $attendee->date_of_birth,
+                    'nid_number' => $data['nid_number'] ?? $attendee->nid_number,
+                    'blood_group' => $data['blood_group'] ?? $attendee->blood_group,
                     'occupation' => $data['occupation'] ?? $attendee->occupation,
                     'designation' => $data['designation'] ?? $attendee->designation,
                     'organization' => $data['organization'] ?? $attendee->organization,
                     'current_address' => $data['current_address'] ?? $attendee->current_address,
+                    'post_office' => $data['post_office'] ?? $attendee->post_office,
+                    'upazila' => $data['upazila'] ?? $attendee->upazila,
+                    'address_district' => $data['address_district'] ?? $attendee->address_district,
                     'tshirt_required' => $data['tshirt_required'] ?? $attendee->tshirt_required,
                     'tshirt_size' => $data['tshirt_size'] ?? $attendee->tshirt_size,
                     'current_class' => $data['current_class'] ?? $attendee->current_class,
@@ -95,10 +100,15 @@ class CreateRegistration
                     'email' => $email,
                     'gender' => $data['gender'],
                     'date_of_birth' => $data['date_of_birth'] ?? null,
+                    'nid_number' => $data['nid_number'] ?? null,
+                    'blood_group' => $data['blood_group'] ?? null,
                     'occupation' => $data['occupation'] ?? null,
                     'designation' => $data['designation'] ?? null,
                     'organization' => $data['organization'] ?? null,
                     'current_address' => $data['current_address'] ?? null,
+                    'post_office' => $data['post_office'] ?? null,
+                    'upazila' => $data['upazila'] ?? null,
+                    'address_district' => $data['address_district'] ?? null,
                     'participant_type' => $data['participant_type'],
                     'ssc_batch_year' => $data['ssc_batch_year'] ?? null,
                     'current_class' => $data['current_class'] ?? null,
@@ -130,8 +140,8 @@ class CreateRegistration
             // standard extra rates regardless, so the discount follows the
             // student rather than their whole party.
             $basePrice = $ticketType->basePriceFor((string) $data['participant_type']);
-            $additionalAdultPrice = (int) $ticketType->additional_adult_price_paisa;
-            $additionalChildPrice = (int) $ticketType->additional_child_price_paisa;
+            $additionalAdultPrice = (int) $ticketType->additional_adult_price_tk;
+            $additionalChildPrice = (int) $ticketType->additional_child_price_tk;
 
             $totalPrice = $basePrice + ($extraAdults * $additionalAdultPrice) + ($billableChildren * $additionalChildPrice);
 

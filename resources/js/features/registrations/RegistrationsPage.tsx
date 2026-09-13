@@ -119,19 +119,19 @@ function priceBreakdown(r: Registration): PriceBreakdown | null {
 
     if (
         !type ||
-        type.base_price_paisa === undefined ||
-        type.additional_adult_price_paisa === undefined ||
-        type.additional_child_price_paisa === undefined
+        type.base_price_tk === undefined ||
+        type.additional_adult_price_tk === undefined ||
+        type.additional_child_price_tk === undefined
     ) {
         return null;
     }
 
     const isStudent = r.attendee?.participant_type === 'current_student';
-    const studentRate = type.current_student_price_paisa;
+    const studentRate = type.current_student_price_tk;
     // Compared against null/undefined rather than checked for truthiness:
     // 0 is a real price (a free student ticket), not an absent rule.
     const onStudentRate = isStudent && studentRate !== null && studentRate !== undefined;
-    const basePaisa = onStudentRate ? (studentRate as number) : type.base_price_paisa;
+    const basePaisa = onStudentRate ? (studentRate as number) : type.base_price_tk;
 
     const baseAdmits = type.base_admits ?? 1;
     const extraAdults = Math.max(0, r.adults_count - baseAdmits);
@@ -147,16 +147,16 @@ function priceBreakdown(r: Registration): PriceBreakdown | null {
     if (extraAdults > 0) {
         lines.push({
             label: `${extraAdults} extra adult${extraAdults === 1 ? '' : 's'}`,
-            detail: `${money(type.additional_adult_price_paisa)} each`,
-            amountPaisa: extraAdults * type.additional_adult_price_paisa,
+            detail: `${money(type.additional_adult_price_tk)} each`,
+            amountPaisa: extraAdults * type.additional_adult_price_tk,
         });
     }
 
     if (r.children_count > 0) {
         lines.push({
             label: `${r.children_count} child${r.children_count === 1 ? '' : 'ren'}`,
-            detail: `${money(type.additional_child_price_paisa)} each`,
-            amountPaisa: r.children_count * type.additional_child_price_paisa,
+            detail: `${money(type.additional_child_price_tk)} each`,
+            amountPaisa: r.children_count * type.additional_child_price_tk,
         });
     }
 

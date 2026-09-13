@@ -20,7 +20,7 @@ export interface TicketType {
     ulid: string;
     code: string;
     name: string;
-    base_price_paisa: number;
+    base_price_tk: number;
     currency: string;
     quantity_total: number | null;
     quantity_sold: number;

@@ -3,12 +3,16 @@
 namespace App\Http\Requests\Admin;
 
 use App\Domain\Registration\Models\Attendee;
+use App\Domain\Registration\Rules\NationalIdNumber;
 use App\Domain\Registration\Support\AttendeeIdentity;
+use App\Http\Requests\Concerns\NormalisesNationalId;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class UpdateAttendeeRequest extends FormRequest
 {
+    use NormalisesNationalId;
+
     public function authorize(): bool
     {
         return $this->user()?->can('attendee.update') ?? false;
@@ -21,6 +25,8 @@ class UpdateAttendeeRequest extends FormRequest
      */
     protected function prepareForValidation(): void
     {
+        $this->normaliseNationalIdInput();
+
         if ($this->has('mobile')) {
             $this->merge(['mobile' => AttendeeIdentity::normaliseMobile($this->input('mobile'))]);
         }
@@ -50,7 +56,19 @@ class UpdateAttendeeRequest extends FormRequest
             // unrelated edit to a legacy attendee impossible to save.
             'father_name' => ['nullable', 'string', 'max:150'],
             'occupation' => ['nullable', 'string', 'max:100'],
+            // The whole postal address, plus the three identity details the
+            // public form now collects. Nullable for the same reason the
+            // 2026-08-16 fields are — an admin corrects records that predate
+            // them — but present, because a field the form requires and the
+            // console cannot fix is a record only a DBA can repair.
             'current_address' => ['nullable', 'string', 'max:255'],
+            'post_office' => ['nullable', 'string', 'max:100'],
+            'upazila' => ['nullable', 'string', 'max:100'],
+            // max:80, matching the column. Anything longer was a 500.
+            'address_district' => ['nullable', 'string', 'max:80'],
+            'date_of_birth' => ['nullable', 'date', 'before:today', 'after:1900-01-01'],
+            'nid_number' => ['nullable', 'string', new NationalIdNumber],
+            'blood_group' => ['nullable', 'string', Rule::in(Attendee::BLOOD_GROUPS)],
             // Not `withoutTrashed()`: the database constraint covers
             // soft-deleted rows, so the validator must too or the 422 turns
             // back into a 500 the moment the conflict is with a deleted

@@ -35,7 +35,7 @@ class PurchaseConcurrencyTest extends TestCase
             'quantity_total' => 100,
             'quantity_reserved' => 0,
             'quantity_sold' => 0,
-            'base_price_paisa' => 10000,
+            'base_price_tk' => 10000,
             'sale_starts_at' => now()->subHour(),
             'sale_ends_at' => now()->addHour(),
             'is_active' => true,

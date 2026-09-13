@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Domain\Registration\Models\Attendee;
+use App\Domain\Registration\Support\NationalId;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -68,6 +69,42 @@ class AttendeeFactory extends Factory
         });
     }
 
+    /**
+     * Real district / upazila / post-office triples, so seeded addresses are
+     * internally consistent.
+     *
+     * @var list<array{0: string, 1: string, 2: string}>
+     */
+    private const ADDRESSES = [
+        ['Dhaka', 'Savar', 'Savar'],
+        ['Dhaka', 'Dhamrai', 'Dhamrai'],
+        ['Gazipur', 'Kaliakair', 'Kaliakair'],
+        ['Chattogram', 'Hathazari', 'Hathazari'],
+        ['Chattogram', 'Patiya', 'Patiya'],
+        ['Sylhet', 'Beanibazar', 'Beanibazar'],
+        ['Rajshahi', 'Bagmara', 'Bhabaniganj'],
+        ['Khulna', 'Dumuria', 'Dumuria'],
+        ['Barishal', 'Bakerganj', 'Bakerganj'],
+        ['Cumilla', 'Laksam', 'Laksam'],
+        ['Mymensingh', 'Trishal', 'Trishal'],
+        ['Rangpur', 'Mithapukur', 'Mithapukur'],
+    ];
+
+    /**
+     * @return array{address_district: string, upazila: string, post_office: string}
+     */
+    private static function address(): array
+    {
+        /** @var array{0: string, 1: string, 2: string} $picked */
+        $picked = fake()->randomElement(self::ADDRESSES);
+
+        return [
+            'address_district' => $picked[0],
+            'upazila' => $picked[1],
+            'post_office' => $picked[2],
+        ];
+    }
+
     public function definition(): array
     {
         $participantType = fake()->randomElement([
@@ -94,7 +131,18 @@ class AttendeeFactory extends Factory
             // before a factory run of any size finishes.
             'email' => fake()->boolean(70) ? fake()->unique()->safeEmail() : null,
             'gender' => fake()->randomElement(['male', 'female', 'other', 'prefer_not_to_say']),
-            'date_of_birth' => fake()->boolean(60) ? fake()->dateTimeBetween('-70 years', '-15 years') : null,
+            // Always set, like the other fields the public form requires —
+            // a coin flip here would leave a large share of factory
+            // attendees looking like pre-2026-09-13 legacy rows, which is
+            // the one shape the form can no longer produce.
+            'date_of_birth' => fake()->dateTimeBetween('-70 years', '-15 years'),
+            // A coin flip *is* right for these two: both are optional on the
+            // form, so a fixture set where every attendee has an NID would
+            // not exercise the far more common case of a blank one.
+            'nid_number' => fake()->boolean(55)
+                ? fake()->numerify(str_repeat('#', fake()->randomElement(NationalId::LENGTHS)))
+                : null,
+            'blood_group' => fake()->boolean(65) ? fake()->randomElement(Attendee::BLOOD_GROUPS) : null,
             'occupation' => fake()->jobTitle(),
             'participant_type' => $participantType,
             // Derived from the type picked directly above; `configure()` is
@@ -103,7 +151,11 @@ class AttendeeFactory extends Factory
             'current_class' => $participantType === 'current_student' ? fake()->randomElement(['9', '10']) : null,
             'tshirt_required' => fake()->boolean(70),
             'tshirt_size' => fake()->randomElement(['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL']),
-            'address_district' => fake()->randomElement(['Dhaka', 'Chattogram', 'Sylhet', 'Rajshahi', 'Khulna', 'Barishal']),
+            // Drawn as a whole triple, not three independent picks: a post
+            // office in Savar under Sylhet district is not an address, and a
+            // fixture that reads as nonsense is one nobody trusts when a
+            // directory page looks wrong.
+            ...self::address(),
             'current_address' => fake()->buildingNumber().', '.fake()->streetName().', '.fake()->city(),
             'country' => 'BD',
             'is_verified' => fake()->boolean(40),

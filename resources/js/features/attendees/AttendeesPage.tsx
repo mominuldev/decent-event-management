@@ -13,7 +13,15 @@ import { totalOf } from '@/lib/pagination';
 import { fullDate, shortDate, titleCase } from '@/lib/format';
 import { useTableSorting } from '@/lib/sorting';
 import * as attendeesApi from './api';
-import { PARTICIPANT_TYPES, SSC_BATCH_YEARS, type Attendee, type ParticipantType, type UpdateAttendeePayload } from './types';
+import { BLOOD_GROUPS, PARTICIPANT_TYPES, SSC_BATCH_YEARS, type Attendee, type ParticipantType, type UpdateAttendeePayload } from './types';
+
+/**
+ * Ceiling for the date-of-birth picker, matching the API's `before:today`.
+ * Computed once at module load rather than per render — a console left open
+ * across midnight is off by a day on a bound nobody can legitimately reach,
+ * and the server refuses a future date regardless.
+ */
+const TODAY = new Date().toISOString().slice(0, 10);
 
 function useDebounced<T>(value: T, delayMs = 350): T {
     const [debounced, setDebounced] = useState(value);
@@ -46,6 +54,12 @@ interface AttendeeForm {
     email: string;
     occupation: string;
     current_address: string;
+    post_office: string;
+    upazila: string;
+    address_district: string;
+    date_of_birth: string;
+    nid_number: string;
+    blood_group: string;
     participant_type: ParticipantType;
     ssc_batch_year: string;
     is_verified: boolean;
@@ -60,6 +74,12 @@ const FORM_KEYS = [
     'email',
     'occupation',
     'current_address',
+    'post_office',
+    'upazila',
+    'address_district',
+    'date_of_birth',
+    'nid_number',
+    'blood_group',
     'participant_type',
     'ssc_batch_year',
     'is_verified',
@@ -75,6 +95,16 @@ function toForm(a: Attendee): AttendeeForm {
         email: a.email ?? '',
         occupation: a.occupation ?? '',
         current_address: a.current_address ?? '',
+        post_office: a.post_office ?? '',
+        upazila: a.upazila ?? '',
+        address_district: a.address_district ?? '',
+        // The resource sends an ISO timestamp; <input type="date"> wants the
+        // date half of it and silently renders blank given the whole thing.
+        date_of_birth: a.date_of_birth ? a.date_of_birth.slice(0, 10) : '',
+        // Absent for callers the API withholds it from. The console always
+        // holds an admin token, so `?? ''` here is the never-set case.
+        nid_number: a.nid_number ?? '',
+        blood_group: a.blood_group ?? '',
         participant_type: a.participant_type,
         ssc_batch_year: a.ssc_batch_year ? String(a.ssc_batch_year) : '',
         is_verified: a.is_verified,
@@ -94,6 +124,12 @@ function toPayload(f: AttendeeForm): UpdateAttendeePayload {
         email: text(f.email),
         occupation: text(f.occupation),
         current_address: text(f.current_address),
+        post_office: text(f.post_office),
+        upazila: text(f.upazila),
+        address_district: text(f.address_district),
+        date_of_birth: text(f.date_of_birth),
+        nid_number: text(f.nid_number),
+        blood_group: text(f.blood_group),
         participant_type: f.participant_type,
         ssc_batch_year: f.ssc_batch_year ? Number(f.ssc_batch_year) : null,
         is_verified: f.is_verified,
@@ -176,14 +212,11 @@ function RecordDetails({ attendee }: { attendee: Attendee }) {
             </summary>
             <dl className="divide-y divide-border border-t border-border px-3.5 py-1">
                 <DetailRow label="Gender" value={attendee.gender ? titleCase(attendee.gender) : null} />
-                <DetailRow label="Date of birth" value={attendee.date_of_birth ? fullDate(attendee.date_of_birth) : null} />
                 <DetailRow label="Designation" value={attendee.designation} />
                 <DetailRow label="Organization" value={attendee.organization} />
                 <DetailRow label="Current class" value={attendee.current_class} />
                 <DetailRow label="T-shirt" value={tshirt} />
-                <DetailRow label="District" value={attendee.address_district} />
                 <DetailRow label="Country" value={attendee.country} />
-                <DetailRow label="Blood group" value={attendee.blood_group} />
                 <DetailRow label="Emergency contact" value={attendee.emergency_contact_name} />
                 <DetailRow label="Emergency phone" value={attendee.emergency_contact_phone} />
                 <DetailRow label="On file since" value={fullDate(attendee.created_at)} />
@@ -427,6 +460,98 @@ function AttendeeDetail({ ulid, onClose }: { ulid: string; onClose: () => void }
                                     disabled={!canEdit}
                                     aria-invalid={Boolean(fieldErrors.current_address)}
                                     onChange={(e) => set('current_address', e.target.value)}
+                                />
+                            </Field>
+                            {/* Free text, not pickers — see the 2026-09-13
+                                migration. Ordered the way a Bangladeshi
+                                address is written, so the row reads down
+                                from the street to the district. */}
+                            <Field id="attendee-post_office" label="Post office" optional error={fieldErrors.post_office}>
+                                <Input
+                                    id="attendee-post_office"
+                                    value={form.post_office}
+                                    maxLength={100}
+                                    disabled={!canEdit}
+                                    aria-invalid={Boolean(fieldErrors.post_office)}
+                                    onChange={(e) => set('post_office', e.target.value)}
+                                />
+                            </Field>
+                            <Field id="attendee-upazila" label="Upazila" optional error={fieldErrors.upazila}>
+                                <Input
+                                    id="attendee-upazila"
+                                    value={form.upazila}
+                                    maxLength={100}
+                                    disabled={!canEdit}
+                                    aria-invalid={Boolean(fieldErrors.upazila)}
+                                    onChange={(e) => set('upazila', e.target.value)}
+                                />
+                            </Field>
+                            <Field
+                                id="attendee-address_district"
+                                label="District"
+                                optional
+                                hint="Shown on the public attendees directory."
+                                error={fieldErrors.address_district}
+                            >
+                                <Input
+                                    id="attendee-address_district"
+                                    value={form.address_district}
+                                    maxLength={80}
+                                    disabled={!canEdit}
+                                    aria-invalid={Boolean(fieldErrors.address_district)}
+                                    onChange={(e) => set('address_district', e.target.value)}
+                                />
+                            </Field>
+                        </div>
+                    </FormSection>
+
+                    <FormSection title="Identity" description="Never shown on the public directory.">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <Field id="attendee-date_of_birth" label="Date of birth" optional error={fieldErrors.date_of_birth}>
+                                <Input
+                                    id="attendee-date_of_birth"
+                                    type="date"
+                                    value={form.date_of_birth}
+                                    max={TODAY}
+                                    disabled={!canEdit}
+                                    aria-invalid={Boolean(fieldErrors.date_of_birth)}
+                                    onChange={(e) => set('date_of_birth', e.target.value)}
+                                />
+                            </Field>
+                            <Field
+                                id="attendee-blood_group"
+                                label="Blood group"
+                                optional
+                                error={fieldErrors.blood_group}
+                            >
+                                <Select
+                                    id="attendee-blood_group"
+                                    value={form.blood_group}
+                                    disabled={!canEdit}
+                                    onChange={(e) => set('blood_group', e.target.value)}
+                                >
+                                    <option value="">Not known</option>
+                                    {BLOOD_GROUPS.map((group) => (
+                                        <option key={group} value={group}>{group}</option>
+                                    ))}
+                                </Select>
+                            </Field>
+                            <Field
+                                id="attendee-nid_number"
+                                label="NID or birth certificate no."
+                                optional
+                                hint="NID (10, 13 or 17 digits) or birth registration number (16 or 17). Spaces and dashes are stripped on save."
+                                error={fieldErrors.nid_number}
+                                className="sm:col-span-2"
+                            >
+                                <Input
+                                    id="attendee-nid_number"
+                                    inputMode="numeric"
+                                    value={form.nid_number}
+                                    maxLength={32}
+                                    disabled={!canEdit}
+                                    aria-invalid={Boolean(fieldErrors.nid_number)}
+                                    onChange={(e) => set('nid_number', e.target.value)}
                                 />
                             </Field>
                         </div>

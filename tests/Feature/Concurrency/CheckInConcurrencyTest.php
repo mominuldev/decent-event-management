@@ -38,7 +38,7 @@ class CheckInConcurrencyTest extends TestCase
             'quantity_total' => 1000,
             'base_admits' => 1,
             'max_admits' => 1,
-            'base_price_paisa' => 5000,
+            'base_price_tk' => 5000,
         ]);
 
         $registration = Registration::factory()->create([

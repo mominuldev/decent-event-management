@@ -26,20 +26,46 @@ class RegistrationController extends Controller
             content: new OAT\MediaType(
                 mediaType: 'application/json',
                 schema: new OAT\Schema(
+                    // A schema-level list, which is the only form a consumer
+                    // reads. Each property below used to carry its own
+                    // `required: ['x']` argument instead, and swagger-php
+                    // emits that *inside* the property node, where nothing
+                    // looks for it — so the published spec marked this
+                    // endpoint's whole body optional while
+                    // StoreRegistrationRequest refused sixteen missing
+                    // fields. The property-level arguments are kept where
+                    // they are harmless, but this is the authority.
+                    //
+                    // `ssc_batch_year` and `tshirt_size` are deliberately
+                    // absent: both are `required_if`, not required, and each
+                    // says so in its own description.
+                    required: [
+                        'full_name', 'father_name', 'mobile', 'gender', 'date_of_birth',
+                        'occupation', 'current_address', 'post_office', 'upazila', 'address_district',
+                        'participant_type', 'ticket_type_ulid', 'participation_type',
+                        'adults_count', 'children_count', 'idempotency_key',
+                    ],
                     properties: [
                         new OAT\Property(property: 'full_name', type: 'string', maxLength: 150, required: ['full_name']),
                         new OAT\Property(
                             property: 'full_name_bn',
                             type: 'string',
                             maxLength: 150,
-                            description: 'Bengali name — the ticket PDF and the gate list both render it',
-                            required: ['full_name_bn']
+                            nullable: true,
+                            description: 'Bengali name. Optional and no longer collected by the registration form since 2026-09-13; the ticket PDF, email greeting and directory fall back to full_name when absent.',
                         ),
                         new OAT\Property(property: 'father_name', type: 'string', maxLength: 150, required: ['father_name']),
                         new OAT\Property(property: 'mobile', type: 'string', maxLength: 20, required: ['mobile']),
                         new OAT\Property(property: 'email', type: 'string', format: 'email', maxLength: 254),
                         new OAT\Property(property: 'gender', type: 'string', enum: ['male', 'female'], required: ['gender']),
-                        new OAT\Property(property: 'date_of_birth', type: 'string', format: 'date'),
+                        new OAT\Property(property: 'date_of_birth', type: 'string', format: 'date', required: ['date_of_birth']),
+                        new OAT\Property(
+                            property: 'nid_number',
+                            type: 'string',
+                            description: 'Bangladeshi National ID or birth registration number — 10, 13, 16 or 17 digits. Optional: an under-18 current student has no NID, but may give the number on their birth certificate. Punctuation is stripped before validation, so a number typed with the spaces printed on the card or certificate is accepted.',
+                            nullable: true
+                        ),
+                        new OAT\Property(property: 'blood_group', type: 'string', enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'], nullable: true),
                         new OAT\Property(property: 'occupation', type: 'string', maxLength: 100, required: ['occupation']),
                         new OAT\Property(property: 'designation', type: 'string', maxLength: 100),
                         new OAT\Property(property: 'organization', type: 'string', maxLength: 200),
@@ -47,8 +73,17 @@ class RegistrationController extends Controller
                             property: 'current_address',
                             type: 'string',
                             maxLength: 255,
-                            description: 'Where the registrant currently lives, as one free-text line',
+                            description: 'Where the registrant currently lives — village/house and road, as one free-text line',
                             required: ['current_address']
+                        ),
+                        new OAT\Property(property: 'post_office', type: 'string', maxLength: 100, required: ['post_office']),
+                        new OAT\Property(property: 'upazila', type: 'string', maxLength: 100, required: ['upazila']),
+                        new OAT\Property(
+                            property: 'address_district',
+                            type: 'string',
+                            maxLength: 80,
+                            description: 'Free text, not a code — see the 2026-09-13 migration. Published on the public attendees directory.',
+                            required: ['address_district']
                         ),
                         new OAT\Property(
                             property: 'participant_type',
@@ -59,7 +94,7 @@ class RegistrationController extends Controller
                         new OAT\Property(
                             property: 'ssc_batch_year',
                             type: 'integer',
-                            description: 'Required when participant_type is current_student or former_student',
+                            description: 'Required when participant_type is former_student; optional for a current_student, who has not sat SSC yet; not applicable to anyone else',
                             minimum: 1971
                         ),
                         new OAT\Property(property: 'current_class', type: 'string', maxLength: 50),
@@ -243,6 +278,9 @@ class RegistrationController extends Controller
                                             new OAT\Property(property: 'gender', type: 'string'),
                                             new OAT\Property(property: 'occupation', type: 'string', nullable: true),
                                             new OAT\Property(property: 'current_address', type: 'string', nullable: true),
+                                            new OAT\Property(property: 'post_office', type: 'string', nullable: true),
+                                            new OAT\Property(property: 'upazila', type: 'string', nullable: true),
+                                            new OAT\Property(property: 'address_district', type: 'string', nullable: true),
                                             new OAT\Property(property: 'participant_type', type: 'string'),
                                             new OAT\Property(property: 'ssc_batch_year', type: 'integer'),
                                         ]

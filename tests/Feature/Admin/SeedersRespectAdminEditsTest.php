@@ -32,8 +32,8 @@ class SeedersRespectAdminEditsTest extends TestCase
 
         $cen = TicketType::query()->where('code', 'CEN')->sole();
         $cen->update([
-            'base_price_paisa' => 300000,
-            'current_student_price_paisa' => 75000,
+            'base_price_tk' => 300000,
+            'current_student_price_tk' => 75000,
             'quantity_total' => 15000,
             'name' => 'Centennial Ticket (Gold)',
         ]);
@@ -46,8 +46,8 @@ class SeedersRespectAdminEditsTest extends TestCase
         // repriced a ticket that may already have sold, and the post-sale
         // lock in TicketTypeController::update() would not have caught it —
         // that lock guards the HTTP path, and a seeder does not use it.
-        $this->assertSame(300000, $cen->base_price_paisa);
-        $this->assertSame(75000, $cen->current_student_price_paisa);
+        $this->assertSame(300000, $cen->base_price_tk);
+        $this->assertSame(75000, $cen->current_student_price_tk);
         $this->assertSame(15000, $cen->quantity_total);
         $this->assertSame('Centennial Ticket (Gold)', $cen->name);
     }

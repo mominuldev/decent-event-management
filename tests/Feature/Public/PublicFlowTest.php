@@ -51,7 +51,7 @@ class PublicFlowTest extends TestCase
     public function test_can_create_registration(): void
     {
         $ticketType = TicketType::factory()->create([
-            'base_price_paisa' => 100000,
+            'base_price_tk' => 100000,
             'is_active' => true,
             'is_public' => true,
             'sale_starts_at' => now()->subDay(),
@@ -66,6 +66,10 @@ class PublicFlowTest extends TestCase
             'father_name' => 'Abdul Karim',
             'occupation' => 'Engineer',
             'current_address' => 'House 12, Road 5, Dhanmondi, Dhaka',
+            'post_office' => 'Dhanmondi',
+            'upazila' => 'Dhanmondi',
+            'address_district' => 'Dhaka',
+            'date_of_birth' => '1988-04-17',
             'participant_type' => 'former_student',
             'ssc_batch_year' => 2010,
             'ticket_type_ulid' => $ticketType->ulid,

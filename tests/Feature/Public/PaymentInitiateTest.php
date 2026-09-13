@@ -16,7 +16,7 @@ class PaymentInitiateTest extends TestCase
     private function createRegistration(): Registration
     {
         $ticketType = TicketType::factory()->create([
-            'base_price_paisa' => 100000,
+            'base_price_tk' => 100000,
             'is_active' => true,
             'is_public' => true,
             'sale_starts_at' => now()->subDay(),

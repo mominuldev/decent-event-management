@@ -27,12 +27,12 @@ export interface TicketType {
     name: string;
     name_bn: string | null;
     description: string | null;
-    base_price_paisa: number;
-    additional_adult_price_paisa: number;
-    additional_child_price_paisa: number;
+    base_price_tk: number;
+    additional_adult_price_tk: number;
+    additional_child_price_tk: number;
     /** What a current student pays for their own seat. Null = no student
-     *  rate on this type, so they pay `base_price_paisa` like everyone else. */
-    current_student_price_paisa: number | null;
+     *  rate on this type, so they pay `base_price_tk` like everyone else. */
+    current_student_price_tk: number | null;
     currency: string;
     base_admits: number;
     max_admits: number;
@@ -57,10 +57,10 @@ export interface TicketTypePayload {
     name: string;
     name_bn?: string | null;
     description?: string | null;
-    base_price_paisa: number;
-    additional_adult_price_paisa: number;
-    additional_child_price_paisa: number;
-    current_student_price_paisa?: number | null;
+    base_price_tk: number;
+    additional_adult_price_tk: number;
+    additional_child_price_tk: number;
+    current_student_price_tk?: number | null;
     base_admits: number;
     max_admits: number;
     quantity_total?: number | null;

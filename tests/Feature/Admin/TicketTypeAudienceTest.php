@@ -45,9 +45,9 @@ class TicketTypeAudienceTest extends TestCase
         return array_merge([
             'code' => 'ALM',
             'name' => 'Alumni',
-            'base_price_paisa' => 150000,
-            'additional_adult_price_paisa' => 0,
-            'additional_child_price_paisa' => 0,
+            'base_price_tk' => 150000,
+            'additional_adult_price_tk' => 0,
+            'additional_child_price_tk' => 0,
             'base_admits' => 1,
             'max_admits' => 1,
         ], $overrides);
@@ -131,7 +131,7 @@ class TicketTypeAudienceTest extends TestCase
         $ticketType = TicketType::create([
             'code' => 'DIRECT',
             'name' => 'Created outside the console',
-            'base_price_paisa' => 0,
+            'base_price_tk' => 0,
             'base_admits' => 1,
             'max_admits' => 1,
         ]);

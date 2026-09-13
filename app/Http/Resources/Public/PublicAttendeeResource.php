@@ -3,6 +3,7 @@
 namespace App\Http\Resources\Public;
 
 use App\Domain\Registration\Models\Registration;
+use App\Http\Resources\AttendeeResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use LogicException;
@@ -19,8 +20,17 @@ use LogicException;
  *  - `mobile`, `email`, `whatsapp_number`, `emergency_contact_*` — contact
  *    details. A public roster of alumni names next to their phone numbers is
  *    a scraping target and a directory the person never consented to.
- *  - `father_name`, `current_address`, `date_of_birth`, `gender`,
- *    `blood_group`, `notes` — personal record, collected to run the event.
+ *  - `father_name`, `current_address`, `post_office`, `upazila`,
+ *    `date_of_birth`, `gender`, `blood_group`, `notes` — personal record,
+ *    collected to run the event. `address_district` *is* published, and has
+ *    been since this resource was written; the finer-grained parts of the
+ *    same address are not, because a post office and upazila beside a name
+ *    narrow a stranger to a village.
+ *  - `nid_number` — a government identity number. Not merely private: it is
+ *    the number used to prove this person is themselves elsewhere, so it
+ *    must not appear on an endpoint with no caller at all. Even the
+ *    passwordless lookup session is refused it — see
+ *    {@see AttendeeResource::showsNationalId()}.
  *    `gender` stays private even though the card draws a gendered placeholder:
  *    what is published is `avatar_variant`, a rendering hint, and the two are
  *    not the same field. See {@see avatarVariant()}.

@@ -124,9 +124,9 @@ erDiagram
         bigint id PK
         string code UK "ALM STU TCH STF VIP FAM SPN"
         string name
-        bigint base_price_paisa
-        bigint additional_adult_price_paisa
-        bigint additional_child_price_paisa
+        bigint base_price_tk
+        bigint additional_adult_price_tk
+        bigint additional_child_price_tk
         tinyint base_admits
         tinyint max_admits
         json allowed_participant_types

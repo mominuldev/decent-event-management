@@ -31,7 +31,7 @@ class AttendeeProfileFieldsTest extends TestCase
     private function ticketType(): TicketType
     {
         return TicketType::factory()->create([
-            'base_price_paisa' => 100000,
+            'base_price_tk' => 100000,
             'is_active' => true,
             'is_public' => true,
             'sale_starts_at' => now()->subDay(),
@@ -53,6 +53,10 @@ class AttendeeProfileFieldsTest extends TestCase
             'gender' => 'male',
             'occupation' => 'Civil Engineer',
             'current_address' => 'House 12, Road 5, Dhanmondi, Dhaka-1205',
+            'post_office' => 'Dhanmondi',
+            'upazila' => 'Dhanmondi',
+            'address_district' => 'Dhaka',
+            'date_of_birth' => '1988-04-17',
             'participant_type' => 'former_student',
             'ssc_batch_year' => 2004,
             'ticket_type_ulid' => $ticketType->ulid,
@@ -87,11 +91,11 @@ class AttendeeProfileFieldsTest extends TestCase
         $this->assertSame('House 12, Road 5, Dhanmondi, Dhaka-1205', $attendee->current_address);
     }
 
-    public function test_each_of_the_four_fields_is_required(): void
+    public function test_each_of_the_three_required_fields_is_required(): void
     {
         $ticketType = $this->ticketType();
 
-        foreach (['full_name_bn', 'father_name', 'occupation', 'current_address'] as $field) {
+        foreach (['father_name', 'occupation', 'current_address'] as $field) {
             $payload = $this->payload($ticketType);
             unset($payload[$field]);
 
@@ -109,13 +113,48 @@ class AttendeeProfileFieldsTest extends TestCase
     public function test_a_blank_string_does_not_satisfy_the_requirement(): void
     {
         $this->submit($this->payload($this->ticketType(), [
-            'full_name_bn' => '',
             'father_name' => '',
             'occupation' => '   ',
             'current_address' => '',
         ]))
             ->assertStatus(422)
-            ->assertJsonValidationErrors(['full_name_bn', 'father_name', 'occupation', 'current_address']);
+            ->assertJsonValidationErrors(['father_name', 'occupation', 'current_address']);
+    }
+
+    /**
+     * The Bangla name stopped being asked for on 2026-09-13. A submission
+     * without it — or with a blank one — is accepted, the column is left
+     * NULL rather than '', and a returning registrant who gave one earlier
+     * keeps it rather than having it blanked by the omission.
+     */
+    public function test_the_bangla_name_is_optional_and_a_returning_registrant_keeps_theirs(): void
+    {
+        $ticketType = $this->ticketType();
+
+        $payload = $this->payload($ticketType);
+        unset($payload['full_name_bn']);
+        $this->submit($payload)->assertStatus(201);
+
+        $attendee = Attendee::where('mobile', '+8801712345678')->firstOrFail();
+        $this->assertNull($attendee->full_name_bn);
+
+        $this->submit($this->payload($ticketType, [
+            'mobile' => '+8801712345679',
+            'email' => 'blank-bn@example.com',
+            'full_name_bn' => '',
+        ]))->assertStatus(201);
+        $this->assertNull(Attendee::where('mobile', '+8801712345679')->value('full_name_bn'));
+
+        // Given once, then omitted on re-registration: kept. Cancelled first,
+        // since one live registration per attendee is the rule.
+        $attendee->registrations()->each(
+            fn (Registration $registration) => $registration->forceFill(['status' => 'cancelled'])->save()
+        );
+        $attendee->forceFill(['full_name_bn' => 'রহিম উদ্দিন'])->save();
+        $again = $this->payload($ticketType, ['idempotency_key' => (string) Str::ulid()]);
+        unset($again['full_name_bn']);
+        $this->submit($again)->assertStatus(201);
+        $this->assertSame('রহিম উদ্দিন', $attendee->fresh()->full_name_bn);
     }
 
     public function test_a_returning_registrant_updates_all_four(): void

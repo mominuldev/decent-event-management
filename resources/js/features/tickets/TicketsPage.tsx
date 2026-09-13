@@ -471,10 +471,10 @@ function emptyTicketTypeForm(): TicketTypePayload {
         name: '',
         name_bn: '',
         description: '',
-        base_price_paisa: 0,
-        additional_adult_price_paisa: 0,
-        additional_child_price_paisa: 0,
-        current_student_price_paisa: null,
+        base_price_tk: 0,
+        additional_adult_price_tk: 0,
+        additional_child_price_tk: 0,
+        current_student_price_tk: null,
         base_admits: 1,
         max_admits: 1,
         quantity_total: null,
@@ -495,10 +495,10 @@ function ticketTypeToForm(t: TicketType): TicketTypePayload {
         name: t.name,
         name_bn: t.name_bn ?? '',
         description: t.description ?? '',
-        base_price_paisa: t.base_price_paisa,
-        additional_adult_price_paisa: t.additional_adult_price_paisa,
-        additional_child_price_paisa: t.additional_child_price_paisa,
-        current_student_price_paisa: t.current_student_price_paisa,
+        base_price_tk: t.base_price_tk,
+        additional_adult_price_tk: t.additional_adult_price_tk,
+        additional_child_price_tk: t.additional_child_price_tk,
+        current_student_price_tk: t.current_student_price_tk,
         base_admits: t.base_admits,
         max_admits: t.max_admits,
         quantity_total: t.quantity_total,
@@ -571,8 +571,8 @@ function TicketTypeFormDialog({ existing, onClose }: { existing: TicketType | nu
                             id="tt_base_price"
                             type="number"
                             disabled={locked}
-                            value={form.base_price_paisa / 100}
-                            onChange={(e) => setForm({ ...form, base_price_paisa: money2paisa(e.target.value) })}
+                            value={form.base_price_tk / 100}
+                            onChange={(e) => setForm({ ...form, base_price_tk: money2paisa(e.target.value) })}
                         />
                     </div>
                     <div>
@@ -581,8 +581,8 @@ function TicketTypeFormDialog({ existing, onClose }: { existing: TicketType | nu
                             id="tt_adult_price"
                             type="number"
                             disabled={locked}
-                            value={form.additional_adult_price_paisa / 100}
-                            onChange={(e) => setForm({ ...form, additional_adult_price_paisa: money2paisa(e.target.value) })}
+                            value={form.additional_adult_price_tk / 100}
+                            onChange={(e) => setForm({ ...form, additional_adult_price_tk: money2paisa(e.target.value) })}
                         />
                     </div>
                     <div>
@@ -591,8 +591,8 @@ function TicketTypeFormDialog({ existing, onClose }: { existing: TicketType | nu
                             id="tt_child_price"
                             type="number"
                             disabled={locked}
-                            value={form.additional_child_price_paisa / 100}
-                            onChange={(e) => setForm({ ...form, additional_child_price_paisa: money2paisa(e.target.value) })}
+                            value={form.additional_child_price_tk / 100}
+                            onChange={(e) => setForm({ ...form, additional_child_price_tk: money2paisa(e.target.value) })}
                         />
                     </div>
                 </div>
@@ -606,11 +606,11 @@ function TicketTypeFormDialog({ existing, onClose }: { existing: TicketType | nu
                         disabled={locked}
                         placeholder="No student rate"
                         aria-describedby="tt_student_price_help"
-                        value={form.current_student_price_paisa === null || form.current_student_price_paisa === undefined ? '' : form.current_student_price_paisa / 100}
+                        value={form.current_student_price_tk === null || form.current_student_price_tk === undefined ? '' : form.current_student_price_tk / 100}
                         onChange={(e) =>
                             setForm({
                                 ...form,
-                                current_student_price_paisa: e.target.value === '' ? null : money2paisa(e.target.value),
+                                current_student_price_tk: e.target.value === '' ? null : money2paisa(e.target.value),
                             })
                         }
                     />
@@ -787,10 +787,10 @@ function TicketTypesTab() {
                                         <div className="text-[11.5px] text-text-faint">{t.code}</div>
                                     </td>
                                     <td className="tnum px-3 py-2.5">
-                                        <div>{money(t.base_price_paisa)}</div>
-                                        {t.current_student_price_paisa !== null && (
+                                        <div>{money(t.base_price_tk)}</div>
+                                        {t.current_student_price_tk !== null && (
                                             <div className="text-[11.5px] text-text-faint">
-                                                {money(t.current_student_price_paisa)} student
+                                                {money(t.current_student_price_tk)} student
                                             </div>
                                         )}
                                     </td>

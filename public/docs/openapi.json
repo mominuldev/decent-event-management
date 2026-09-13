@@ -137,6 +137,15 @@
                                                         "format": "date-time",
                                                         "nullable": true
                                                     },
+                                                    "nid_number": {
+                                                        "description": "NID or birth registration number. Absent for a find-my-ticket lookup session, which may not read it.",
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "nid_number_set": {
+                                                        "description": "Whether an NID or birth registration number is on file, readable by every caller.",
+                                                        "type": "boolean"
+                                                    },
                                                     "occupation": {
                                                         "type": "string",
                                                         "nullable": true
@@ -172,6 +181,14 @@
                                                         "nullable": true
                                                     },
                                                     "current_address": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "post_office": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "upazila": {
                                                         "type": "string",
                                                         "nullable": true
                                                     },
@@ -427,6 +444,15 @@
                                                     "format": "date-time",
                                                     "nullable": true
                                                 },
+                                                "nid_number": {
+                                                    "description": "NID or birth registration number. Absent for a find-my-ticket lookup session, which may not read it.",
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "nid_number_set": {
+                                                    "description": "Whether an NID or birth registration number is on file, readable by every caller.",
+                                                    "type": "boolean"
+                                                },
                                                 "occupation": {
                                                     "type": "string",
                                                     "nullable": true
@@ -462,6 +488,14 @@
                                                     "nullable": true
                                                 },
                                                 "current_address": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "post_office": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "upazila": {
                                                     "type": "string",
                                                     "nullable": true
                                                 },
@@ -632,6 +666,45 @@
                                         "type": "string",
                                         "nullable": true,
                                         "maxLength": 255
+                                    },
+                                    "post_office": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 100
+                                    },
+                                    "upazila": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 100
+                                    },
+                                    "address_district": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 80
+                                    },
+                                    "date_of_birth": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "nullable": true
+                                    },
+                                    "nid_number": {
+                                        "description": "NID or birth registration number; 10, 13, 16 or 17 digits.",
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "blood_group": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                            "A+",
+                                            "A-",
+                                            "B+",
+                                            "B-",
+                                            "AB+",
+                                            "AB-",
+                                            "O+",
+                                            "O-"
+                                        ]
                                     },
                                     "mobile": {
                                         "type": "string",
@@ -5978,12 +6051,15 @@
                             "schema": {
                                 "required": [
                                     "full_name",
-                                    "full_name_bn",
                                     "father_name",
                                     "mobile",
                                     "gender",
+                                    "date_of_birth",
                                     "occupation",
                                     "current_address",
+                                    "post_office",
+                                    "upazila",
+                                    "address_district",
                                     "participant_type",
                                     "ticket_type_ulid",
                                     "participation_type",
@@ -5996,7 +6072,9 @@
                                         "maxLength": 150
                                     },
                                     "full_name_bn": {
+                                        "description": "Optional since 2026-09-13; falls back to full_name wherever it is rendered.",
                                         "type": "string",
+                                        "nullable": true,
                                         "maxLength": 150
                                     },
                                     "father_name": {
@@ -6021,8 +6099,26 @@
                                     },
                                     "date_of_birth": {
                                         "type": "string",
-                                        "format": "date",
+                                        "format": "date"
+                                    },
+                                    "nid_number": {
+                                        "description": "NID or birth registration number; 10, 13, 16 or 17 digits; optional.",
+                                        "type": "string",
                                         "nullable": true
+                                    },
+                                    "blood_group": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                            "A+",
+                                            "A-",
+                                            "B+",
+                                            "B-",
+                                            "AB+",
+                                            "AB-",
+                                            "O+",
+                                            "O-"
+                                        ]
                                     },
                                     "occupation": {
                                         "type": "string",
@@ -6041,6 +6137,18 @@
                                     "current_address": {
                                         "type": "string",
                                         "maxLength": 255
+                                    },
+                                    "post_office": {
+                                        "type": "string",
+                                        "maxLength": 100
+                                    },
+                                    "upazila": {
+                                        "type": "string",
+                                        "maxLength": 100
+                                    },
+                                    "address_district": {
+                                        "type": "string",
+                                        "maxLength": 80
                                     },
                                     "participant_type": {
                                         "type": "string",
@@ -7946,19 +8054,19 @@
                                                         "type": "string",
                                                         "nullable": true
                                                     },
-                                                    "base_price_paisa": {
+                                                    "base_price_tk": {
                                                         "description": "Amount in paisa (1 BDT = 100 paisa)",
                                                         "type": "integer"
                                                     },
-                                                    "additional_adult_price_paisa": {
+                                                    "additional_adult_price_tk": {
                                                         "description": "Amount in paisa",
                                                         "type": "integer"
                                                     },
-                                                    "additional_child_price_paisa": {
+                                                    "additional_child_price_tk": {
                                                         "description": "Amount in paisa",
                                                         "type": "integer"
                                                     },
-                                                    "current_student_price_paisa": {
+                                                    "current_student_price_tk": {
                                                         "description": "Amount in paisa, or null when this type has no student rate.",
                                                         "type": "integer",
                                                         "nullable": true
@@ -8077,29 +8185,29 @@
                                         "type": "string",
                                         "nullable": true
                                     },
-                                    "base_price_paisa": {
+                                    "base_price_tk": {
                                         "description": "Amount in paisa (1 BDT = 100 paisa)",
                                         "required": [
-                                            "base_price_paisa"
+                                            "base_price_tk"
                                         ],
                                         "type": "integer"
                                     },
-                                    "additional_adult_price_paisa": {
+                                    "additional_adult_price_tk": {
                                         "description": "Amount in paisa",
                                         "required": [
-                                            "additional_adult_price_paisa"
+                                            "additional_adult_price_tk"
                                         ],
                                         "type": "integer"
                                     },
-                                    "additional_child_price_paisa": {
+                                    "additional_child_price_tk": {
                                         "description": "Amount in paisa",
                                         "required": [
-                                            "additional_child_price_paisa"
+                                            "additional_child_price_tk"
                                         ],
                                         "type": "integer"
                                     },
-                                    "current_student_price_paisa": {
-                                        "description": "Amount in paisa. What a current student pays for their own seat; null means they pay base_price_paisa.",
+                                    "current_student_price_tk": {
+                                        "description": "Amount in paisa. What a current student pays for their own seat; null means they pay base_price_tk.",
                                         "type": "integer",
                                         "nullable": true
                                     },
@@ -8259,19 +8367,19 @@
                                             "type": "string",
                                             "nullable": true
                                         },
-                                        "base_price_paisa": {
+                                        "base_price_tk": {
                                             "description": "Amount in paisa (1 BDT = 100 paisa)",
                                             "type": "integer"
                                         },
-                                        "additional_adult_price_paisa": {
+                                        "additional_adult_price_tk": {
                                             "description": "Amount in paisa",
                                             "type": "integer"
                                         },
-                                        "additional_child_price_paisa": {
+                                        "additional_child_price_tk": {
                                             "description": "Amount in paisa",
                                             "type": "integer"
                                         },
-                                        "current_student_price_paisa": {
+                                        "current_student_price_tk": {
                                             "description": "Amount in paisa, or null when this type has no student rate.",
                                             "type": "integer",
                                             "nullable": true
@@ -8446,19 +8554,19 @@
                                         "type": "string",
                                         "nullable": true
                                     },
-                                    "base_price_paisa": {
+                                    "base_price_tk": {
                                         "description": "Amount in paisa. Locked after sales start.",
                                         "type": "integer"
                                     },
-                                    "additional_adult_price_paisa": {
+                                    "additional_adult_price_tk": {
                                         "description": "Amount in paisa. Locked after sales start.",
                                         "type": "integer"
                                     },
-                                    "additional_child_price_paisa": {
+                                    "additional_child_price_tk": {
                                         "description": "Amount in paisa. Locked after sales start.",
                                         "type": "integer"
                                     },
-                                    "current_student_price_paisa": {
+                                    "current_student_price_tk": {
                                         "description": "Amount in paisa. Locked after sales start.",
                                         "type": "integer",
                                         "nullable": true
@@ -9729,6 +9837,15 @@
                                             "format": "date-time",
                                             "nullable": true
                                         },
+                                        "nid_number": {
+                                            "description": "NID or birth registration number. Absent for a find-my-ticket lookup session, which may not read it.",
+                                            "type": "string",
+                                            "nullable": true
+                                        },
+                                        "nid_number_set": {
+                                            "description": "Whether an NID or birth registration number is on file, readable by every caller.",
+                                            "type": "boolean"
+                                        },
                                         "occupation": {
                                             "type": "string",
                                             "nullable": true
@@ -9764,6 +9881,14 @@
                                             "nullable": true
                                         },
                                         "current_address": {
+                                            "type": "string",
+                                            "nullable": true
+                                        },
+                                        "post_office": {
+                                            "type": "string",
+                                            "nullable": true
+                                        },
+                                        "upazila": {
                                             "type": "string",
                                             "nullable": true
                                         },
@@ -9844,6 +9969,16 @@
                                         "type": "string",
                                         "nullable": true
                                     },
+                                    "date_of_birth": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "nullable": true
+                                    },
+                                    "nid_number": {
+                                        "description": "NID or birth registration number — 10, 13, 16 or 17 digits. Not accepted from a find-my-ticket lookup session, which cannot read the value it would be overwriting.",
+                                        "type": "string",
+                                        "nullable": true
+                                    },
                                     "whatsapp_number": {
                                         "type": "string",
                                         "nullable": true
@@ -9887,6 +10022,14 @@
                                         "nullable": true
                                     },
                                     "current_address": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "post_office": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "upazila": {
                                         "type": "string",
                                         "nullable": true
                                     },
@@ -11815,6 +11958,24 @@
                     "content": {
                         "application/json": {
                             "schema": {
+                                "required": [
+                                    "full_name",
+                                    "father_name",
+                                    "mobile",
+                                    "gender",
+                                    "date_of_birth",
+                                    "occupation",
+                                    "current_address",
+                                    "post_office",
+                                    "upazila",
+                                    "address_district",
+                                    "participant_type",
+                                    "ticket_type_ulid",
+                                    "participation_type",
+                                    "adults_count",
+                                    "children_count",
+                                    "idempotency_key"
+                                ],
                                 "properties": {
                                     "full_name": {
                                         "required": [
@@ -11824,11 +11985,9 @@
                                         "maxLength": 150
                                     },
                                     "full_name_bn": {
-                                        "description": "Bengali name — the ticket PDF and the gate list both render it",
-                                        "required": [
-                                            "full_name_bn"
-                                        ],
+                                        "description": "Bengali name. Optional and no longer collected by the registration form since 2026-09-13; the ticket PDF, email greeting and directory fall back to full_name when absent.",
                                         "type": "string",
+                                        "nullable": true,
                                         "maxLength": 150
                                     },
                                     "father_name": {
@@ -11861,8 +12020,30 @@
                                         ]
                                     },
                                     "date_of_birth": {
+                                        "required": [
+                                            "date_of_birth"
+                                        ],
                                         "type": "string",
                                         "format": "date"
+                                    },
+                                    "nid_number": {
+                                        "description": "Bangladeshi National ID or birth registration number — 10, 13, 16 or 17 digits. Optional: an under-18 current student has no NID, but may give the number on their birth certificate. Punctuation is stripped before validation, so a number typed with the spaces printed on the card or certificate is accepted.",
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "blood_group": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                            "A+",
+                                            "A-",
+                                            "B+",
+                                            "B-",
+                                            "AB+",
+                                            "AB-",
+                                            "O+",
+                                            "O-"
+                                        ]
                                     },
                                     "occupation": {
                                         "required": [
@@ -11880,12 +12061,34 @@
                                         "maxLength": 200
                                     },
                                     "current_address": {
-                                        "description": "Where the registrant currently lives, as one free-text line",
+                                        "description": "Where the registrant currently lives — village/house and road, as one free-text line",
                                         "required": [
                                             "current_address"
                                         ],
                                         "type": "string",
                                         "maxLength": 255
+                                    },
+                                    "post_office": {
+                                        "required": [
+                                            "post_office"
+                                        ],
+                                        "type": "string",
+                                        "maxLength": 100
+                                    },
+                                    "upazila": {
+                                        "required": [
+                                            "upazila"
+                                        ],
+                                        "type": "string",
+                                        "maxLength": 100
+                                    },
+                                    "address_district": {
+                                        "description": "Free text, not a code — see the 2026-09-13 migration. Published on the public attendees directory.",
+                                        "required": [
+                                            "address_district"
+                                        ],
+                                        "type": "string",
+                                        "maxLength": 80
                                     },
                                     "participant_type": {
                                         "required": [
@@ -11902,7 +12105,7 @@
                                         ]
                                     },
                                     "ssc_batch_year": {
-                                        "description": "Required when participant_type is current_student or former_student",
+                                        "description": "Required when participant_type is former_student; optional for a current_student, who has not sat SSC yet; not applicable to anyone else",
                                         "type": "integer",
                                         "minimum": 1971
                                     },
@@ -12270,6 +12473,18 @@
                                                             "type": "string",
                                                             "nullable": true
                                                         },
+                                                        "post_office": {
+                                                            "type": "string",
+                                                            "nullable": true
+                                                        },
+                                                        "upazila": {
+                                                            "type": "string",
+                                                            "nullable": true
+                                                        },
+                                                        "address_district": {
+                                                            "type": "string",
+                                                            "nullable": true
+                                                        },
                                                         "participant_type": {
                                                             "type": "string"
                                                         },
@@ -12440,17 +12655,17 @@
                                                     "description": {
                                                         "type": "string"
                                                     },
-                                                    "base_price_paisa": {
+                                                    "base_price_tk": {
                                                         "description": "Price in paisa (1 BDT = 100 paisa)",
                                                         "type": "integer"
                                                     },
-                                                    "additional_adult_price_paisa": {
+                                                    "additional_adult_price_tk": {
                                                         "type": "integer"
                                                     },
-                                                    "additional_child_price_paisa": {
+                                                    "additional_child_price_tk": {
                                                         "type": "integer"
                                                     },
-                                                    "current_student_price_paisa": {
+                                                    "current_student_price_tk": {
                                                         "type": "integer",
                                                         "nullable": true
                                                     },
