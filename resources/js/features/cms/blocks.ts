@@ -712,6 +712,567 @@ export const BLOCK_SCHEMAS: Record<BlockType, BlockSchema> = {
             },
         ],
     },
+
+    // ---------------------------------------------------------------------
+    // Shared inner-page sections. The same contract as every bespoke section
+    // above: every field is optional in practice, because the public site
+    // keeps the designed copy as its fallback.
+    // ---------------------------------------------------------------------
+
+    page_hero: {
+        label: 'Page hero',
+        description: 'The plain purple inner-page banner: breadcrumb, year pill, eyebrow, two-tone title and intro. Used by FAQ, Sponsors and Alumni.',
+        media: 'none',
+        fields: [
+            { key: 'breadcrumb', label: 'Breadcrumb label', kind: 'text', help: 'The trailing crumb after “Home ›”.' },
+            { key: 'year_pill', label: 'Year pill', kind: 'text', help: 'ASCII with an en-dash, e.g. “1927–2027” — the digits are localised for you.' },
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_lead', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent word', kind: 'text', help: 'Drawn in gold after the heading.' },
+            { key: 'body', label: 'Intro paragraph', kind: 'textarea' },
+            { key: 'subheading', label: 'Subheading', kind: 'text', help: 'A second display line under the title; the design leaves it blank on most pages.' },
+        ],
+    },
+
+    faq_contact_cta: {
+        label: 'FAQ contact card',
+        description: 'The “didn’t find your answer?” card that closes the FAQ page and points at the contact desks.',
+        media: 'none',
+        fields: [
+            { key: 'heading', label: 'Heading', kind: 'text' },
+            { key: 'body', label: 'Body', kind: 'text' },
+            { key: 'cta_label', label: 'Button label', kind: 'text' },
+            { key: 'cta_url', label: 'Button link', kind: 'url' },
+        ],
+    },
+
+    // ---------------------------------------------------------------------
+    // Gallery-page sections.
+    // ---------------------------------------------------------------------
+
+    gallery_hero: {
+        label: 'Gallery hero',
+        description: 'The Gallery banner with its three fact cards (archived photos, videos, oldest photo).',
+        media: 'none',
+        fields: [
+            { key: 'breadcrumb', label: 'Breadcrumb label', kind: 'text', help: 'The trailing crumb after “Home ›”.' },
+            { key: 'year_pill', label: 'Year pill', kind: 'text', help: 'ASCII with an en-dash, e.g. “1927–2027” — the digits are localised for you.' },
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_lead', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent word', kind: 'text', help: 'Drawn in gold after the heading.' },
+            { key: 'body', label: 'Intro paragraph', kind: 'textarea' },
+            {
+                key: 'facts',
+                label: 'Key facts',
+                kind: 'repeater',
+                itemLabel: 'fact',
+                help: 'Three fit the row as designed.',
+                item: [
+                    { key: 'label', label: 'Label', kind: 'text' },
+                    { key: 'value', label: 'Value', kind: 'text' },
+                    { key: 'icon', label: 'Icon', kind: 'text', placeholder: 'Camera', translatable: false },
+                ],
+            },
+        ],
+    },
+
+    album_filters: {
+        label: 'Album filters',
+        description: 'The row of filter pills above the photo grid. Counts are display copy, not live figures.',
+        media: 'none',
+        fields: [
+            {
+                key: 'filters',
+                label: 'Filters',
+                kind: 'repeater',
+                itemLabel: 'filter',
+                item: [
+                    { key: 'label', label: 'Label', kind: 'text' },
+                    { key: 'count', label: 'Count', kind: 'text', placeholder: '1240', translatable: false },
+                ],
+            },
+        ],
+    },
+
+    photo_grid: {
+        label: 'Photo grid',
+        description: 'The archive grid: a heading and a four-column grid of captioned photos.',
+        media: 'none',
+        fields: [
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_dark', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+            { key: 'more_label', label: '“View more” label', kind: 'text' },
+            {
+                key: 'photos',
+                label: 'Photos',
+                kind: 'repeater',
+                itemLabel: 'photo',
+                item: [
+                    { key: 'image', label: 'Image', kind: 'image' },
+                    { key: 'title', label: 'Title', kind: 'text' },
+                    { key: 'meta', label: 'Caption line', kind: 'text', placeholder: '1931 · Founding Era' },
+                ],
+            },
+        ],
+    },
+
+    album_collection: {
+        label: 'Album collection',
+        description: 'The three-column album cards with a year-span pill and photo count.',
+        media: 'none',
+        fields: [
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_dark', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+            {
+                key: 'albums',
+                label: 'Albums',
+                kind: 'repeater',
+                itemLabel: 'album',
+                item: [
+                    { key: 'image', label: 'Cover image', kind: 'image' },
+                    { key: 'span', label: 'Year span', kind: 'text', placeholder: '1927–1960' },
+                    { key: 'title', label: 'Title', kind: 'text' },
+                    { key: 'count', label: 'Photo count', kind: 'text', placeholder: '86 photos' },
+                ],
+            },
+        ],
+    },
+
+    video_gallery: {
+        label: 'Video gallery',
+        description: 'The video cards with a play button and duration badge.',
+        media: 'none',
+        fields: [
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_dark', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+            {
+                key: 'videos',
+                label: 'Videos',
+                kind: 'repeater',
+                itemLabel: 'video',
+                item: [
+                    { key: 'image', label: 'Thumbnail', kind: 'image' },
+                    { key: 'title', label: 'Title', kind: 'text' },
+                    { key: 'meta', label: 'Caption line', kind: 'text', placeholder: 'Documentary · 2026' },
+                    { key: 'duration', label: 'Duration', kind: 'text', placeholder: '12:40', translatable: false },
+                    { key: 'url', label: 'Video link', kind: 'url' },
+                ],
+            },
+        ],
+    },
+
+    contribute: {
+        label: 'Contribute',
+        description: 'The “add your photos” card: an upload panel on the left and the how-to on the right.',
+        media: 'none',
+        fields: [
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_dark', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+            { key: 'panel_title', label: 'Panel title', kind: 'text' },
+            { key: 'panel_note', label: 'Panel note', kind: 'text', help: 'File types and size limit.' },
+            { key: 'kicker', label: 'Kicker', kind: 'text' },
+            { key: 'heading', label: 'Card heading', kind: 'text' },
+            { key: 'body', label: 'Card body', kind: 'textarea' },
+            {
+                key: 'steps',
+                label: 'Steps',
+                kind: 'repeater',
+                itemLabel: 'step',
+                item: [
+                    { key: 'title', label: 'Title', kind: 'text' },
+                    { key: 'body', label: 'Body', kind: 'text' },
+                ],
+            },
+            { key: 'cta_label', label: 'Button label', kind: 'text' },
+            { key: 'cta_url', label: 'Button link', kind: 'url', help: 'A mailto: address or a page.' },
+        ],
+    },
+
+    // ---------------------------------------------------------------------
+    // Souvenir-page sections.
+    // ---------------------------------------------------------------------
+
+    souvenir_hero: {
+        label: 'Souvenir hero',
+        description: 'The Souvenir banner with its three fact cards (pages, compiled writings, publish date).',
+        media: 'none',
+        fields: [
+            { key: 'breadcrumb', label: 'Breadcrumb label', kind: 'text', help: 'The trailing crumb after “Home ›”.' },
+            { key: 'year_pill', label: 'Year pill', kind: 'text', help: 'ASCII with an en-dash, e.g. “1927–2027” — the digits are localised for you.' },
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_lead', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent word', kind: 'text', help: 'Drawn in gold after the heading.' },
+            { key: 'body', label: 'Intro paragraph', kind: 'textarea' },
+            {
+                key: 'facts',
+                label: 'Key facts',
+                kind: 'repeater',
+                itemLabel: 'fact',
+                help: 'Three fit the row as designed.',
+                item: [
+                    { key: 'label', label: 'Label', kind: 'text' },
+                    { key: 'value', label: 'Value', kind: 'text' },
+                    { key: 'icon', label: 'Icon', kind: 'text', placeholder: 'Camera', translatable: false },
+                ],
+            },
+        ],
+    },
+
+    book_preview: {
+        label: 'Book preview',
+        description: 'The 3D book mockup beside the book’s description, spec grid and two buttons.',
+        media: 'none',
+        fields: [
+            { key: 'cover_school', label: 'Cover: school line', kind: 'text' },
+            { key: 'cover_kicker', label: 'Cover: small title', kind: 'text' },
+            { key: 'cover_title', label: 'Cover: main title', kind: 'text' },
+            { key: 'cover_years', label: 'Cover: years', kind: 'text' },
+            { key: 'cover_footer', label: 'Cover: footer line', kind: 'text' },
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_dark', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+            { key: 'body', label: 'Body', kind: 'textarea' },
+            {
+                key: 'specs',
+                label: 'Specifications',
+                kind: 'repeater',
+                itemLabel: 'spec',
+                item: [
+                    { key: 'label', label: 'Label', kind: 'text' },
+                    { key: 'value', label: 'Value', kind: 'text' },
+                ],
+            },
+            { key: 'primary_label', label: 'Primary button', kind: 'text' },
+            { key: 'primary_url', label: 'Primary link', kind: 'url' },
+            { key: 'secondary_label', label: 'Secondary button', kind: 'text' },
+            { key: 'secondary_url', label: 'Secondary link', kind: 'url' },
+        ],
+    },
+
+    book_contents: {
+        label: 'Book contents',
+        description: 'The table of contents: numbered chapter cards with an icon and page count.',
+        media: 'none',
+        fields: [
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_dark', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+            {
+                key: 'chapters',
+                label: 'Chapters',
+                kind: 'repeater',
+                itemLabel: 'chapter',
+                item: [
+                    { key: 'number', label: 'Number', kind: 'text', placeholder: '01' },
+                    { key: 'icon', label: 'Icon', kind: 'text', placeholder: 'ScrollText', translatable: false },
+                    { key: 'title', label: 'Title', kind: 'text' },
+                    { key: 'body', label: 'Body', kind: 'text' },
+                    { key: 'pages', label: 'Page count', kind: 'text', placeholder: '42 pages' },
+                ],
+            },
+        ],
+    },
+
+    call_for_writing: {
+        label: 'Call for writing',
+        description: 'The submission deadline banner and the four writing categories.',
+        media: 'none',
+        fields: [
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_dark', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+            { key: 'deadline_title', label: 'Deadline line', kind: 'text' },
+            { key: 'deadline_body', label: 'Deadline note', kind: 'textarea' },
+            { key: 'deadline_badge', label: 'Deadline badge', kind: 'text', help: 'Copy, not a countdown — e.g. “47 days left”. Blank hides it.' },
+            {
+                key: 'categories',
+                label: 'Categories',
+                kind: 'repeater',
+                itemLabel: 'category',
+                item: [
+                    { key: 'icon', label: 'Icon', kind: 'text', placeholder: 'Feather', translatable: false },
+                    { key: 'title', label: 'Title', kind: 'text' },
+                    { key: 'body', label: 'Body', kind: 'text' },
+                    { key: 'limit', label: 'Length limit', kind: 'text', placeholder: '800–1200 words' },
+                ],
+            },
+        ],
+    },
+
+    editorial_board: {
+        label: 'Editorial board',
+        description: 'The row of portrait cards for the souvenir book’s editors.',
+        media: 'none',
+        fields: [
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_dark', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+            {
+                key: 'members',
+                label: 'Members',
+                kind: 'repeater',
+                itemLabel: 'member',
+                item: [
+                    { key: 'image', label: 'Portrait', kind: 'image' },
+                    { key: 'name', label: 'Name', kind: 'text' },
+                    { key: 'role', label: 'Role', kind: 'text' },
+                ],
+            },
+        ],
+    },
+
+    get_a_copy: {
+        label: 'Get a copy',
+        description: 'The three ways to get the book, as pricing-style cards.',
+        media: 'none',
+        fields: [
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_dark', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+            { key: 'popular_label', label: '“Most popular” badge', kind: 'text' },
+            { key: 'footnote', label: 'Footnote', kind: 'text' },
+            {
+                key: 'options',
+                label: 'Options',
+                kind: 'repeater',
+                itemLabel: 'option',
+                item: [
+                    { key: 'title', label: 'Title', kind: 'text' },
+                    { key: 'subtitle', label: 'Subtitle', kind: 'text' },
+                    { key: 'price', label: 'Price', kind: 'text', placeholder: '৳ 800' },
+                    { key: 'features', label: 'Features', kind: 'textarea', placeholder: 'One per line' },
+                    { key: 'cta_label', label: 'Button label', kind: 'text' },
+                    { key: 'cta_url', label: 'Button link', kind: 'url' },
+                    { key: 'highlighted', label: 'Highlighted', kind: 'text', placeholder: 'yes', translatable: false },
+                ],
+            },
+        ],
+    },
+
+    // ---------------------------------------------------------------------
+    // Contact-page sections. Venue & directions and the FAQ grid are the
+    // shared `venue_directions` and `faq_list` types above.
+    // ---------------------------------------------------------------------
+
+    contact_hero: {
+        label: 'Contact hero',
+        description: 'The Contact banner and the four channel cards that overlap its foot (helpline, WhatsApp, email, office).',
+        media: 'none',
+        fields: [
+            { key: 'breadcrumb', label: 'Breadcrumb label', kind: 'text', help: 'The trailing crumb after “Home ›”.' },
+            { key: 'year_pill', label: 'Year pill', kind: 'text', help: 'ASCII with an en-dash, e.g. “1927–2027” — the digits are localised for you.' },
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_lead', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent word', kind: 'text', help: 'Drawn in gold after the heading.' },
+            { key: 'body', label: 'Intro paragraph', kind: 'textarea' },
+            {
+                key: 'channels',
+                label: 'Channels',
+                kind: 'repeater',
+                itemLabel: 'channel',
+                help: 'Leave a value blank to fall back to the event settings (contact.phone, contact.email, contact.address).',
+                item: [
+                    { key: 'icon', label: 'Icon', kind: 'text', placeholder: 'Phone', translatable: false },
+                    { key: 'tone', label: 'Tone', kind: 'text', placeholder: 'gold', translatable: false },
+                    { key: 'title', label: 'Title', kind: 'text' },
+                    { key: 'description', label: 'Description', kind: 'text' },
+                    { key: 'value', label: 'Value', kind: 'text', placeholder: '+880 1234-567890', translatable: false },
+                    { key: 'action_label', label: 'Button label', kind: 'text' },
+                    { key: 'action_url', label: 'Button link', kind: 'url', placeholder: 'tel:… / mailto:… / https://…' },
+                ],
+            },
+        ],
+    },
+
+    committee_desks: {
+        label: 'Committee desks',
+        description: 'The four department desks and the secretariat hours banner beneath them.',
+        media: 'none',
+        fields: [
+            { key: 'badge', label: 'Badge', kind: 'text' },
+            { key: 'heading', label: 'Heading', kind: 'text' },
+            { key: 'subheading', label: 'Subheading', kind: 'text' },
+            {
+                key: 'desks',
+                label: 'Desks',
+                kind: 'repeater',
+                itemLabel: 'desk',
+                item: [
+                    { key: 'icon', label: 'Icon', kind: 'text', placeholder: 'Ticket', translatable: false },
+                    { key: 'tone', label: 'Tone', kind: 'text', placeholder: 'purple', translatable: false },
+                    { key: 'title', label: 'Title', kind: 'text' },
+                    { key: 'description', label: 'Description', kind: 'text' },
+                    { key: 'email', label: 'Email', kind: 'text', translatable: false },
+                ],
+            },
+            { key: 'hours_title', label: 'Hours banner title', kind: 'text' },
+            { key: 'hours_subtitle', label: 'Hours banner subtitle', kind: 'text' },
+            { key: 'hours_value', label: 'Opening hours', kind: 'text' },
+            { key: 'hours_badge', label: 'Hours badge', kind: 'text' },
+        ],
+    },
+
+    // ---------------------------------------------------------------------
+    // Tickets-page sections. No money lives here: prices, admit limits and
+    // the free-infant age come from the ticket type, so the cards and the
+    // worked-out rules always agree with what the server charges.
+    // ---------------------------------------------------------------------
+
+    tickets_hero: {
+        label: 'Tickets hero',
+        description: 'The Tickets banner: fact cards, a countdown and two buttons.',
+        media: 'none',
+        fields: [
+            { key: 'breadcrumb', label: 'Breadcrumb label', kind: 'text', help: 'The trailing crumb after “Home ›”.' },
+            { key: 'year_pill', label: 'Year pill', kind: 'text', help: 'ASCII with an en-dash, e.g. “1927–2027” — the digits are localised for you.' },
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_lead', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent word', kind: 'text', help: 'Drawn in gold after the heading.' },
+            { key: 'body', label: 'Intro paragraph', kind: 'textarea' },
+            {
+                key: 'facts',
+                label: 'Key facts',
+                kind: 'repeater',
+                itemLabel: 'fact',
+                help: 'Three fit the row as designed.',
+                item: [
+                    { key: 'label', label: 'Label', kind: 'text' },
+                    { key: 'value', label: 'Value', kind: 'text' },
+                    { key: 'icon', label: 'Icon', kind: 'text', placeholder: 'Camera', translatable: false },
+                ],
+            },
+            { key: 'countdown_target', label: 'Countdown target', kind: 'text', help: 'ISO 8601 with offset, e.g. 2027-02-12T09:00:00+06:00.' },
+            { key: 'primary_label', label: 'Primary button', kind: 'text' },
+            { key: 'primary_url', label: 'Primary link', kind: 'url', help: 'e.g. #register' },
+            { key: 'secondary_label', label: 'Secondary button', kind: 'text' },
+            { key: 'secondary_url', label: 'Secondary link', kind: 'url', help: 'e.g. #pricing' },
+        ],
+    },
+
+    ticket_pricing: {
+        label: 'Ticket pricing',
+        description: 'The heading over the live ticket card. The card itself reads its prices from the ticket type.',
+        media: 'none',
+        fields: [
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_dark', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+            { key: 'body', label: 'Body', kind: 'textarea' },
+        ],
+    },
+
+    pricing_rules: {
+        label: 'Pricing rules',
+        description: 'The heading beside the worked-out pricing rules. The rule bodies quote live prices and cannot be edited here.',
+        media: 'none',
+        fields: [
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_dark', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+        ],
+    },
+
+    registration_form: {
+        label: 'Registration form',
+        description: 'The “reserve your place” heading, the what-to-have-ready checklist, and the live registration form beneath it.',
+        media: 'none',
+        fields: [
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_dark', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+            { key: 'body', label: 'Body', kind: 'textarea' },
+            { key: 'checklist_heading', label: 'Checklist heading', kind: 'text' },
+            {
+                key: 'checklist_items',
+                label: 'Checklist items',
+                kind: 'repeater',
+                itemLabel: 'item',
+                item: [{ key: 'text', label: 'Item', kind: 'text' }],
+            },
+            { key: 'video_label', label: 'Video button label', kind: 'text' },
+            { key: 'video_url', label: 'Tutorial video', kind: 'url', help: 'A YouTube or Vimeo page URL. Blank shows a “coming soon” note.' },
+        ],
+    },
+
+    how_it_works: {
+        label: 'How it works',
+        description: 'The numbered three-step walkthrough of registration.',
+        media: 'none',
+        fields: [
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_dark', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+            {
+                key: 'steps',
+                label: 'Steps',
+                kind: 'repeater',
+                itemLabel: 'step',
+                item: [
+                    { key: 'title', label: 'Title', kind: 'text' },
+                    { key: 'body', label: 'Body', kind: 'textarea' },
+                ],
+            },
+        ],
+    },
+
+    ticket_faq: {
+        label: 'Ticket FAQ',
+        description: 'The ticket page’s own two-column question grid and the “still unsure?” line under it.',
+        media: 'none',
+        fields: [
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_dark', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+            {
+                key: 'items',
+                label: 'Questions',
+                kind: 'repeater',
+                itemLabel: 'question',
+                item: [
+                    { key: 'question', label: 'Question', kind: 'text' },
+                    { key: 'answer', label: 'Answer', kind: 'textarea' },
+                ],
+            },
+            { key: 'tail', label: 'Closing line', kind: 'text' },
+            { key: 'tail_label', label: 'Closing link label', kind: 'text' },
+            { key: 'tail_url', label: 'Closing link', kind: 'url' },
+        ],
+    },
+
+    // ---------------------------------------------------------------------
+    // Attendees-page sections.
+    // ---------------------------------------------------------------------
+
+    attendees_hero: {
+        label: 'Attendees hero',
+        description: 'The directory banner. The six counts are live; only their labels are editable.',
+        media: 'none',
+        fields: [
+            { key: 'breadcrumb', label: 'Breadcrumb label', kind: 'text', help: 'The trailing crumb after “Home ›”.' },
+            { key: 'year_pill', label: 'Year pill', kind: 'text', help: 'ASCII with an en-dash, e.g. “1927–2027” — the digits are localised for you.' },
+            { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
+            { key: 'heading_lead', label: 'Heading', kind: 'text' },
+            { key: 'heading_accent', label: 'Heading accent word', kind: 'text', help: 'Drawn in gold after the heading.' },
+            { key: 'body', label: 'Intro paragraph', kind: 'textarea' },
+            { key: 'label_total', label: 'Label: total registered', kind: 'text' },
+            { key: 'label_alumni', label: 'Label: alumni', kind: 'text' },
+            { key: 'label_students', label: 'Label: current students', kind: 'text' },
+            { key: 'label_teachers_staff', label: 'Label: teachers & staff', kind: 'text' },
+            { key: 'label_guests', label: 'Label: guests', kind: 'text' },
+            { key: 'label_batches', label: 'Label: batches', kind: 'text' },
+        ],
+    },
+
+    attendee_directory: {
+        label: 'Attendee directory',
+        description: 'Places the live, filterable attendee directory. It has no copy of its own.',
+        media: 'none',
+        fields: [],
+    },
 };
 
 /** A stat-row entry, the only structured (non-string) field value we store. */

@@ -38,7 +38,9 @@ class ContentSeeder extends Seeder
         // `home` is deliberately absent: it is thirteen bespoke sections
         // rather than a handful of generic blocks, so {@see HomePageSeeder}
         // owns that page — and holds position 0, which is why the pages here
-        // start at 1.
+        // start at 1. `faq` and `contact` moved out for the same reason: the
+        // public site draws them as designed sections, so
+        // {@see FaqPageSeeder} and {@see ContactPageSeeder} own those slugs.
         /** @var array<int, array{slug: string, title: string, title_bn: string, excerpt: string, excerpt_bn: string, blocks: array<int, array{type: string, data: array<string, mixed>, data_bn: array<string, mixed>}>}> $pages */
         $pages = [
             [
@@ -66,34 +68,6 @@ class ContentSeeder extends Seeder
                         'type' => 'schedule',
                         'data' => ['heading' => 'Programme'],
                         'data_bn' => ['heading' => 'কর্মসূচি'],
-                    ],
-                ],
-            ],
-            [
-                'slug' => 'faq',
-                'title' => 'Frequently Asked Questions',
-                'title_bn' => 'সাধারণ জিজ্ঞাসা',
-                'excerpt' => 'Registration, payment and venue questions.',
-                'excerpt_bn' => 'নিবন্ধন, পরিশোধ ও ভেন্যু সংক্রান্ত প্রশ্ন।',
-                'blocks' => [
-                    [
-                        'type' => 'faq_list',
-                        'data' => ['heading' => 'Questions'],
-                        'data_bn' => ['heading' => 'প্রশ্নসমূহ'],
-                    ],
-                ],
-            ],
-            [
-                'slug' => 'contact',
-                'title' => 'Contact',
-                'title_bn' => 'যোগাযোগ',
-                'excerpt' => 'Reach the organising committee.',
-                'excerpt_bn' => 'আয়োজক কমিটির সঙ্গে যোগাযোগ করুন।',
-                'blocks' => [
-                    [
-                        'type' => 'rich_text',
-                        'data' => ['heading' => 'Get in touch', 'body' => 'The organising committee answers queries within two working days.'],
-                        'data_bn' => ['heading' => 'যোগাযোগ করুন', 'body' => 'আয়োজক কমিটি দুই কার্যদিবসের মধ্যে উত্তর দেয়।'],
                     ],
                 ],
             ],

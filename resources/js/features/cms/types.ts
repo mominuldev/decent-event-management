@@ -37,6 +37,22 @@ export const BLOCK_TYPES = [
     // Events-page sections — see ContentBlock::TYPES. `attraction_grid`,
     // `guest_carousel` and `cta_banner` are shared with the homepage.
     'event_hero', 'programme_glance', 'full_schedule', 'venue_directions',
+    // Shared inner-page sections — the plain hero and the FAQ page's closing
+    // "didn't find your answer?" card.
+    'page_hero', 'faq_contact_cta',
+    // Gallery-page sections — see ContentBlock::TYPES.
+    'gallery_hero', 'album_filters', 'photo_grid', 'album_collection',
+    'video_gallery', 'contribute',
+    // Souvenir-page sections.
+    'souvenir_hero', 'book_preview', 'book_contents', 'call_for_writing',
+    'editorial_board', 'get_a_copy',
+    // Contact-page sections. `venue_directions` and `faq_list` are shared.
+    'contact_hero', 'committee_desks',
+    // Tickets-page sections — copy only; prices live on ticket types.
+    'tickets_hero', 'ticket_pricing', 'pricing_rules', 'registration_form',
+    'how_it_works', 'ticket_faq',
+    // Attendees-page sections — the directory itself is a live query.
+    'attendees_hero', 'attendee_directory',
 ] as const;
 
 export type BlockType = (typeof BLOCK_TYPES)[number];

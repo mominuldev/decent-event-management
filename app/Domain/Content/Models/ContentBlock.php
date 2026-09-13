@@ -68,6 +68,44 @@ class ContentBlock extends Model
         'programme_glance',
         'full_schedule',
         'venue_directions',
+        // Shared inner-page sections. `page_hero` is the plain purple hero
+        // every inner page opens with (FAQ, Sponsors, Alumni); pages whose
+        // hero carries extra structure — fact cards, contact channels, live
+        // counts — get their own hero type below instead.
+        'page_hero',
+        'faq_contact_cta',
+        // Gallery-page sections, one per bespoke section of the Gallery
+        // design. `cta_banner` above closes the page.
+        'gallery_hero',
+        'album_filters',
+        'photo_grid',
+        'album_collection',
+        'video_gallery',
+        'contribute',
+        // Souvenir-page sections — the commemorative *book*, not merchandise.
+        'souvenir_hero',
+        'book_preview',
+        'book_contents',
+        'call_for_writing',
+        'editorial_board',
+        'get_a_copy',
+        // Contact-page sections. `venue_directions` and `faq_list` above are
+        // shared with the Events page and the homepage respectively.
+        'contact_hero',
+        'committee_desks',
+        // Tickets-page sections. Prices, admit limits and the free-infant age
+        // stay on `ticket_types` — these blocks carry only the copy around
+        // them, and the registration form itself is live.
+        'tickets_hero',
+        'ticket_pricing',
+        'pricing_rules',
+        'registration_form',
+        'how_it_works',
+        'ticket_faq',
+        // Attendees-page sections. The directory is a live query — the block
+        // only places it; the hero's counts come from the same query.
+        'attendees_hero',
+        'attendee_directory',
     ];
 
     protected $fillable = [
