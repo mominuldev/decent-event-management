@@ -89,7 +89,7 @@ class CentennialTicketFlowTest extends TestCase
 
         $registration = $this->register($this->payload($this->centennialType()));
 
-        $this->assertSame(250000, $registration->total_paisa);
+        $this->assertSame(152000, $registration->total_paisa);
         $this->assertSame(1, $registration->adults_count);
         $this->assertSame(0, $registration->children_count);
         $this->assertSame(0, $registration->infants_count);
@@ -122,8 +122,8 @@ class CentennialTicketFlowTest extends TestCase
 
         $this->assertSame($alone->ticket_type_id, $family->ticket_type_id, 'one ticket type serves both');
 
-        // 250000 base + 200000 extra adult + 200000 extra child
-        $this->assertSame(650000, $family->total_paisa);
+        // 152000 base + 102000 extra adult + 102000 extra child
+        $this->assertSame(356000, $family->total_paisa);
     }
 
     /**
@@ -147,11 +147,11 @@ class CentennialTicketFlowTest extends TestCase
         ]));
 
         // 2,500 for the registrant + 3 × 2,000 for the members.
-        $this->assertSame(850000, $registration->total_paisa);
+        $this->assertSame(458000, $registration->total_paisa);
         $this->assertSame(0, $registration->infants_count);
     }
 
-    public function test_a_child_under_two_is_free_but_still_occupies_an_admit(): void
+    public function test_a_child_under_one_is_free_but_still_occupies_an_admit(): void
     {
         $this->seedCentennialTypes();
         $family = $this->centennialType();
@@ -164,12 +164,12 @@ class CentennialTicketFlowTest extends TestCase
             'guests' => [
                 ['full_name' => 'Nusrat Jahan', 'relation' => 'spouse', 'age_group' => 'adult', 'gender' => 'female', 'tshirt_required' => true, 'tshirt_size' => 'M'],
                 ['full_name' => 'Arif Uddin', 'relation' => 'child', 'age_group' => 'child', 'age' => 9, 'gender' => 'male', 'tshirt_required' => true, 'tshirt_size' => 'S'],
-                ['full_name' => 'Baby Uddin', 'relation' => 'child', 'age_group' => 'child', 'age' => 1, 'gender' => 'female', 'tshirt_required' => false],
+                ['full_name' => 'Baby Uddin', 'relation' => 'child', 'age_group' => 'child', 'age' => 0, 'gender' => 'female', 'tshirt_required' => false],
             ],
         ]));
 
-        // Billed for 3 of the 4 heads: 2,500 + 2,000 + 2,000, infant free.
-        $this->assertSame(650000, $registration->total_paisa);
+        // Billed for 3 of the 4 heads: 1,520 + 1,020 + 1,020, infant free.
+        $this->assertSame(356000, $registration->total_paisa);
         $this->assertSame(1, $registration->infants_count);
         $this->assertSame(1, $registration->children_count, 'the infant is moved out of the billable child count');
 
@@ -184,11 +184,11 @@ class CentennialTicketFlowTest extends TestCase
     }
 
     /**
-     * A child who has had their second birthday is billed. The boundary is
+     * A child who has had their first birthday is billed. The boundary is
      * "strictly under", and this is the case the ticket page's own FAQ
      * calls out, so it gets its own test.
      */
-    public function test_a_child_of_exactly_two_is_billed(): void
+    public function test_a_child_of_exactly_one_is_billed(): void
     {
         $this->seedCentennialTypes();
         $family = $this->centennialType();
@@ -198,11 +198,11 @@ class CentennialTicketFlowTest extends TestCase
             'adults_count' => 1,
             'children_count' => 1,
             'guests' => [
-                ['full_name' => 'Just Turned Two', 'relation' => 'child', 'age_group' => 'child', 'age' => 2, 'gender' => 'male', 'tshirt_required' => true, 'tshirt_size' => 'XS'],
+                ['full_name' => 'Just Turned One', 'relation' => 'child', 'age_group' => 'child', 'age' => 1, 'gender' => 'male', 'tshirt_required' => true, 'tshirt_size' => 'XS'],
             ],
         ]));
 
-        $this->assertSame(450000, $registration->total_paisa);
+        $this->assertSame(254000, $registration->total_paisa);
         $this->assertSame(0, $registration->infants_count);
     }
 
@@ -229,7 +229,7 @@ class CentennialTicketFlowTest extends TestCase
         ]));
 
         $this->assertSame(0, $registration->infants_count);
-        $this->assertSame(850000, $registration->total_paisa);
+        $this->assertSame(458000, $registration->total_paisa);
     }
 
     /** A child guest sent with no age is billed, not waved through. */
@@ -248,7 +248,7 @@ class CentennialTicketFlowTest extends TestCase
         ]));
 
         $this->assertSame(0, $registration->infants_count);
-        $this->assertSame(450000, $registration->total_paisa);
+        $this->assertSame(254000, $registration->total_paisa);
     }
 
     /**
@@ -291,7 +291,7 @@ class CentennialTicketFlowTest extends TestCase
         $response = $this->getJson(route('api.v1.public.ticket-types.index'));
 
         $response->assertStatus(200)
-            ->assertJsonFragment(['code' => 'CEN', 'child_free_under_age' => 2]);
+            ->assertJsonFragment(['code' => 'CEN', 'child_free_under_age' => 1]);
     }
 
     /**
@@ -306,7 +306,7 @@ class CentennialTicketFlowTest extends TestCase
             'participant_type' => 'current_student',
         ]));
 
-        $this->assertSame(50000, $registration->total_paisa);
+        $this->assertSame(102000, $registration->total_paisa);
     }
 
     /**
@@ -332,7 +332,7 @@ class CentennialTicketFlowTest extends TestCase
             ],
         ]));
 
-        $this->assertSame(50000 + 200000 + 200000, $registration->total_paisa);
+        $this->assertSame(102000 + 102000 + 102000, $registration->total_paisa);
     }
 
     /**
@@ -348,7 +348,7 @@ class CentennialTicketFlowTest extends TestCase
             'ssc_batch_year' => null,
         ]));
 
-        $this->assertSame(250000, $registration->total_paisa);
+        $this->assertSame(152000, $registration->total_paisa);
     }
 
     /**
@@ -405,7 +405,7 @@ class CentennialTicketFlowTest extends TestCase
         $response = $this->getJson(route('api.v1.public.ticket-types.index'));
 
         $response->assertStatus(200)
-            ->assertJsonFragment(['code' => 'CEN', 'current_student_price_tk' => 50000]);
+            ->assertJsonFragment(['code' => 'CEN', 'current_student_price_tk' => 102000]);
     }
 
     public function test_every_allowed_participant_type_may_buy_the_one_ticket(): void
@@ -431,7 +431,7 @@ class CentennialTicketFlowTest extends TestCase
 
             // A current student is the one type with its own rate; the
             // rest all pay the base seat.
-            $expected = $type === 'current_student' ? 50000 : 250000;
+            $expected = $type === 'current_student' ? 102000 : 152000;
 
             $this->assertSame($expected, $registration->total_paisa, "{$type} should pay its own tier");
         }

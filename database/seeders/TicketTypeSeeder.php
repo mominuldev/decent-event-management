@@ -28,49 +28,45 @@ class TicketTypeSeeder extends Seeder
 
     public function run(): void
     {
+        // ⚠️ Every price below is integer PAISA, like every other money column
+        // in the system — the `_tk` suffix is the column's name, not its unit.
+        // ৳1,520 is 152000. Writing `1520` here seeds a ৳15.20 ticket, and
+        // nothing refuses it: the public page, the admin console and
+        // CreateRegistration all divide by 100 on the way out.
         $types = [
-            ['code' => 'ALM', 'name' => 'Alumni', 'base_admits' => 1, 'max_admits' => 1, 'base_price_tk' => 1520, 'allowed_participant_types' => ['former_student'], 'quantity_total' => 2500],
-            ['code' => 'STU', 'name' => 'Current Student', 'base_admits' => 1, 'max_admits' => 1, 'base_price_tk' => 1020, 'allowed_participant_types' => ['current_student'], 'quantity_total' => 1700],
-            ['code' => 'TCH', 'name' => 'Teacher', 'base_admits' => 1, 'max_admits' => 1, 'base_price_tk' => 1520, 'allowed_participant_types' => ['teacher'], 'quantity_total' => 200],
-            ['code' => 'STF', 'name' => 'Staff', 'base_admits' => 1, 'max_admits' => 1, 'base_price_tk' => 1520, 'allowed_participant_types' => ['staff'], 'quantity_total' => 15],
-            ['code' => 'VIP', 'name' => 'VIP Guest', 'base_admits' => 2, 'max_admits' => 2, 'base_price_tk' => 3060, 'allowed_participant_types' => ['guest'], 'quantity_total' => 200, 'requires_approval' => true, 'is_public' => false],
+            ['code' => 'ALM', 'name' => 'Alumni', 'base_admits' => 1, 'max_admits' => 1, 'base_price_tk' => 152000, 'allowed_participant_types' => ['former_student'], 'quantity_total' => 2500],
+            ['code' => 'STU', 'name' => 'Current Student', 'base_admits' => 1, 'max_admits' => 1, 'base_price_tk' => 102000, 'allowed_participant_types' => ['current_student'], 'quantity_total' => 1700],
+            ['code' => 'TCH', 'name' => 'Teacher', 'base_admits' => 1, 'max_admits' => 1, 'base_price_tk' => 152000, 'allowed_participant_types' => ['teacher'], 'quantity_total' => 200],
+            ['code' => 'STF', 'name' => 'Staff', 'base_admits' => 1, 'max_admits' => 1, 'base_price_tk' => 152000, 'allowed_participant_types' => ['staff'], 'quantity_total' => 15],
+            ['code' => 'VIP', 'name' => 'VIP Guest', 'base_admits' => 2, 'max_admits' => 2, 'base_price_tk' => 306000, 'allowed_participant_types' => ['guest'], 'quantity_total' => 200, 'requires_approval' => true, 'is_public' => false],
 
-            // The two centennial categories the public ticket page sells.
-            // These are the money authority for that page — it renders these
-            // rows, it does not carry its own constants.
+            // The centennial ticket the public ticket page sells. This row is
+            // the money authority for that page — it renders these columns,
+            // it does not carry its own constants.
             //
-            // CEN-FAMILY encodes "every head at the same flat rate, the
-            // registering alumnus included" through the generic formula:
-            // with base_admits = 1, a party of N costs
-            //   200000 + (N-1)×200000 = 200000 × N.
-            // Setting the adult and child extras to the same figure is what
-            // makes "flat per person" fall out of a tiered pricing model.
             // ONE centennial ticket, not a single/family pair. Every
             // participant type registers on this row and may bring family;
             // bringing nobody is simply a party of one, so there is no
             // "family ticket" to pick and no way to pick the wrong one.
             //
             // The tiered columns carry the whole rule:
-            //   registrant        → base_price_tk          (৳1,520)
-            //   a current student → current_student_price     (৳1,020)
-            //   each extra adult  → additional_adult_price    (৳1,020)
-            //   each extra child  → additional_child_price    (৳1,020)
-            //   child under 2     → free, still admitted
+            //   registrant        → base_price_tk             (৳1,520 = 152000)
+            //   a current student → current_student_price_tk  (৳1,020 = 102000)
+            //   each extra adult  → additional_adult_price_tk (৳1,020 = 102000)
+            //   each extra child  → additional_child_price_tk (৳1,020 = 102000)
+            //   child under 1     → free, still admitted
             //
             // The student rate applies to the student's own seat only —
             // family they bring pays the standard extra rates, so the
             // discount follows the student, not their whole party.
             //
-            // ⚠️ 1020 is carried over from the standalone STU ticket type
-            // above, which is the only current-student price this system has
-            // ever had. It is a starting value, not a client decision: set
-            // the real one in the admin console (Tickets → Centennial
-            // Ticket → Student price), or here before this database is
-            // first seeded. Two things follow from that ordering — the
-            // post-sale price lock means PATCH refuses to change it once CEN
-            // has sold anything, and since 2026-08-22 this seeder no longer
-            // updates an existing row, so editing the figure here does
-            // nothing to a database that has already been seeded.
+            // ৳1,520 / ৳1,020 are the client's figures as of 2026-09-13
+            // (previously ৳2,500 / ৳500). Two things follow from how this
+            // seeder works — the post-sale price lock means PATCH refuses to
+            // change a price once CEN has sold anything, and since 2026-08-22
+            // this seeder no longer updates an existing row, so editing a
+            // figure here does nothing to a database that has already been
+            // seeded: reprice a live system in the admin console.
             //
             // `allowed_participant_types` is the public form's own dropdown
             // — it builds the list from this column and CreateRegistration
@@ -79,7 +75,7 @@ class TicketTypeSeeder extends Seeder
             // deliberately absent: they have their own VIP/SPN types, which
             // are is_public=false and requires_approval=true, and must not
             // become self-serve at the centennial price.
-            ['code' => 'CEN', 'name' => 'Centennial Ticket', 'name_bn' => 'শতবর্ষ টিকিট', 'base_admits' => 1, 'max_admits' => 9, 'base_price_tk' => 1520, 'additional_adult_price_tk' => 1020, 'additional_child_price_tk' => 1020, 'current_student_price_tk' => 1020, 'child_free_under_age' => 1, 'allowed_participant_types' => self::CENTENNIAL_AUDIENCE, 'quantity_total' => 2540, 'includes_tshirt' => true],
+            ['code' => 'CEN', 'name' => 'Centennial Ticket', 'name_bn' => 'শতবর্ষ টিকিট', 'base_admits' => 1, 'max_admits' => 9, 'base_price_tk' => 152000, 'additional_adult_price_tk' => 102000, 'additional_child_price_tk' => 102000, 'current_student_price_tk' => 102000, 'child_free_under_age' => 1, 'allowed_participant_types' => self::CENTENNIAL_AUDIENCE, 'quantity_total' => 2540, 'includes_tshirt' => true],
         ];
 
         foreach ($types as $i => $type) {

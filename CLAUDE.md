@@ -2001,6 +2001,15 @@ admin SPA and `pricing.ts` in the public site are unchanged and still correct.
   PHPStan level 8 clean, admin SPA typecheck + build clean, public site `tsc` and ESLint (0
   errors) clean. OpenAPI regenerated (still 132 paths — a field rename on documented endpoints).
 
+### ✅ Seeded prices are ৳1,520 / ৳1,020 — 2026-09-13
+
+`TicketTypeSeeder` now seeds every ticket type at **৳1,520** (`152000` paisa) and the current-student rate at **৳1,020** (`102000`) — CEN's extra-adult and extra-child rates are ৳1,020 too, VIP is ৳3,060. Previously ৳2,500 / ৳500 / ৳2,000.
+
+**The first cut of this wrote `1520` into the column and seeded a ৳15.20 ticket.** The `_tk` rename the same day made the column *look* like it holds taka, but every reader — `CreateRegistration`, `TicketTypeResource`, the admin SPA's `money2paisa()`, the public site's `pricing.ts` — divides by 100, and nothing refuses a suspiciously small price. The seeder now says so in a comment at the top of the list; the dev database, which had been seeded from that cut with nothing sold, was corrected in place.
+
+- **A re-seed does not reprice an existing database** (the seeder leaves existing rows alone since 2026-08-22), so production still holds whatever it was seeded with — ৳2,500 unless someone has edited it. Reprice it in the admin console (Tickets → Centennial Ticket); the post-sale lock applies if CEN has sold.
+- `CentennialTicketFlowTest` and `AdminCashRegistrationTest` seed the real seeder and assert on its figures, so both moved with it. `CentennialTicketFlowTest` also follows the seeder's `child_free_under_age`, which is now **1** (was 2) — a child aged 1 is billed. ⚠️ The public site's FAQ copy (`centennial-celebration/src/features/ticket-system/config.ts`) still says "children under 2 are free"; it is prose, not read from the API, so it needs a manual edit to match.
+
 ### 🚨 External Dependencies (start during Phase 2!)
 - [ ] **PayStation live merchant account** — the only gateway relationship now needed. Sandbox is self-service (credentials are published in their docs and are already the defaults here), so nothing is blocked until go-live; what is needed is a live `PAYSTATION_MERCHANT_ID`/`PAYSTATION_MERCHANT_PASSWORD` plus the IPN URL registered in their dashboard. See [§PayStation replaces SSLCommerz](#-paystation-replaces-sslcommerz--2026-09-10).
 - [ ] ~~Payment gateway merchant applications (bKash, Nagad, Rocket, SSLCommerz)~~ — **no longer on the critical path** (2026-09-10). PayStation aggregates all of these on one hosted checkout, so direct adapters are now an optional optimisation rather than a prerequisite for launch.

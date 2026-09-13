@@ -112,7 +112,7 @@ class AdminCashRegistrationTest extends TestCase
         $response->assertStatus(201)
             ->assertJsonPath('data.status', 'pending_payment')
             ->assertJsonPath('data.source', 'admin_counter')
-            ->assertJsonPath('data.total_paisa', 250000)
+            ->assertJsonPath('data.total_paisa', 152000)
             ->assertJsonPath('data.payments.0.method', 'cash')
             ->assertJsonPath('data.payments.0.channel', 'manual')
             ->assertJsonPath('data.payments.0.status', 'pending');
@@ -157,7 +157,7 @@ class AdminCashRegistrationTest extends TestCase
 
         $this->assertSame($this->admin->id, $log->causer_id);
         $this->assertSame('admin_counter', $log->properties['source']);
-        $this->assertSame(250000, $log->properties['total_paisa']);
+        $this->assertSame(152000, $log->properties['total_paisa']);
     }
 
     public function test_a_public_registration_writes_no_such_audit_row(): void
@@ -248,14 +248,14 @@ class AdminCashRegistrationTest extends TestCase
 
         $response = $this->postJson(
             route('api.v1.admin.payments.collect-cash', ['payment' => $payment->ulid]),
-            ['amount_received_paisa' => 250000, 'receipt_reference' => 'RCPT-0042'],
+            ['amount_received_paisa' => 152000, 'receipt_reference' => 'RCPT-0042'],
         );
 
         $response->assertStatus(200)
             ->assertJsonPath('data.status', 'succeeded')
             ->assertJsonPath('data.method', 'cash')
             ->assertJsonPath('data.channel', 'manual')
-            ->assertJsonPath('data.amount_paid_paisa', 250000);
+            ->assertJsonPath('data.amount_paid_paisa', 152000);
 
         $payment->refresh();
         $this->assertNotNull($payment->paid_at);
@@ -315,7 +315,7 @@ class AdminCashRegistrationTest extends TestCase
 
         $response = $this->postJson(
             route('api.v1.admin.payments.collect-cash', ['payment' => $payment->ulid]),
-            ['amount_received_paisa' => 200000],
+            ['amount_received_paisa' => 102000],
         );
 
         $response->assertStatus(422)
@@ -324,8 +324,8 @@ class AdminCashRegistrationTest extends TestCase
 
         // Both figures named, so the operator knows what to take rather than
         // being told only that they were wrong.
-        $this->assertStringContainsString('2,000.00', (string) $response->json('message'));
-        $this->assertStringContainsString('2,500.00', (string) $response->json('message'));
+        $this->assertStringContainsString('1,020.00', (string) $response->json('message'));
+        $this->assertStringContainsString('1,520.00', (string) $response->json('message'));
 
         $this->assertSame('pending', $payment->refresh()->status);
         $this->assertSame(0, (int) $payment->amount_paid_paisa);
@@ -342,7 +342,7 @@ class AdminCashRegistrationTest extends TestCase
 
         $this->postJson(
             route('api.v1.admin.payments.collect-cash', ['payment' => $payment->ulid]),
-            ['amount_received_paisa' => 250000],
+            ['amount_received_paisa' => 152000],
         )
             ->assertStatus(422)
             ->assertJsonPath('code', 'payment_not_collectable');
@@ -359,8 +359,8 @@ class AdminCashRegistrationTest extends TestCase
 
         $url = route('api.v1.admin.payments.collect-cash', ['payment' => $payment->ulid]);
 
-        $this->postJson($url, ['amount_received_paisa' => 250000])->assertStatus(200);
-        $this->postJson($url, ['amount_received_paisa' => 250000])
+        $this->postJson($url, ['amount_received_paisa' => 152000])->assertStatus(200);
+        $this->postJson($url, ['amount_received_paisa' => 152000])
             ->assertStatus(422)
             ->assertJsonPath('code', 'payment_not_collectable');
 
@@ -385,7 +385,7 @@ class AdminCashRegistrationTest extends TestCase
             'method' => 'paystation',
             'channel' => 'online',
             'status' => 'pending',
-            'amount_due_paisa' => 250000,
+            'amount_due_paisa' => 152000,
             'expires_at' => now()->addMinutes(10),
         ]);
 
@@ -393,7 +393,7 @@ class AdminCashRegistrationTest extends TestCase
 
         $this->postJson(
             route('api.v1.admin.payments.collect-cash', ['payment' => $payment->ulid]),
-            ['amount_received_paisa' => 250000],
+            ['amount_received_paisa' => 152000],
         )
             ->assertStatus(200)
             ->assertJsonPath('data.method', 'cash')
@@ -415,14 +415,14 @@ class AdminCashRegistrationTest extends TestCase
 
         $this->postJson(
             route('api.v1.admin.payments.collect-cash', ['payment' => $payment->ulid]),
-            ['amount_received_paisa' => 250000, 'receipt_reference' => 'RCPT-7', 'note' => 'Paid at gate desk'],
+            ['amount_received_paisa' => 152000, 'receipt_reference' => 'RCPT-7', 'note' => 'Paid at gate desk'],
         )->assertStatus(200);
 
         $log = ActivityLog::where('log_name', 'payment')->where('event', 'cash_collected')->firstOrFail();
 
         $this->assertSame($this->admin->id, $log->causer_id);
         $this->assertSame($payment->id, $log->subject_id);
-        $this->assertSame(250000, $log->properties['amount_paisa']);
+        $this->assertSame(152000, $log->properties['amount_paisa']);
         $this->assertSame('RCPT-7', $log->properties['receipt_reference']);
         $this->assertSame($registration->registration_number, $log->properties['registration_number']);
     }
@@ -451,7 +451,7 @@ class AdminCashRegistrationTest extends TestCase
 
         $this->postJson(
             route('api.v1.admin.payments.collect-cash', ['payment' => $payment->ulid]),
-            ['amount_received_paisa' => 250000],
+            ['amount_received_paisa' => 152000],
         )->assertStatus(403);
 
         $this->assertSame('pending', $payment->refresh()->status);
