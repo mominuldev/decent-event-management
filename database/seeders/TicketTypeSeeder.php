@@ -34,7 +34,7 @@ class TicketTypeSeeder extends Seeder
         // nothing refuses it: the public page, the admin console and
         // CreateRegistration all divide by 100 on the way out.
         $types = [
-            ['code' => 'ALM', 'name' => 'Alumni', 'base_admits' => 1, 'max_admits' => 1, 'base_price_tk' => 152000, 'allowed_participant_types' => ['former_student'], 'quantity_total' => 2500],
+            ['code' => 'ALM', 'name' => 'Alumni', 'base_admits' => 1, 'max_admits' => 1, 'base_price_tk' => 152000, 'allowed_participant_types' => ['former_student'], 'quantity_total' => 3000],
             ['code' => 'STU', 'name' => 'Current Student', 'base_admits' => 1, 'max_admits' => 1, 'base_price_tk' => 102000, 'allowed_participant_types' => ['current_student'], 'quantity_total' => 1700],
             ['code' => 'TCH', 'name' => 'Teacher', 'base_admits' => 1, 'max_admits' => 1, 'base_price_tk' => 152000, 'allowed_participant_types' => ['teacher'], 'quantity_total' => 200],
             ['code' => 'STF', 'name' => 'Staff', 'base_admits' => 1, 'max_admits' => 1, 'base_price_tk' => 152000, 'allowed_participant_types' => ['staff'], 'quantity_total' => 15],
