@@ -11962,6 +11962,8 @@
                                     "full_name",
                                     "father_name",
                                     "mobile",
+                                    "password",
+                                    "password_confirmation",
                                     "gender",
                                     "date_of_birth",
                                     "occupation",
@@ -12003,6 +12005,17 @@
                                         ],
                                         "type": "string",
                                         "maxLength": 20
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "format": "password",
+                                        "minLength": 8,
+                                        "description": "The attendee's sign-in password, chosen at checkout — how they view and update their own details afterwards. Applied only when the attendee has no password yet: a returning registrant keeps the one they had, and the submitted value is discarded silently (an unauthenticated endpoint must never reset an existing credential)."
+                                    },
+                                    "password_confirmation": {
+                                        "type": "string",
+                                        "format": "password",
+                                        "description": "Must match `password`."
                                     },
                                     "email": {
                                         "type": "string",

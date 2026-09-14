@@ -48,16 +48,19 @@ class StoreRegistrationRequest extends FormRequest
             'father_name' => ['required', 'string', 'max:150'],
             'mobile' => ['required', 'string', 'max:20'],
 
-            // The sign-in password, chosen at checkout so an attendee never
-            // needs an SMS to reach their own registration. `nullable`
-            // rather than `required`: this endpoint is also how an admin
-            // tool or an import creates a registration, and a returning
-            // registrant already has one — see
+            // The sign-in password, chosen at checkout: signing in with it is
+            // how an attendee views and updates their own details afterwards
+            // (2026-09-14 — the name-plus-number lookup is no longer offered
+            // by the public site). `required`, not `nullable`, so a
+            // self-registered attendee can never end up with no way in but
+            // a paid SMS. Admin desk registrations go through
+            // StoreAdminRegistrationRequest and are not affected. A
+            // returning registrant already has one — see
             // `CreateRegistration::setInitialPassword()`, which is what
             // decides whether the value is used at all. Confirmation is
             // checked here rather than only in the browser so a non-browser
             // client cannot set a password its user mistyped.
-            'password' => ['nullable', 'string', Password::min(8), 'confirmed'],
+            'password' => ['required', 'string', Password::min(8), 'confirmed'],
             'email' => ['nullable', 'email', 'max:254'],
             'gender' => ['required', 'string', Rule::in(['male', 'female'])],
             // Required as of 2026-09-13, where it was `nullable` before and

@@ -229,6 +229,8 @@ class FindMyTicketTest extends TestCase
         $this->withToken($token)
             ->patchJson(route('api.v1.attendee.find-my-ticket.me.update'), [
                 'father_name' => 'Abdul Karim',
+                'password' => 'checkout-pass-123',
+                'password_confirmation' => 'checkout-pass-123',
                 'occupation' => 'Teacher',
                 'current_address' => 'Village Road, Nilphamari',
             ])

@@ -142,12 +142,16 @@ class AttendeePasswordAuthTest extends TestCase
         ])->assertOk();
     }
 
-    public function test_a_registration_without_a_password_still_succeeds(): void
+    public function test_a_registration_without_a_password_is_refused(): void
     {
-        // Admin tools, imports and any older client send none.
-        $this->registrationPayload(password: null)->assertCreated();
+        // Since 2026-09-14 the password is the only way back in that the
+        // public site offers, so a registration that would leave the
+        // attendee with none is a 422, not a silent account with no login.
+        $this->registrationPayload(password: null)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['password']);
 
-        $this->assertFalse(Attendee::where('mobile', '+8801733333333')->sole()->hasPassword());
+        $this->assertNull(Attendee::where('mobile', '+8801733333333')->first());
     }
 
     public function test_a_short_or_unconfirmed_password_is_refused_at_checkout(): void

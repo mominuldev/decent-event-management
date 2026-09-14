@@ -71,6 +71,8 @@ class AdminCashRegistrationTest extends TestCase
             'full_name' => 'Rahim Uddin',
             'full_name_bn' => 'রহিম উদ্দিন',
             'father_name' => 'Abdul Karim',
+            'password' => 'checkout-pass-123',
+            'password_confirmation' => 'checkout-pass-123',
             'mobile' => '01712345678',
             'email' => 'rahim@example.com',
             'gender' => 'male',

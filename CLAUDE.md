@@ -1575,7 +1575,25 @@ resend to all" message; a scalar `ulids` answers 422; a selected send whose
 `Idempotency-Key` answers 400. Notification rows were 26 before and 26 after.
 The token was revoked and the idempotency row removed afterwards.
 
-### ✅ Find my ticket: no password, and none is set at checkout either — 2026-09-11
+### ✅ The checkout password is back, and required — 2026-09-14
+
+The public site asks for a password again at checkout, in the contact
+section under the mobile number and email, and **signing in is once more
+the way an attendee views and updates their own details**. The site no
+longer links to or ships `/find-my-ticket`. `StoreRegistrationRequest`'s
+`password` went from `nullable` to **`required`** (still `Password::min(8)`
++ `confirmed`), so a self-registered attendee can never be left with no way
+in but a paid SMS; `test_a_registration_without_a_password_is_refused` pins
+it. `StoreAdminRegistrationRequest` is untouched — staff still never set a
+credential. `CreateRegistration::setInitialPassword()`'s rule stands: a
+returning registrant keeps the password they had.
+
+The backend's `POST /attendee/find-my-ticket` routes and the
+`attendee-lookup` ability below were **left in place** — additive,
+rate-limited, and tested — but nothing on the public site calls them any
+more. Remove them in their own change if the lookup is not coming back.
+
+### ⚠️ Superseded 2026-09-14 — Find my ticket: no password, and none is set at checkout either — 2026-09-11
 
 An attendee can check and correct their own registration by stating **the
 mobile number or email address they registered with, plus the name they

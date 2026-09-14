@@ -48,6 +48,8 @@ class AttendeeProfileFieldsTest extends TestCase
             'full_name' => 'Rahim Uddin',
             'full_name_bn' => 'রহিম উদ্দিন',
             'father_name' => 'Abdul Karim Uddin',
+            'password' => 'checkout-pass-123',
+            'password_confirmation' => 'checkout-pass-123',
             'mobile' => '+8801712345678',
             'email' => 'rahim@example.com',
             'gender' => 'male',
@@ -175,6 +177,8 @@ class AttendeeProfileFieldsTest extends TestCase
             'idempotency_key' => (string) Str::ulid(),
             'full_name_bn' => 'আব্দুল করিম উদ্দিন',
             'father_name' => 'Abdul Karim',
+            'password' => 'checkout-pass-123',
+            'password_confirmation' => 'checkout-pass-123',
             'occupation' => 'Retired',
             'current_address' => 'Flat 3B, Uttara Sector 7, Dhaka-1230',
         ]))->assertStatus(201);
@@ -213,6 +217,8 @@ class AttendeeProfileFieldsTest extends TestCase
 
         $this->patchJson(route('api.v1.admin.attendees.update', $attendee->ulid), [
             'father_name' => 'Mohammad Ali',
+            'password' => 'checkout-pass-123',
+            'password_confirmation' => 'checkout-pass-123',
             'occupation' => 'Teacher',
             'current_address' => 'Village Shibpur, Narsingdi',
         ])

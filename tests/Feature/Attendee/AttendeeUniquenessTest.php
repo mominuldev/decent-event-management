@@ -69,6 +69,8 @@ class AttendeeUniquenessTest extends TestCase
             'gender' => 'male',
             'full_name_bn' => 'রহিম উদ্দিন',
             'father_name' => 'Abdul Karim',
+            'password' => 'checkout-pass-123',
+            'password_confirmation' => 'checkout-pass-123',
             'occupation' => 'Engineer',
             'current_address' => 'House 12, Road 5, Dhanmondi, Dhaka',
             'post_office' => 'Dhanmondi',
