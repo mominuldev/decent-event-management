@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domain\Registration\Support\PartySize;
 use App\Domain\Ticketing\Models\TicketType;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -31,6 +32,13 @@ class TicketTypeResource extends JsonResource
             'currency' => $this->currency,
             'base_admits' => $this->base_admits,
             'max_admits' => $this->max_admits,
+            'allows_family' => $this->allows_family,
+            // The limit a registration is actually held to — the event-wide
+            // `registration.max_family_size` setting when `allows_family` is
+            // on, otherwise 1. Published so the public form offers exactly
+            // as many member rows as CreateRegistration will accept; it must
+            // not read `max_admits`, which no longer bounds the party.
+            'max_party_size' => PartySize::limitFor($this->resource),
             'child_free_under_age' => $this->child_free_under_age,
             'allowed_participant_types' => $this->allowed_participant_types,
             'quantity_total' => $this->quantity_total,

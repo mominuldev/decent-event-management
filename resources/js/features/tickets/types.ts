@@ -36,6 +36,9 @@ export interface TicketType {
     currency: string;
     base_admits: number;
     max_admits: number;
+    /** Whether the public form offers family rows on this type. Off, the
+     *  party is capped at 1 whatever `max_admits` says. */
+    allows_family: boolean;
     allowed_participant_types: string[] | null;
     quantity_total: number | null;
     quantity_sold: number;
@@ -63,6 +66,7 @@ export interface TicketTypePayload {
     current_student_price_tk?: number | null;
     base_admits: number;
     max_admits: number;
+    allows_family?: boolean;
     quantity_total?: number | null;
     /** Empty = open to every participant type. The column is NOT NULL, so this
      *  is always sent as a list, never omitted and never null. */

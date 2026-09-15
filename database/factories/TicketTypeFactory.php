@@ -20,6 +20,9 @@ class TicketTypeFactory extends Factory
             'base_price_tk' => fake()->numberBetween(50000, 500000),
             'base_admits' => 1,
             'max_admits' => 1,
+            // Follows `max_admits` unless a test says otherwise, so a test
+            // that builds a family ticket by widening the admits gets one.
+            'allows_family' => fn (array $attributes): bool => ($attributes['max_admits'] ?? 1) > 1,
             'allowed_participant_types' => ['former_student', 'current_student'],
             'quantity_total' => fake()->numberBetween(500, 5000),
             'is_active' => true,

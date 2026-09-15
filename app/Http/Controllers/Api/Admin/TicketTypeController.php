@@ -48,6 +48,8 @@ class TicketTypeController extends Controller
                                         new OAT\Property(property: 'currency', type: 'string'),
                                         new OAT\Property(property: 'base_admits', type: 'integer'),
                                         new OAT\Property(property: 'max_admits', type: 'integer'),
+                                        new OAT\Property(property: 'allows_family', type: 'boolean', description: 'Whether family members may be added; on, the party is bounded by the registration.max_family_size setting, off, it is 1'),
+                                        new OAT\Property(property: 'max_party_size', type: 'integer', description: 'The party limit a registration is held to, registrant included: the registration.max_family_size setting when allows_family is on, otherwise 1'),
                                         new OAT\Property(property: 'allowed_participant_types', type: 'array', items: new OAT\Items(type: 'string'), nullable: true),
                                         new OAT\Property(property: 'quantity_total', type: 'integer', nullable: true),
                                         new OAT\Property(property: 'quantity_sold', type: 'integer'),
@@ -104,6 +106,7 @@ class TicketTypeController extends Controller
                         new OAT\Property(property: 'currency', type: 'string', nullable: true, description: 'ISO 4217 currency code, e.g. BDT'),
                         new OAT\Property(property: 'base_admits', type: 'integer', required: ['base_admits']),
                         new OAT\Property(property: 'max_admits', type: 'integer', description: 'Must be >= base_admits', required: ['max_admits']),
+                        new OAT\Property(property: 'allows_family', type: 'boolean'),
                         new OAT\Property(
                             property: 'allowed_participant_types',
                             type: 'array',
@@ -194,6 +197,8 @@ class TicketTypeController extends Controller
                             new OAT\Property(property: 'currency', type: 'string'),
                             new OAT\Property(property: 'base_admits', type: 'integer'),
                             new OAT\Property(property: 'max_admits', type: 'integer'),
+                            new OAT\Property(property: 'allows_family', type: 'boolean', description: 'Whether family members may be added; on, the party is bounded by the registration.max_family_size setting, off, it is 1'),
+                            new OAT\Property(property: 'max_party_size', type: 'integer', description: 'The party limit a registration is held to, registrant included: the registration.max_family_size setting when allows_family is on, otherwise 1'),
                             new OAT\Property(property: 'allowed_participant_types', type: 'array', items: new OAT\Items(type: 'string'), nullable: true),
                             new OAT\Property(property: 'quantity_total', type: 'integer', nullable: true),
                             new OAT\Property(property: 'quantity_sold', type: 'integer'),
@@ -249,6 +254,7 @@ class TicketTypeController extends Controller
                         new OAT\Property(property: 'currency', type: 'string', nullable: true),
                         new OAT\Property(property: 'base_admits', type: 'integer'),
                         new OAT\Property(property: 'max_admits', type: 'integer', description: 'Must be >= base_admits'),
+                        new OAT\Property(property: 'allows_family', type: 'boolean'),
                         new OAT\Property(
                             property: 'allowed_participant_types',
                             type: 'array',

@@ -9,6 +9,7 @@ use App\Domain\Payment\Models\Payment;
 use App\Domain\Registration\Models\Attendee;
 use App\Domain\Registration\Models\Registration;
 use App\Domain\Registration\Models\RegistrationGuest;
+use App\Domain\Registration\Support\PartySize;
 use App\Domain\Shared\Models\User;
 use App\Domain\Ticketing\Models\Ticket;
 use App\Domain\Ticketing\Models\TicketType;
@@ -251,14 +252,14 @@ class DummyDataSeeder extends Seeder
      * demo rows are internally consistent: the tiered ticket-type columns
      * decide the price (not a hardcoded per-child rate), a child young enough
      * for the type's `child_free_under_age` becomes a free infant, and the
-     * party never exceeds `max_admits`.
+     * party never exceeds what `PartySize` would let checkout accept.
      *
      * @return array{adults: int, children: int, infants: int, subtotal_paisa: int, participation_type: string}
      */
     private function buildParty(TicketType $ticketType): array
     {
         $baseAdmits = (int) ($ticketType->base_admits ?: 1);
-        $maxAdmits = (int) ($ticketType->max_admits ?: $baseAdmits);
+        $maxAdmits = PartySize::limitFor($ticketType);
 
         $adults = min(fake()->numberBetween(1, 2), $maxAdmits);
         $children = min(fake()->numberBetween(0, 2), max(0, $maxAdmits - $adults));

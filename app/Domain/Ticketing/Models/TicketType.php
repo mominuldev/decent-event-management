@@ -32,6 +32,7 @@ class TicketType extends Model
         'currency',
         'base_admits',
         'max_admits',
+        'allows_family',
         'child_free_under_age',
         'allowed_participant_types',
         'quantity_total',
@@ -65,12 +66,18 @@ class TicketType extends Model
      */
     protected $attributes = [
         'allowed_participant_types' => '[]',
+        // Same reasoning, gentler failure: the column has a database
+        // default, but a row created without the key would answer null in
+        // memory until refreshed — and the create response reads
+        // `PartySize::limitFor()` off that in-memory row.
+        'allows_family' => false,
     ];
 
     protected function casts(): array
     {
         return [
             'allowed_participant_types' => 'array',
+            'allows_family' => 'boolean',
             'requires_approval' => 'boolean',
             'includes_tshirt' => 'boolean',
             'includes_meal' => 'boolean',

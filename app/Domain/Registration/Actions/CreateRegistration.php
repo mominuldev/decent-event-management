@@ -10,6 +10,7 @@ use App\Domain\Registration\Models\Attendee;
 use App\Domain\Registration\Models\Registration;
 use App\Domain\Registration\Models\RegistrationGuest;
 use App\Domain\Registration\Support\AttendeeIdentity;
+use App\Domain\Registration\Support\PartySize;
 use App\Domain\Registration\Support\RegistrationContext;
 use App\Domain\Shared\Models\ActivityLog;
 use App\Domain\Shared\Models\User;
@@ -51,9 +52,15 @@ class CreateRegistration
             /** @var Attendee|null $attendee */
             $attendee = Attendee::whereIn('mobile', AttendeeIdentity::mobileLookupCandidates($mobile))->first();
 
-            // All three checked before reserving, so a rejected registration
+            $adultsCount = (int) ($data['adults_count'] ?? 1);
+            $childrenCount = (int) ($data['children_count'] ?? 0);
+            /** @var array<int, mixed> $guests */
+            $guests = isset($data['guests']) && is_array($data['guests']) ? $data['guests'] : [];
+
+            // All four checked before reserving, so a rejected registration
             // never holds capacity it is not entitled to.
             $this->assertParticipantTypeAllowed($ticketType, (string) $data['participant_type']);
+            $this->assertPartyFits($ticketType, $adultsCount, $childrenCount, $guests);
             $this->assertEmailAvailable($email, $attendee);
             $this->assertNotAlreadyRegistered($attendee);
 
@@ -119,15 +126,13 @@ class CreateRegistration
             }
 
             $baseAdmits = $ticketType->base_admits ?? 1;
-            $adultsCount = (int) ($data['adults_count'] ?? 1);
-            $childrenCount = (int) ($data['children_count'] ?? 0);
 
             // `children_count` arrives as every child attending, infants
             // included. How many of those are free is decided here from the
             // guests' own ages against the ticket type's threshold — never
             // from a client-supplied count, which would let a caller mint
             // free admits by claiming a party of infants.
-            $infantsCount = $this->countFreeInfants($ticketType, $data['guests'] ?? []);
+            $infantsCount = $this->countFreeInfants($ticketType, $guests);
             $infantsCount = min($infantsCount, $childrenCount);
             $billableChildren = $childrenCount - $infantsCount;
 
@@ -242,6 +247,29 @@ class CreateRegistration
 
         if (! in_array($participantType, $allowed, true)) {
             throw RegistrationRejectedException::participantTypeNotAllowed($participantType);
+        }
+    }
+
+    /**
+     * The whole party fits under the ticket type's limit.
+     *
+     * Two head counts arrive and both are checked, because a caller can
+     * send them inconsistently: `adults_count` + `children_count` is what
+     * gets priced and stored, while `guests` is who gets a badge. Bounding
+     * only one would let the other admit a party the ticket does not cover
+     * — the registrant is the one head in the counts that has no guest row,
+     * hence the `+ 1`. A free infant still occupies an admit (see
+     * `countFreeInfants()`), so no one is subtracted here.
+     *
+     * @param  array<int, mixed>  $guests
+     */
+    private function assertPartyFits(TicketType $ticketType, int $adultsCount, int $childrenCount, array $guests): void
+    {
+        $limit = PartySize::limitFor($ticketType);
+        $party = max($adultsCount + $childrenCount, count($guests) + 1);
+
+        if ($party > $limit) {
+            throw RegistrationRejectedException::partyTooLarge($limit);
         }
     }
 

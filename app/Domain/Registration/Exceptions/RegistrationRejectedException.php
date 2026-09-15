@@ -85,6 +85,28 @@ class RegistrationRejectedException extends RuntimeException
         );
     }
 
+    /**
+     * More people than this ticket type admits under the event's rule.
+     *
+     * Names the limit, following `alreadyRegistered()`: a refusal that does
+     * not say how many are allowed is one the registrant cannot act on
+     * without guessing. `$limit` is the whole party, registrant included, so
+     * the family half is spelled out separately — that is the number the
+     * public form shows and the one the reader was counting.
+     */
+    public static function partyTooLarge(int $limit): self
+    {
+        $members = $limit - 1;
+
+        return new self(
+            $members > 0
+                ? "This ticket admits at most {$limit} people including you — up to {$members} "
+                    .($members === 1 ? 'family member' : 'family members').'. Remove someone and try again.'
+                : 'This ticket admits one person only; family members cannot be added to it.',
+            'party_too_large',
+        );
+    }
+
     public function render(Request $request): JsonResponse
     {
         return response()->json([

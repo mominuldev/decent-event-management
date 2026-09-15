@@ -46,6 +46,7 @@ class StoreTicketTypeRequest extends FormRequest
             'currency' => ['nullable', 'string', 'size:3'],
             'base_admits' => ['required', 'integer', 'min:1', 'max:20'],
             'max_admits' => ['required', 'integer', 'min:1', 'max:20', 'gte:base_admits'],
+            'allows_family' => ['sometimes', 'boolean'],
             // Null means this type has no free-infant rule at all.
             'child_free_under_age' => ['nullable', 'integer', 'min:1', 'max:18'],
             'allowed_participant_types' => ['nullable', 'array'],

@@ -96,7 +96,7 @@ sequenceDiagram
 | SSC batch year 1971 … current year | Zod + FormRequest + CHECK-equivalent app validation |
 | Batch year required for student/alumni types | Conditional, both layers |
 | Family fields required when `participation_type = family` | Conditional, both layers |
-| `adults_count + children_count ≤ max_family_size` | FormRequest, bound from `event_settings` |
+| `max(adults_count + children_count, count(guests) + 1) ≤ (ticket_type.allows_family ? registration.max_family_size : 1)` | `CreateRegistration::assertPartyFits()` via `PartySize`, before the seat is reserved — `422 party_too_large` |
 | T-shirt size required when `tshirt_required` | Conditional, both layers |
 | Participant type allowed for chosen ticket type | Server only — `ticket_types.allowed_participant_types` |
 | Mobile is a valid BD or international E.164 number | Server only, normalised on write |

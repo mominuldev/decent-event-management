@@ -412,6 +412,10 @@ class EndToEndTest extends TestCase
         $ticketType = TicketType::factory()->create([
             'name' => 'Family Package',
             'base_price_tk' => 300000,
+            // A party of three is sent below; the factory's one-seat default
+            // is refused as `party_too_large` since the limit became real.
+            'base_admits' => 1,
+            'max_admits' => 4,
             'quantity_total' => 50,
             'quantity_sold' => 0,
             'is_active' => true,
@@ -535,6 +539,8 @@ class EndToEndTest extends TestCase
         $ticketType = TicketType::factory()->create([
             'name' => 'Couple Package',
             'base_price_tk' => 200000,
+            'base_admits' => 1,
+            'max_admits' => 2,
             'quantity_total' => 50,
             'quantity_sold' => 0,
             'is_active' => true,

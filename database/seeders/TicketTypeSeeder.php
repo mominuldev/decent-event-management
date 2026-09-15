@@ -75,7 +75,7 @@ class TicketTypeSeeder extends Seeder
             // deliberately absent: they have their own VIP/SPN types, which
             // are is_public=false and requires_approval=true, and must not
             // become self-serve at the centennial price.
-            ['code' => 'CEN', 'name' => 'Centennial Ticket', 'name_bn' => 'শতবর্ষ টিকিট', 'base_admits' => 1, 'max_admits' => 9, 'base_price_tk' => 152000, 'additional_adult_price_tk' => 102000, 'additional_child_price_tk' => 102000, 'current_student_price_tk' => 102000, 'child_free_under_age' => 1, 'allowed_participant_types' => self::CENTENNIAL_AUDIENCE, 'quantity_total' => 2540, 'includes_tshirt' => true],
+            ['code' => 'CEN', 'name' => 'Centennial Ticket', 'name_bn' => 'শতবর্ষ টিকিট', 'base_admits' => 1, 'max_admits' => 9, 'allows_family' => true, 'base_price_tk' => 152000, 'additional_adult_price_tk' => 102000, 'additional_child_price_tk' => 102000, 'current_student_price_tk' => 102000, 'child_free_under_age' => 1, 'allowed_participant_types' => self::CENTENNIAL_AUDIENCE, 'quantity_total' => 2540, 'includes_tshirt' => true],
         ];
 
         foreach ($types as $i => $type) {

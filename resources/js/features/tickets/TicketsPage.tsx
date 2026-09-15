@@ -477,6 +477,7 @@ function emptyTicketTypeForm(): TicketTypePayload {
         current_student_price_tk: null,
         base_admits: 1,
         max_admits: 1,
+        allows_family: false,
         quantity_total: null,
         allowed_participant_types: [],
         requires_approval: false,
@@ -501,6 +502,7 @@ function ticketTypeToForm(t: TicketType): TicketTypePayload {
         current_student_price_tk: t.current_student_price_tk,
         base_admits: t.base_admits,
         max_admits: t.max_admits,
+        allows_family: t.allows_family,
         quantity_total: t.quantity_total,
         allowed_participant_types: t.allowed_participant_types ?? [],
         requires_approval: t.requires_approval,
@@ -693,6 +695,7 @@ function TicketTypeFormDialog({ existing, onClose }: { existing: TicketType | nu
 
                 <div className="grid grid-cols-2 gap-2 text-[13px]">
                     {([
+                        ['allows_family', 'Family members allowed'],
                         ['requires_approval', 'Requires approval'],
                         ['includes_tshirt', 'Includes T-shirt'],
                         ['includes_meal', 'Includes meal'],
