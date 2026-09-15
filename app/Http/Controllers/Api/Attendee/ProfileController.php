@@ -38,6 +38,7 @@ class ProfileController extends Controller
                             new OAT\Property(property: 'father_name', type: 'string', nullable: true),
                             new OAT\Property(property: 'mobile', type: 'string'),
                             new OAT\Property(property: 'email', type: 'string', format: 'email', nullable: true),
+                            new OAT\Property(property: 'whatsapp_number', type: 'string', nullable: true),
                             new OAT\Property(property: 'gender', type: 'string', nullable: true),
                             new OAT\Property(property: 'date_of_birth', type: 'string', format: 'date-time', nullable: true),
                             new OAT\Property(property: 'nid_number', type: 'string', description: 'NID or birth registration number. Present for the attendee\'s own signed-in session; the unauthenticated public registration response omits it.', nullable: true),

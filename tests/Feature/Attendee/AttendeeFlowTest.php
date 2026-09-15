@@ -39,6 +39,27 @@ class AttendeeFlowTest extends TestCase
         ]);
     }
 
+    /**
+     * The number was always written; the resource just never read it back,
+     * so the profile form re-baselined to blank after every save.
+     */
+    public function test_saved_whatsapp_number_is_returned_on_the_next_read(): void
+    {
+        $attendee = Attendee::factory()->create(['whatsapp_number' => null]);
+
+        Sanctum::actingAs($attendee, ['attendee'], 'attendee');
+
+        $this->patchJson(route('api.v1.attendee.me.update'), [
+            'whatsapp_number' => '01712 345678',
+        ])
+            ->assertStatus(200)
+            ->assertJsonPath('data.whatsapp_number', '01712345678');
+
+        $this->getJson(route('api.v1.attendee.me.show'))
+            ->assertStatus(200)
+            ->assertJsonPath('data.whatsapp_number', '01712345678');
+    }
+
     public function test_attendee_can_list_and_cancel_registration(): void
     {
         $attendee = Attendee::factory()->create();

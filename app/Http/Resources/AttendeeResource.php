@@ -36,6 +36,9 @@ class AttendeeResource extends JsonResource
             'father_name' => $this->father_name,
             'mobile' => $this->mobile,
             'email' => $this->email,
+            // Self-editable on /attendee/me; without it here the profile
+            // form re-baselined to blank after every save.
+            'whatsapp_number' => $this->whatsapp_number,
             'gender' => $this->gender,
             'date_of_birth' => $this->date_of_birth?->toISOString(),
             // Absent entirely for a caller outside the allowlist, rather
