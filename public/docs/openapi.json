@@ -738,6 +738,18 @@
                                         "type": "integer",
                                         "nullable": true
                                     },
+                                    "current_class": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                            "6",
+                                            "7",
+                                            "8",
+                                            "9",
+                                            "new_10",
+                                            "10"
+                                        ]
+                                    },
                                     "designation": {
                                         "type": "string",
                                         "nullable": true,
@@ -6218,8 +6230,17 @@
                                         "nullable": true
                                     },
                                     "current_class": {
+                                        "description": "Required when participant_type is current_student.",
                                         "type": "string",
-                                        "nullable": true
+                                        "nullable": true,
+                                        "enum": [
+                                            "6",
+                                            "7",
+                                            "8",
+                                            "9",
+                                            "new_10",
+                                            "10"
+                                        ]
                                     },
                                     "ticket_type_ulid": {
                                         "type": "string"
@@ -12094,8 +12115,16 @@
                                         "minimum": 1971
                                     },
                                     "current_class": {
+                                        "description": "Required when participant_type is current_student.",
                                         "type": "string",
-                                        "maxLength": 50
+                                        "enum": [
+                                            "6",
+                                            "7",
+                                            "8",
+                                            "9",
+                                            "new_10",
+                                            "10"
+                                        ]
                                     },
                                     "ticket_type_ulid": {
                                         "description": "ULID of an active, public TicketType",

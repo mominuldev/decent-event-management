@@ -88,6 +88,11 @@ class UpdateAttendeeRequest extends FormRequest
             'whatsapp_number' => ['nullable', 'string', 'max:20'],
             'participant_type' => ['sometimes', 'string', Rule::in(['current_student', 'former_student', 'teacher', 'staff', 'guardian', 'guest', 'sponsor', 'other'])],
             'ssc_batch_year' => ['nullable', 'integer', 'min:1971', 'max:'.max(2026, (int) date('Y'))],
+            // Nullable rather than required_if: an admin corrects legacy
+            // records, and one holding free text here must stay editable
+            // in every other field. The console omits the key when the
+            // recorded value is not in the catalogue.
+            'current_class' => ['nullable', 'string', Rule::in(Attendee::CURRENT_CLASSES)],
             // The rest of what the attendee can edit on their own profile
             // page, so the console can correct anything the person can —
             // a field only its owner may fix is a support call waiting to

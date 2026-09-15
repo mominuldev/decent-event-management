@@ -306,6 +306,7 @@ class CentennialTicketFlowTest extends TestCase
 
         $registration = $this->register($this->payload($this->centennialType(), [
             'participant_type' => 'current_student',
+            'current_class' => '9',
         ]));
 
         $this->assertSame(102000, $registration->total_paisa);
@@ -325,6 +326,7 @@ class CentennialTicketFlowTest extends TestCase
 
         $registration = $this->register($this->payload($this->centennialType(), [
             'participant_type' => 'current_student',
+            'current_class' => '9',
             'participation_type' => 'family',
             'adults_count' => 2,
             'children_count' => 1,
@@ -371,6 +373,7 @@ class CentennialTicketFlowTest extends TestCase
 
         $registration = $this->register($this->payload($ticketType, [
             'participant_type' => 'current_student',
+            'current_class' => '9',
         ]));
 
         $this->assertSame(100000, $registration->total_paisa);
@@ -395,6 +398,7 @@ class CentennialTicketFlowTest extends TestCase
 
         $registration = $this->register($this->payload($ticketType, [
             'participant_type' => 'current_student',
+            'current_class' => '9',
         ]));
 
         $this->assertSame(0, $registration->total_paisa);
@@ -429,6 +433,7 @@ class CentennialTicketFlowTest extends TestCase
                 'email' => "{$type}@example.com",
                 'participant_type' => $type,
                 'ssc_batch_year' => $needsBatch ? 2004 : null,
+                'current_class' => $type === 'current_student' ? '10' : null,
             ]));
 
             // A current student is the one type with its own rate; the

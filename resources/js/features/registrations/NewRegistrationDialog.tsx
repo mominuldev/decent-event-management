@@ -7,7 +7,7 @@ import { useToast } from '@/components/Toast';
 import { ApiRequestError } from '@/lib/api';
 import { money } from '@/lib/cn';
 import { randomId } from '@/lib/id';
-import { BLOOD_GROUPS } from '@/features/attendees/types';
+import { BLOOD_GROUPS, CURRENT_CLASSES } from '@/features/attendees/types';
 import { fetchTicketTypes } from '@/features/tickets/api';
 import type { TicketType } from '@/features/tickets/types';
 import * as registrationsApi from './api';
@@ -72,6 +72,7 @@ const EMPTY_FORM = {
     address_district: '',
     participant_type: 'former_student',
     ssc_batch_year: '',
+    current_class: '',
     ticket_type_ulid: '',
     special_notes: '',
 };
@@ -136,6 +137,7 @@ export function NewRegistrationDialog({
     const childrenCount = guests.filter((g) => g.age_group === 'child').length;
     const participationType = guests.length === 0 ? 'single' : guests.length === 1 ? 'couple' : 'family';
     const needsBatchYear = BATCH_YEAR_PARTICIPANT_TYPES.includes(form.participant_type);
+    const isCurrentStudent = form.participant_type === 'current_student';
 
     const set = (key: keyof typeof EMPTY_FORM, value: string) => {
         setForm((f) => ({ ...f, [key]: value }));
@@ -199,6 +201,7 @@ export function NewRegistrationDialog({
             address_district: form.address_district.trim(),
             participant_type: form.participant_type,
             ssc_batch_year: needsBatchYear && form.ssc_batch_year ? Number(form.ssc_batch_year) : null,
+            current_class: isCurrentStudent && form.current_class ? form.current_class : null,
             ticket_type_ulid: form.ticket_type_ulid,
             participation_type: participationType,
             adults_count: adultsCount,
@@ -387,6 +390,20 @@ export function NewRegistrationDialog({
                                     onChange={(e) => set('occupation', e.target.value)}
                                 />
                             </Field>
+                            {isCurrentStudent && (
+                                <Field id="current-class" label="Class" error={err('current_class')}>
+                                    <Select
+                                        id="current-class"
+                                        value={form.current_class}
+                                        onChange={(e) => set('current_class', e.target.value)}
+                                    >
+                                        <option value="">Pick a class</option>
+                                        {CURRENT_CLASSES.map((c) => (
+                                            <option key={c.value} value={c.value}>{c.label}</option>
+                                        ))}
+                                    </Select>
+                                </Field>
+                            )}
                             {needsBatchYear && (
                                 <Field id="batch-year" label="SSC batch year" error={err('ssc_batch_year')}>
                                     <Input

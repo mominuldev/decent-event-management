@@ -62,6 +62,8 @@ export interface UpdateAttendeePayload {
     blood_group?: string | null;
     participant_type?: ParticipantType;
     ssc_batch_year?: number | null;
+    /** One of CURRENT_CLASSES; omit the key to leave a legacy free-text value as recorded. */
+    current_class?: string | null;
     whatsapp_number?: string | null;
     designation?: string | null;
     organization?: string | null;
@@ -73,6 +75,28 @@ export interface UpdateAttendeePayload {
     emergency_contact_phone?: string | null;
     is_verified?: boolean;
     notes?: string | null;
+}
+
+/**
+ * Mirrors `Attendee::CURRENT_CLASSES` — the classes a current student may be
+ * in. The value stored is the bare number; the label is for the screen.
+ */
+export const CURRENT_CLASSES: { value: string; label: string }[] = [
+    { value: '6', label: 'Class Six' },
+    { value: '7', label: 'Class Seven' },
+    { value: '8', label: 'Class Eight' },
+    { value: '9', label: 'Class Nine' },
+    { value: 'new_10', label: 'New Ten' },
+    { value: '10', label: 'Class Ten' },
+];
+
+export function isCatalogueClass(value: string): boolean {
+    return CURRENT_CLASSES.some((c) => c.value === value);
+}
+
+export function currentClassLabel(value: string | null | undefined): string | null {
+    if (!value) return null;
+    return CURRENT_CLASSES.find((c) => c.value === value)?.label ?? value;
 }
 
 /** Mirrors `Attendee::TSHIRT_SIZES`. */

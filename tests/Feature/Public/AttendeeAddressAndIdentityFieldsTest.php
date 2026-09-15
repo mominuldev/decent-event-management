@@ -354,6 +354,77 @@ class AttendeeAddressAndIdentityFieldsTest extends TestCase
      * An attendee predating these columns must stay editable, which is the
      * whole reason the admin rules are `nullable` rather than `required`.
      */
+    /**
+     * A current student is placed in the school by their class the way a
+     * former student is by their batch year, so it is required of exactly
+     * that type — and it is a pick from six to ten, not free text, on both
+     * the public form and the counter.
+     */
+    public function test_a_current_student_must_pick_a_class_from_six_to_ten(): void
+    {
+        $ticketType = $this->ticketType();
+
+        $missing = $this->payload($ticketType, ['participant_type' => 'current_student']);
+        unset($missing['ssc_batch_year'], $missing['current_class']);
+        $this->submit($missing)->assertStatus(422)->assertJsonValidationErrors(['current_class']);
+
+        $freeText = $this->payload($ticketType, ['participant_type' => 'current_student', 'current_class' => 'Class 9, Section B']);
+        unset($freeText['ssc_batch_year']);
+        $this->submit($freeText)->assertStatus(422)->assertJsonValidationErrors(['current_class']);
+
+        $eleven = $this->payload($ticketType, ['participant_type' => 'current_student', 'current_class' => '11']);
+        unset($eleven['ssc_batch_year']);
+        $this->submit($eleven)->assertStatus(422)->assertJsonValidationErrors(['current_class']);
+
+        $seven = $this->payload($ticketType, ['participant_type' => 'current_student', 'current_class' => '7']);
+        unset($seven['ssc_batch_year']);
+        $this->submit($seven)->assertStatus(201)->assertJsonPath('data.attendee.current_class', '7');
+
+        // "New Ten" — just promoted into class ten — is its own value.
+        $newTen = $this->payload($ticketType, ['participant_type' => 'current_student', 'current_class' => 'new_10', 'mobile' => '+8801799000001', 'email' => 'newten@example.test']);
+        unset($newTen['ssc_batch_year']);
+        $this->submit($newTen)->assertStatus(201)->assertJsonPath('data.attendee.current_class', 'new_10');
+
+        // Nobody else is asked for one.
+        $this->submit($this->payload($ticketType, ['mobile' => '+8801799000002', 'email' => 'former@example.test']))
+            ->assertStatus(201);
+
+        $this->actingAsAdmin();
+        $counter = $this->payload($ticketType, ['participant_type' => 'current_student', 'mobile' => '+8801799000003', 'email' => 'desk@example.test']);
+        unset($counter['idempotency_key'], $counter['ssc_batch_year'], $counter['current_class']);
+        $this->withHeader('Idempotency-Key', (string) Str::ulid())
+            ->postJson(route('api.v1.admin.registrations.store'), $counter)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['current_class']);
+    }
+
+    /**
+     * The admin edit path validates against the same list, but a legacy row
+     * holding free text stays editable in every other field — the console
+     * omits the key rather than sending the recorded value back.
+     */
+    public function test_an_admin_corrects_a_class_from_the_catalogue_and_a_legacy_row_stays_editable(): void
+    {
+        $attendee = Attendee::factory()->create([
+            'participant_type' => 'current_student',
+            'current_class' => 'Class 9, Section B',
+        ]);
+
+        $this->actingAsAdmin();
+
+        $this->patchJson(route('api.v1.admin.attendees.update', $attendee->ulid), ['notes' => 'Rang to confirm.'])
+            ->assertStatus(200);
+        $this->assertSame('Class 9, Section B', $attendee->refresh()->current_class);
+
+        $this->patchJson(route('api.v1.admin.attendees.update', $attendee->ulid), ['current_class' => 'Class 9, Section B'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['current_class']);
+
+        $this->patchJson(route('api.v1.admin.attendees.update', $attendee->ulid), ['current_class' => '9'])
+            ->assertStatus(200)
+            ->assertJsonPath('data.current_class', '9');
+    }
+
     public function test_an_admin_may_correct_the_new_fields_on_a_legacy_attendee(): void
     {
         $attendee = Attendee::factory()->create([

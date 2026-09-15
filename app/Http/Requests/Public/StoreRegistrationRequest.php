@@ -101,7 +101,9 @@ class StoreRegistrationRequest extends FormRequest
             // value they may give but must not be refused for lacking
             // (2026-09-13). Everyone else has no batch at all.
             'ssc_batch_year' => ['required_if:participant_type,former_student', 'nullable', 'integer', 'min:1971', 'max:'.date('Y')],
-            'current_class' => ['nullable', 'string', 'max:50'],
+            // Required of a current student, as the batch year is of a
+            // former one: it is the one fact that places them in the school.
+            'current_class' => ['required_if:participant_type,current_student', 'nullable', 'string', Rule::in(Attendee::CURRENT_CLASSES)],
             'ticket_type_ulid' => ['required', 'string', Rule::exists('ticket_types', 'ulid')],
             'event_session_ulid' => ['nullable', 'string', Rule::exists('event_sessions', 'ulid')],
             'participation_type' => ['required', 'string', Rule::in(['single', 'couple', 'family'])],

@@ -14,7 +14,7 @@ import { countryOptions, DEFAULT_COUNTRY } from '@/lib/countries';
 import { fullDate, shortDate, titleCase } from '@/lib/format';
 import { useTableSorting } from '@/lib/sorting';
 import * as attendeesApi from './api';
-import { BLOOD_GROUPS, PARTICIPANT_TYPES, SSC_BATCH_YEARS, TSHIRT_SIZES, type Attendee, type ParticipantType, type TshirtSize, type UpdateAttendeePayload } from './types';
+import { BLOOD_GROUPS, CURRENT_CLASSES, PARTICIPANT_TYPES, SSC_BATCH_YEARS, TSHIRT_SIZES, isCatalogueClass, type Attendee, type ParticipantType, type TshirtSize, type UpdateAttendeePayload } from './types';
 
 /**
  * Ceiling for the date-of-birth picker, matching the API's `before:today`.
@@ -63,6 +63,7 @@ interface AttendeeForm {
     blood_group: string;
     participant_type: ParticipantType;
     ssc_batch_year: string;
+    current_class: string;
     whatsapp_number: string;
     designation: string;
     organization: string;
@@ -91,6 +92,7 @@ const FORM_KEYS = [
     'blood_group',
     'participant_type',
     'ssc_batch_year',
+    'current_class',
     'whatsapp_number',
     'designation',
     'organization',
@@ -124,6 +126,7 @@ function toForm(a: Attendee): AttendeeForm {
         blood_group: a.blood_group ?? '',
         participant_type: a.participant_type,
         ssc_batch_year: a.ssc_batch_year ? String(a.ssc_batch_year) : '',
+        current_class: a.current_class ?? '',
         whatsapp_number: a.whatsapp_number ?? '',
         designation: a.designation ?? '',
         organization: a.organization ?? '',
@@ -159,6 +162,13 @@ function toPayload(f: AttendeeForm): UpdateAttendeePayload {
         blood_group: text(f.blood_group),
         participant_type: f.participant_type,
         ssc_batch_year: f.ssc_batch_year ? Number(f.ssc_batch_year) : null,
+        // A class is only ever a catalogue value or blank. A legacy row can
+        // hold free text ("Class 9, Section B"), which the API now refuses —
+        // so leave the key out and the record keeps it as recorded until
+        // somebody picks a real class.
+        ...(f.current_class === '' || isCatalogueClass(f.current_class)
+            ? { current_class: f.current_class || null }
+            : {}),
         whatsapp_number: text(f.whatsapp_number),
         designation: text(f.designation),
         organization: text(f.organization),
@@ -245,7 +255,6 @@ function RecordDetails({ attendee }: { attendee: Attendee }) {
             </summary>
             <dl className="divide-y divide-border border-t border-border px-3.5 py-1">
                 <DetailRow label="Gender" value={attendee.gender ? titleCase(attendee.gender) : null} />
-                <DetailRow label="Current class" value={attendee.current_class} />
                 <DetailRow label="On file since" value={fullDate(attendee.created_at)} />
             </dl>
         </details>
@@ -652,6 +661,29 @@ function AttendeeDetail({ ulid, onClose }: { ulid: string; onClose: () => void }
                                     ))}
                                 </Select>
                             </Field>
+                            {/* Asked of a current student the way the batch
+                                year is of a former one. A legacy free-text
+                                value is shown as its own option so the admin
+                                sees what was recorded rather than a blank. */}
+                            {form.participant_type === 'current_student' && (
+                                <Field id="attendee-current_class" label="Class" error={fieldErrors.current_class}>
+                                    <Select
+                                        id="attendee-current_class"
+                                        value={form.current_class}
+                                        disabled={!canEdit}
+                                        aria-invalid={Boolean(fieldErrors.current_class)}
+                                        onChange={(e) => set('current_class', e.target.value)}
+                                    >
+                                        <option value="">Not set</option>
+                                        {form.current_class && !isCatalogueClass(form.current_class) && (
+                                            <option value={form.current_class}>{form.current_class} (as recorded)</option>
+                                        )}
+                                        {CURRENT_CLASSES.map((c) => (
+                                            <option key={c.value} value={c.value}>{c.label}</option>
+                                        ))}
+                                    </Select>
+                                </Field>
+                            )}
                             <Field id="attendee-ssc_batch_year" label="SSC batch year" optional error={fieldErrors.ssc_batch_year}>
                                 <Select
                                     id="attendee-ssc_batch_year"

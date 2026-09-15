@@ -97,7 +97,7 @@ class RegistrationController extends Controller
                             description: 'Required when participant_type is former_student; optional for a current_student, who has not sat SSC yet; not applicable to anyone else',
                             minimum: 1971
                         ),
-                        new OAT\Property(property: 'current_class', type: 'string', maxLength: 50),
+                        new OAT\Property(property: 'current_class', type: 'string', enum: ['6', '7', '8', '9', 'new_10', '10'], description: 'Required when participant_type is current_student.'),
                         new OAT\Property(property: 'ticket_type_ulid', type: 'string', description: 'ULID of an active, public TicketType', required: ['ticket_type_ulid']),
                         new OAT\Property(property: 'event_session_ulid', type: 'string', description: 'ULID of an EventSession'),
                         new OAT\Property(

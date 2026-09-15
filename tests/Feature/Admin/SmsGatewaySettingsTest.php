@@ -268,8 +268,8 @@ class SmsGatewaySettingsTest extends TestCase
             ->assertOk()
             ->assertJsonPath('configured', true)
             ->assertJsonPath('balance', 1420.5)
-            // 142,050 paisa at the seeded 50 paisa per segment.
-            ->assertJsonPath('estimated_segments', 2841)
+            // 142,050 paisa at the seeded 26 paisa per segment.
+            ->assertJsonPath('estimated_segments', 5463)
             // Below the seeded ৳2,000 threshold.
             ->assertJsonPath('is_low', true);
     }
