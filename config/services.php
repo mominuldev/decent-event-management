@@ -188,7 +188,7 @@ return [
         // per segment against a prepaid balance and does not return a price
         // on the send response, so this is a local figure that has to match
         // the contracted rate — it is reporting, not billing.
-        'cost_paisa_per_segment' => (int) env('REVESMS_COST_PAISA_PER_SEGMENT', 50),
+        'cost_paisa_per_segment' => (int) env('REVESMS_COST_PAISA_PER_SEGMENT', 26),
 
         // Client id for the balance page (`smsClientBalance.jsp?client=...`).
         // Separate from `api_key`; REVE issues it with the account.

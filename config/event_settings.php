@@ -326,7 +326,9 @@ return [
         'is_public' => false,
         'label' => 'SMS cost per segment',
         'description' => 'What one segment costs under your REVE contract. This is what the delivery-cost report multiplies — REVE returns no price on a send, so a wrong figure here makes every cost figure wrong.',
-        'default' => 50,
+        // ৳0.26 per segment, the contracted REVE rate as of 2026-09-15
+        // (previously seeded at a placeholder 50).
+        'default' => 26,
     ],
 
     'sms.low_balance_threshold_paisa' => [
