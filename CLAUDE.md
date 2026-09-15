@@ -1588,12 +1588,25 @@ it. `StoreAdminRegistrationRequest` is untouched — staff still never set a
 credential. `CreateRegistration::setInitialPassword()`'s rule stands: a
 returning registrant keeps the password they had.
 
-The backend's `POST /attendee/find-my-ticket` routes and the
-`attendee-lookup` ability below were **left in place** — additive,
-rate-limited, and tested — but nothing on the public site calls them any
-more. Remove them in their own change if the lookup is not coming back.
+The backend's `POST /attendee/find-my-ticket` routes were left in place by
+that change and **removed in the next one, the same day**: the three routes
+and their `attendee-lookup` group in `routes/api/v1.php`,
+`FindMyTicketController`, `UpdateLookupProfileRequest`,
+`AttendeeNameMatch`, the `throttle:find-my-ticket` limiter, the twenty tests
+in `FindMyTicketTest` and the two lookup-session cases in
+`AttendeeAddressAndIdentityFieldsTest`. `AttendeeResource::showsNationalId()`
+is unchanged — it was already an allowlist of `admin` and `attendee`, so the
+public registration poll is still refused the NID with nothing to reword.
+The `attendee_lookup_session_opened` audit rows already written stay in
+`activity_logs`; nothing reads the event name. OpenAPI regenerated — **129
+paths** (was 132). Full suite **930 passing / 2 skipped**, Pint and PHPStan
+level 8 clean. The section below is kept as the record of what the lookup was
+and why it was built the way it was.
 
 ### ⚠️ Superseded 2026-09-14 — Find my ticket: no password, and none is set at checkout either — 2026-09-11
+
+**History only — every class, route, limiter and test named in this section
+was deleted on 2026-09-14 (see above).**
 
 An attendee can check and correct their own registration by stating **the
 mobile number or email address they registered with, plus the name they
@@ -1806,12 +1819,14 @@ load-bearing part of this change.**
   `test_the_public_registration_response_exposes_the_address_but_never_the_nid`
   caught it and is why the rule is an allowlist now. A denylist is only ever as
   complete as the last person to think about it.
-- **`UpdateLookupProfileRequest` drops `nid_number` from its ruleset**, beside
-  the `email` it already dropped. A "find my ticket" session is authorised by a
+- **`UpdateLookupProfileRequest` dropped `nid_number` from its ruleset**, beside
+  the `email` it already dropped. A "find my ticket" session was authorised by a
   mobile number plus the registered name — and the public attendees directory
-  publishes a name — so it cannot read the value, and letting it *write* one
+  publishes a name — so it could not read the value, and letting it *write* one
   would silently replace a number the caller was never shown, in the one field
-  that exists to confirm an alumnus is who they say they are.
+  that exists to confirm an alumnus is who they say they are. *(That request
+  class and the lookup went on 2026-09-14; the rule outlived them only as the
+  allowlist in `showsNationalId()`.)*
 - **`PublicAttendeeResource` carries none of the new fields.** `address_district`
   *is* published there and has been since that resource was written; the finer
   parts of the same address are not, because a post office and upazila beside a
@@ -1894,9 +1909,10 @@ values that were read-only `DetailRow`s became editable rather than being
 duplicated; the counter registration dialog gained all six, because the counter
 request mirrors the public one and would otherwise 422 on every walk-up. The
 public ticket form, its review step, the self-service profile and the
-find-my-ticket correction form all collect them, bilingually — the lookup form
-shows *"NID: on file"* in the locked-identifiers strip beside mobile and email
-rather than offering a control the server would discard.
+find-my-ticket correction form (since removed, 2026-09-14) all collected them,
+bilingually — the lookup form showed *"NID: on file"* in the locked-identifiers
+strip beside mobile and email rather than offering a control the server would
+discard.
 
 20 tests in `tests/Feature/Public/AttendeeAddressAndIdentityFieldsTest.php`,
 plus the four newly-required fields added to 15 registration payload fixtures
@@ -1960,7 +1976,8 @@ for exactly the audience the student price tier exists for.
   17 digits — check the number printed on the card or certificate`), the OpenAPI descriptions
   and the Zod mirrors in the public site. Every allowlist rule from the original section still
   holds — it is still absent from the public directory and from the unauthenticated registration
-  response, and still unwritable from a find-my-ticket session.
+  response, and (until that surface went on 2026-09-14) unwritable from a
+  find-my-ticket session.
 - The width test gained a 16-digit case; the 12-digit refusal is unchanged.
 
 **The Bangla name is no longer collected at registration.** `full_name_bn` left the public ticket
@@ -1971,7 +1988,7 @@ deliberately the *narrow* removal:
 
 - **The column stays, and so does every renderer.** The ticket PDF (`holder_name_bn`), the Bangla
   email greeting (`Attendee::banglaName()`), the public directory card, the printed directory
-  export and `AttendeeNameMatch` all already fell back to `full_name` when the Bangla name was
+  export and `AttendeeNameMatch` (since removed) all already fell back to `full_name` when the Bangla name was
   blank — the 2026-08-21 sections record each fallback — so a registrant who never gives one
   simply sees their Latin name in those places. Nothing was deleted and no existing attendee
   loses the name they gave.
@@ -1980,8 +1997,8 @@ deliberately the *narrow* removal:
   returning registrant who gave a Bangla name earlier keeps it** when the omission arrives —
   `CreateRegistration` already did `$data['full_name_bn'] ?? $attendee->full_name_bn` — and
   `test_the_bangla_name_is_optional_and_a_returning_registrant_keeps_theirs` pins all three.
-- **It can still be entered and corrected** in the admin attendee dialog, the self-service profile
-  and the find-my-ticket correction form; those were left alone on purpose. Removing it from the
+- **It can still be entered and corrected** in the admin attendee dialog and the self-service profile
+  (and, until 2026-09-14, the find-my-ticket correction form); those were left alone on purpose. Removing it from the
   forms that *edit* records would make every existing Bangla name uneditable while it goes on
   being printed on tickets.
 - The one place the fallback now matters at scale is the Bangla email greeting: a new registrant

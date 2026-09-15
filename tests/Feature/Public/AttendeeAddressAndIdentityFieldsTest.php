@@ -8,7 +8,6 @@ use App\Domain\Shared\Models\User;
 use App\Domain\Ticketing\Models\TicketType;
 use Database\Seeders\RbacSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
@@ -28,22 +27,13 @@ use Tests\TestCase;
  *    that predates them is still editable.
  *  - **NID and blood group are optional on purpose.** An under-18 current
  *    student has no NID, and a forced blood group is a guessed one.
- *  - **An NID must not leak to a lookup session.** `AttendeeResource` is
- *    returned to a "find my ticket" caller, whose credential is a mobile
- *    number plus a name the public directory publishes. That session may
- *    read the record and may not read a government ID number out of it, nor
- *    overwrite one it was never shown.
+ *  - **An NID is published only to a signed-in attendee or staff.** The
+ *    unauthenticated registration poll embeds `AttendeeResource` with no
+ *    token at all, and is told that a number is on file, never the number.
  */
 class AttendeeAddressAndIdentityFieldsTest extends TestCase
 {
     use RefreshDatabase;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        RateLimiter::clear('ip:127.0.0.1');
-    }
 
     private function ticketType(): TicketType
     {
@@ -317,58 +307,7 @@ class AttendeeAddressAndIdentityFieldsTest extends TestCase
             ->assertJsonValidationErrors('address_district');
     }
 
-    // ------------------------------------------------- the lookup session
-
-    /**
-     * @return array{0: Attendee, 1: string}
-     */
-    private function openLookupSession(): array
-    {
-        $attendee = Attendee::factory()->create([
-            'full_name' => 'Rahim Uddin',
-            'mobile' => '+8801711111111',
-            'nid_number' => '1234567890',
-        ]);
-
-        $token = $this->postJson(route('api.v1.attendee.find-my-ticket'), [
-            'mobile' => '01711111111',
-            'full_name' => 'Rahim Uddin',
-        ])->assertStatus(200)->json('token');
-
-        return [$attendee, $token];
-    }
-
-    public function test_a_lookup_session_is_told_an_nid_exists_but_never_shown_it(): void
-    {
-        [, $token] = $this->openLookupSession();
-
-        $body = $this->withToken($token)
-            ->getJson(route('api.v1.attendee.find-my-ticket.me.show'))
-            ->assertStatus(200)
-            ->assertJsonPath('data.nid_number_set', true)
-            ->json();
-
-        $this->assertArrayNotHasKey('nid_number', $body['data']);
-    }
-
-    public function test_a_lookup_session_cannot_overwrite_the_nid_it_cannot_read(): void
-    {
-        [$attendee, $token] = $this->openLookupSession();
-
-        // The rest of the correction is applied, so this proves the field is
-        // dropped from the ruleset rather than the whole request failing.
-        $this->withToken($token)
-            ->patchJson(route('api.v1.attendee.find-my-ticket.me.update'), [
-                'occupation' => 'Teacher',
-                'nid_number' => '9999999999',
-            ])
-            ->assertStatus(200);
-
-        $attendee->refresh();
-
-        $this->assertSame('Teacher', $attendee->occupation);
-        $this->assertSame('1234567890', $attendee->nid_number);
-    }
+    // ------------------------------------------------------------ the nid
 
     public function test_a_signed_in_attendee_reads_their_own_nid(): void
     {

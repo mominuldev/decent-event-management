@@ -28,8 +28,7 @@ use LogicException;
  *    narrow a stranger to a village.
  *  - `nid_number` — a government identity number. Not merely private: it is
  *    the number used to prove this person is themselves elsewhere, so it
- *    must not appear on an endpoint with no caller at all. Even the
- *    passwordless lookup session is refused it — see
+ *    must not appear on an endpoint with no caller at all — see
  *    {@see AttendeeResource::showsNationalId()}.
  *    `gender` stays private even though the card draws a gendered placeholder:
  *    what is published is `avatar_variant`, a rendering hint, and the two are

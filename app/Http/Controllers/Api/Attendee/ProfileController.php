@@ -40,7 +40,7 @@ class ProfileController extends Controller
                             new OAT\Property(property: 'email', type: 'string', format: 'email', nullable: true),
                             new OAT\Property(property: 'gender', type: 'string', nullable: true),
                             new OAT\Property(property: 'date_of_birth', type: 'string', format: 'date-time', nullable: true),
-                            new OAT\Property(property: 'nid_number', type: 'string', description: 'NID or birth registration number. Absent for a find-my-ticket lookup session, which may not read it.', nullable: true),
+                            new OAT\Property(property: 'nid_number', type: 'string', description: 'NID or birth registration number. Present for the attendee\'s own signed-in session; the unauthenticated public registration response omits it.', nullable: true),
                             new OAT\Property(property: 'nid_number_set', type: 'boolean', description: 'Whether an NID or birth registration number is on file, readable by every caller.'),
                             new OAT\Property(property: 'occupation', type: 'string', nullable: true),
                             new OAT\Property(property: 'designation', type: 'string', nullable: true),
@@ -96,7 +96,7 @@ class ProfileController extends Controller
                         new OAT\Property(
                             property: 'nid_number',
                             type: 'string',
-                            description: 'NID or birth registration number — 10, 13, 16 or 17 digits. Not accepted from a find-my-ticket lookup session, which cannot read the value it would be overwriting.',
+                            description: 'NID or birth registration number — 10, 13, 16 or 17 digits.',
                             nullable: true
                         ),
                         new OAT\Property(property: 'whatsapp_number', type: 'string', nullable: true),

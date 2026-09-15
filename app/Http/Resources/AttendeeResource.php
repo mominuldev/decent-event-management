@@ -9,14 +9,14 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /**
  * The full attendee record, for a caller entitled to the whole of it.
  *
- * Four audiences share this resource and they are not equally trusted: the
- * admin console, an attendee's own signed-in session, a passwordless "find
- * my ticket" lookup — and, through {@see RegistrationResource}, the
- * **unauthenticated** `GET /public/registrations/{ulid}`, which anyone
- * holding a registration ULID may read. `nid_number` is the field where
- * that stops being a theoretical distinction, so it is published to an
- * allowlist of two abilities rather than withheld from a list of callers
- * somebody has to remember to extend — see {@see self::showsNationalId()}.
+ * Three audiences share this resource and they are not equally trusted: the
+ * admin console, an attendee's own signed-in session — and, through
+ * {@see RegistrationResource}, the **unauthenticated**
+ * `GET /public/registrations/{ulid}`, which anyone holding a registration
+ * ULID may read. `nid_number` is the field where that stops being a
+ * theoretical distinction, so it is published to an allowlist of two
+ * abilities rather than withheld from a list of callers somebody has to
+ * remember to extend — see {@see self::showsNationalId()}.
  *
  * @mixin Attendee
  */
@@ -84,24 +84,20 @@ class AttendeeResource extends JsonResource
      * An allowlist of exactly two token abilities — staff (`admin`) and the
      * attendee's own signed-in session (`attendee`) — and deliberately not
      * a list of callers to withhold it from. The first draft of this was
-     * written the other way round, as "everyone except a lookup session",
-     * and it published every registrant's NID on
-     * `GET /public/registrations/{ulid}`: that endpoint is unauthenticated,
-     * embeds this resource through {@see RegistrationResource}, and so had
-     * no token to fail the check. A denylist is only ever as complete as
-     * the last person to think about it.
+     * written the other way round, as "everyone except the passwordless
+     * lookup session that existed at the time" (retired 2026-09-14), and it
+     * published every registrant's NID on `GET /public/registrations/{ulid}`:
+     * that endpoint is unauthenticated, embeds this resource through
+     * {@see RegistrationResource}, and so had no token to fail the check. A
+     * denylist is only ever as complete as the last person to think about
+     * it.
      *
-     * The two callers it excludes on purpose:
-     *
-     *  - **No token at all** — the public registration poll above.
-     *  - **`attendee-lookup`** — a "find my ticket" session, authorised by a
-     *    mobile number or email address plus the registered name, and the
-     *    public attendees directory publishes a name. That token is designed
-     *    to buy strictly less than a real sign-in (it cannot read the QR,
-     *    cancel a registration, or set a password), and a government ID
-     *    number belongs on the same side of that line: the other personal
-     *    details it can read describe the person, while this one is the
-     *    number used to *prove* they are that person elsewhere.
+     * The caller it excludes on purpose is the one with **no token at all**
+     * — the public registration poll above. Any weaker-than-sign-in
+     * credential added later (a token minted on something guessable rather
+     * than possessed) belongs on the same side of the line: a government
+     * ID number is the number used to *prove* someone is who they say they
+     * are elsewhere, not just a detail about them.
      *
      * Checked on the ability rather than on a route or a guard, so a new
      * endpoint returning this resource inherits the rule instead of having

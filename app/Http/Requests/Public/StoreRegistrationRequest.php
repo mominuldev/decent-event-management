@@ -50,8 +50,8 @@ class StoreRegistrationRequest extends FormRequest
 
             // The sign-in password, chosen at checkout: signing in with it is
             // how an attendee views and updates their own details afterwards
-            // (2026-09-14 — the name-plus-number lookup is no longer offered
-            // by the public site). `required`, not `nullable`, so a
+            // (2026-09-14 — the passwordless name-plus-number lookup that
+            // briefly replaced it is gone). `required`, not `nullable`, so a
             // self-registered attendee can never end up with no way in but
             // a paid SMS. Admin desk registrations go through
             // StoreAdminRegistrationRequest and are not affected. A

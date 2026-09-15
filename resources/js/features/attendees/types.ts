@@ -10,9 +10,9 @@ export interface Attendee {
     gender: string | null;
     date_of_birth: string | null;
     /**
-     * Absent — not null — for a caller the API will not show it to: an
-     * unauthenticated public reader or a find-my-ticket lookup session. The
-     * admin console always holds an `admin` token, so it always gets it.
+     * Absent — not null — for a caller the API will not show it to: the
+     * unauthenticated public registration reader. The admin console always
+     * holds an `admin` token, so it always gets it.
      */
     nid_number?: string | null;
     /** Whether one is on file, readable even where the number itself is not. */
