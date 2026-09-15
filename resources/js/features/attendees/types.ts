@@ -7,6 +7,7 @@ export interface Attendee {
     father_name: string | null;
     mobile: string;
     email: string | null;
+    whatsapp_number: string | null;
     gender: string | null;
     date_of_birth: string | null;
     /**
@@ -61,9 +62,23 @@ export interface UpdateAttendeePayload {
     blood_group?: string | null;
     participant_type?: ParticipantType;
     ssc_batch_year?: number | null;
+    whatsapp_number?: string | null;
+    designation?: string | null;
+    organization?: string | null;
+    tshirt_required?: boolean;
+    tshirt_size?: TshirtSize | null;
+    /** ISO 3166-1 alpha-2 — the column is CHAR(2) NOT NULL, so never blank. */
+    country?: string;
+    emergency_contact_name?: string | null;
+    emergency_contact_phone?: string | null;
     is_verified?: boolean;
     notes?: string | null;
 }
+
+/** Mirrors `Attendee::TSHIRT_SIZES`. */
+export const TSHIRT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'] as const;
+
+export type TshirtSize = (typeof TSHIRT_SIZES)[number];
 
 export const SSC_BATCH_YEAR_MIN = 1971;
 /** Floored at 2026 so the list never shrinks below the range the event was launched with. */

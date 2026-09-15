@@ -114,9 +114,9 @@ class StoreRegistrationRequest extends FormRequest
             'guests.*.age' => ['nullable', 'integer', 'min:0', 'max:120'],
             'guests.*.gender' => ['nullable', 'string', Rule::in(['male', 'female'])],
             'guests.*.tshirt_required' => ['nullable', 'boolean'],
-            'guests.*.tshirt_size' => ['required_if:guests.*.tshirt_required,true', 'nullable', 'string', Rule::in(['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'])],
+            'guests.*.tshirt_size' => ['required_if:guests.*.tshirt_required,true', 'nullable', 'string', Rule::in(Attendee::TSHIRT_SIZES)],
             'tshirt_required' => ['nullable', 'boolean'],
-            'tshirt_size' => ['required_if:tshirt_required,true', 'nullable', 'string', Rule::in(['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'])],
+            'tshirt_size' => ['required_if:tshirt_required,true', 'nullable', 'string', Rule::in(Attendee::TSHIRT_SIZES)],
             'special_notes' => ['nullable', 'string', 'max:1000'],
             // Was never validated *and* never in the rules at all, so
             // `validated()` stripped it and every registration silently fell

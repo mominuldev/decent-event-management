@@ -65,6 +65,15 @@ class Attendee extends AuthUserBase
      */
     public const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
+    /**
+     * The T-shirt sizes every write path accepts. One list here rather than
+     * the same literal in four FormRequests, so a size added for the event
+     * cannot be accepted at registration and refused on edit.
+     *
+     * @var list<string>
+     */
+    public const TSHIRT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+
     protected $hidden = [
         'auth_token_hash',
         'password',

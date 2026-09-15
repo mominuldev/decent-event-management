@@ -55,7 +55,7 @@ class UpdateProfileRequest extends FormRequest
             'designation' => ['nullable', 'string', 'max:100'],
             'organization' => ['nullable', 'string', 'max:200'],
             'tshirt_required' => ['sometimes', 'boolean'],
-            'tshirt_size' => ['required_if:tshirt_required,true', 'nullable', 'string', Rule::in(['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'])],
+            'tshirt_size' => ['required_if:tshirt_required,true', 'nullable', 'string', Rule::in(Attendee::TSHIRT_SIZES)],
             // max:80, not max:100: the column is VARCHAR(80), so the longer
             // limit let an over-length district reach MySQL and die there —
             // a 500 where a field-level 422 belongs. The same mismatch the

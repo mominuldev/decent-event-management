@@ -34,6 +34,16 @@ class UpdateAttendeeRequest extends FormRequest
         if ($this->has('email')) {
             $this->merge(['email' => AttendeeIdentity::normaliseEmail($this->input('email'))]);
         }
+
+        if ($this->has('whatsapp_number')) {
+            $this->merge(['whatsapp_number' => AttendeeIdentity::normaliseMobile($this->input('whatsapp_number')) ?: null]);
+        }
+
+        // ISO 3166-1 alpha-2, as the CHAR(2) column holds it. Uppercased
+        // here so `bd` is accepted rather than refused on case alone.
+        if (is_string($this->input('country'))) {
+            $this->merge(['country' => strtoupper(trim($this->input('country')))]);
+        }
     }
 
     /**
@@ -75,8 +85,22 @@ class UpdateAttendeeRequest extends FormRequest
             // attendee.
             'mobile' => ['sometimes', 'string', 'max:20', Rule::unique('attendees', 'mobile')->ignore($attendeeId)],
             'email' => ['nullable', 'email', 'max:254', Rule::unique('attendees', 'email')->ignore($attendeeId)],
+            'whatsapp_number' => ['nullable', 'string', 'max:20'],
             'participant_type' => ['sometimes', 'string', Rule::in(['current_student', 'former_student', 'teacher', 'staff', 'guardian', 'guest', 'sponsor', 'other'])],
             'ssc_batch_year' => ['nullable', 'integer', 'min:1971', 'max:'.max(2026, (int) date('Y'))],
+            // The rest of what the attendee can edit on their own profile
+            // page, so the console can correct anything the person can —
+            // a field only its owner may fix is a support call waiting to
+            // happen. Same limits as UpdateProfileRequest.
+            'designation' => ['nullable', 'string', 'max:100'],
+            'organization' => ['nullable', 'string', 'max:200'],
+            'tshirt_required' => ['sometimes', 'boolean'],
+            'tshirt_size' => ['required_if:tshirt_required,true', 'nullable', 'string', Rule::in(Attendee::TSHIRT_SIZES)],
+            // `attendees.country` is CHAR(2) NOT NULL — a two-letter code
+            // and never a name, or the save dies in MySQL rather than here.
+            'country' => ['sometimes', 'string', 'regex:/^[A-Z]{2}$/'],
+            'emergency_contact_name' => ['nullable', 'string', 'max:200'],
+            'emergency_contact_phone' => ['nullable', 'string', 'max:20'],
             'is_verified' => ['sometimes', 'boolean'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ];
@@ -90,6 +114,8 @@ class UpdateAttendeeRequest extends FormRequest
         return [
             'mobile.unique' => 'This mobile number already belongs to another attendee.',
             'email.unique' => 'This email address already belongs to another attendee.',
+            'tshirt_size.required_if' => 'Pick a size when a T-shirt is requested.',
+            'country.regex' => 'Country must be a two-letter ISO code, such as BD.',
         ];
     }
 }

@@ -716,6 +716,11 @@
                                         "nullable": true,
                                         "maxLength": 254
                                     },
+                                    "whatsapp_number": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 20
+                                    },
                                     "participant_type": {
                                         "type": "string",
                                         "enum": [
@@ -724,12 +729,57 @@
                                             "teacher",
                                             "staff",
                                             "guardian",
+                                            "guest",
+                                            "sponsor",
                                             "other"
                                         ]
                                     },
                                     "ssc_batch_year": {
                                         "type": "integer",
                                         "nullable": true
+                                    },
+                                    "designation": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 100
+                                    },
+                                    "organization": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 200
+                                    },
+                                    "tshirt_required": {
+                                        "type": "boolean"
+                                    },
+                                    "tshirt_size": {
+                                        "description": "Required when tshirt_required is true.",
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                            "XS",
+                                            "S",
+                                            "M",
+                                            "L",
+                                            "XL",
+                                            "XXL",
+                                            "XXXL"
+                                        ]
+                                    },
+                                    "country": {
+                                        "description": "ISO 3166-1 alpha-2 code, e.g. BD. Never blank.",
+                                        "type": "string",
+                                        "maxLength": 2,
+                                        "minLength": 2
+                                    },
+                                    "emergency_contact_name": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 200
+                                    },
+                                    "emergency_contact_phone": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 20
                                     },
                                     "is_verified": {
                                         "type": "boolean"
@@ -7293,9 +7343,17 @@
                         }
                     },
                     {
+                        "name": "ticket_type",
+                        "in": "query",
+                        "description": "Filter by ticket type ULID. An unknown ULID selects nothing.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
                         "name": "ticket_type_id",
                         "in": "query",
-                        "description": "Filter by ticket type ID",
+                        "description": "Filter by ticket type ID (legacy; prefer `ticket_type`)",
                         "schema": {
                             "type": "integer"
                         }
@@ -7856,8 +7914,17 @@
                         }
                     },
                     {
+                        "name": "ticket_type",
+                        "in": "query",
+                        "description": "Ticket type ULID",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
                         "name": "ticket_type_id",
                         "in": "query",
+                        "description": "Legacy; prefer `ticket_type`",
                         "schema": {
                             "type": "integer"
                         }
@@ -7978,7 +8045,13 @@
                                         "type": "string",
                                         "nullable": true
                                     },
+                                    "ticket_type": {
+                                        "description": "Ticket type ULID",
+                                        "type": "string",
+                                        "nullable": true
+                                    },
                                     "ticket_type_id": {
+                                        "description": "Legacy; prefer `ticket_type`",
                                         "type": "integer",
                                         "nullable": true
                                     },
@@ -8078,6 +8151,14 @@
                                                         "type": "integer"
                                                     },
                                                     "max_admits": {
+                                                        "type": "integer"
+                                                    },
+                                                    "allows_family": {
+                                                        "description": "Whether family members may be added; on, the party is bounded by the registration.max_family_size setting, off, it is 1",
+                                                        "type": "boolean"
+                                                    },
+                                                    "max_party_size": {
+                                                        "description": "The party limit a registration is held to, registrant included: the registration.max_family_size setting when allows_family is on, otherwise 1",
                                                         "type": "integer"
                                                     },
                                                     "allowed_participant_types": {
@@ -8228,6 +8309,9 @@
                                             "max_admits"
                                         ],
                                         "type": "integer"
+                                    },
+                                    "allows_family": {
+                                        "type": "boolean"
                                     },
                                     "allowed_participant_types": {
                                         "type": "array",
@@ -8391,6 +8475,14 @@
                                             "type": "integer"
                                         },
                                         "max_admits": {
+                                            "type": "integer"
+                                        },
+                                        "allows_family": {
+                                            "description": "Whether family members may be added; on, the party is bounded by the registration.max_family_size setting, off, it is 1",
+                                            "type": "boolean"
+                                        },
+                                        "max_party_size": {
+                                            "description": "The party limit a registration is held to, registrant included: the registration.max_family_size setting when allows_family is on, otherwise 1",
                                             "type": "integer"
                                         },
                                         "allowed_participant_types": {
@@ -8581,6 +8673,9 @@
                                     "max_admits": {
                                         "description": "Must be >= base_admits",
                                         "type": "integer"
+                                    },
+                                    "allows_family": {
+                                        "type": "boolean"
                                     },
                                     "allowed_participant_types": {
                                         "type": "array",
@@ -9705,6 +9800,10 @@
                                         "email": {
                                             "type": "string",
                                             "format": "email",
+                                            "nullable": true
+                                        },
+                                        "whatsapp_number": {
+                                            "type": "string",
                                             "nullable": true
                                         },
                                         "gender": {
@@ -11681,8 +11780,8 @@
                 "tags": [
                     "Public"
                 ],
-                "summary": "Start a gateway payment session for a registration's pending payment",
-                "description": "Creates a gateway session via the payment method chosen at registration time and returns the URL to redirect the payer's browser to. This never marks the payment `succeeded` — only a server-to-server webhook ({@see \\App\\Http\\Controllers\\Webhooks}) or the expiry sweeper can do that.",
+                "summary": "Start (or retry) a gateway payment session for a registration",
+                "description": "Creates a gateway session via the payment method chosen at registration time and returns the URL to redirect the payer's browser to. Safe to call again after an abandoned, declined or expired attempt: the gateway is first asked whether the previous attempt actually settled, and if not a fresh payment row is opened (an invoice number is single-use at the gateway). A declined or expired attempt gave its seat back, so a retry re-reserves capacity and can meet `sold_out`. This never marks the payment `succeeded` — only a server-to-server webhook ({@see \\App\\Http\\Controllers\\Webhooks}) or the expiry sweeper can do that.",
                 "operationId": "a8357f62726c8503c1e3a52076343009",
                 "parameters": [
                     {
@@ -11746,14 +11845,20 @@
                         "description": "Registration not found"
                     },
                     "422": {
-                        "description": "Registration has no payment awaiting initiation",
+                        "description": "Nothing to pay right now. `already_paid` means an abandoned checkout had in fact settled (the registration is now paid — reload it); `payment_in_progress` and `payment_under_review` mean an attempt is being confirmed or reconciled; `sold_out` means the seat a failed attempt released has since been taken; `no_payable_payment` covers a registration that is settled, cancelled or has no payment at all.",
                         "content": {
                             "application/json": {
                                 "schema": {
                                     "properties": {
                                         "code": {
                                             "type": "string",
-                                            "example": "no_payable_payment"
+                                            "enum": [
+                                                "no_payable_payment",
+                                                "already_paid",
+                                                "payment_in_progress",
+                                                "payment_under_review",
+                                                "sold_out"
+                                            ]
                                         },
                                         "message": {
                                             "type": "string"
@@ -12555,6 +12660,14 @@
                                                         "type": "integer"
                                                     },
                                                     "max_admits": {
+                                                        "type": "integer"
+                                                    },
+                                                    "allows_family": {
+                                                        "description": "Whether family members may be added; on, the party is bounded by the registration.max_family_size setting, off, it is 1",
+                                                        "type": "boolean"
+                                                    },
+                                                    "max_party_size": {
+                                                        "description": "The party limit a registration is held to, registrant included: the registration.max_family_size setting when allows_family is on, otherwise 1",
                                                         "type": "integer"
                                                     },
                                                     "allowed_participant_types": {

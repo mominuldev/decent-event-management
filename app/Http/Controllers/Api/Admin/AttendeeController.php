@@ -344,12 +344,20 @@ class AttendeeController extends Controller
                         new OAT\Property(property: 'blood_group', type: 'string', enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'], nullable: true),
                         new OAT\Property(property: 'mobile', type: 'string', maxLength: 20),
                         new OAT\Property(property: 'email', type: 'string', format: 'email', nullable: true, maxLength: 254),
+                        new OAT\Property(property: 'whatsapp_number', type: 'string', nullable: true, maxLength: 20),
                         new OAT\Property(
                             property: 'participant_type',
                             type: 'string',
-                            enum: ['current_student', 'former_student', 'teacher', 'staff', 'guardian', 'other']
+                            enum: ['current_student', 'former_student', 'teacher', 'staff', 'guardian', 'guest', 'sponsor', 'other']
                         ),
                         new OAT\Property(property: 'ssc_batch_year', type: 'integer', nullable: true),
+                        new OAT\Property(property: 'designation', type: 'string', nullable: true, maxLength: 100),
+                        new OAT\Property(property: 'organization', type: 'string', nullable: true, maxLength: 200),
+                        new OAT\Property(property: 'tshirt_required', type: 'boolean'),
+                        new OAT\Property(property: 'tshirt_size', type: 'string', enum: ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'], nullable: true, description: 'Required when tshirt_required is true.'),
+                        new OAT\Property(property: 'country', type: 'string', description: 'ISO 3166-1 alpha-2 code, e.g. BD. Never blank.', minLength: 2, maxLength: 2),
+                        new OAT\Property(property: 'emergency_contact_name', type: 'string', nullable: true, maxLength: 200),
+                        new OAT\Property(property: 'emergency_contact_phone', type: 'string', nullable: true, maxLength: 20),
                         new OAT\Property(property: 'is_verified', type: 'boolean'),
                         new OAT\Property(property: 'notes', type: 'string', nullable: true, maxLength: 1000),
                     ]

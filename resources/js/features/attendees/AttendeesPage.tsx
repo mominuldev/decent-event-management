@@ -10,10 +10,11 @@ import { useToast } from '@/components/Toast';
 import { ApiRequestError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { totalOf } from '@/lib/pagination';
+import { countryOptions, DEFAULT_COUNTRY } from '@/lib/countries';
 import { fullDate, shortDate, titleCase } from '@/lib/format';
 import { useTableSorting } from '@/lib/sorting';
 import * as attendeesApi from './api';
-import { BLOOD_GROUPS, PARTICIPANT_TYPES, SSC_BATCH_YEARS, type Attendee, type ParticipantType, type UpdateAttendeePayload } from './types';
+import { BLOOD_GROUPS, PARTICIPANT_TYPES, SSC_BATCH_YEARS, TSHIRT_SIZES, type Attendee, type ParticipantType, type TshirtSize, type UpdateAttendeePayload } from './types';
 
 /**
  * Ceiling for the date-of-birth picker, matching the API's `before:today`.
@@ -62,6 +63,14 @@ interface AttendeeForm {
     blood_group: string;
     participant_type: ParticipantType;
     ssc_batch_year: string;
+    whatsapp_number: string;
+    designation: string;
+    organization: string;
+    tshirt_required: boolean;
+    tshirt_size: string;
+    country: string;
+    emergency_contact_name: string;
+    emergency_contact_phone: string;
     is_verified: boolean;
     notes: string;
 }
@@ -82,6 +91,14 @@ const FORM_KEYS = [
     'blood_group',
     'participant_type',
     'ssc_batch_year',
+    'whatsapp_number',
+    'designation',
+    'organization',
+    'tshirt_required',
+    'tshirt_size',
+    'country',
+    'emergency_contact_name',
+    'emergency_contact_phone',
     'is_verified',
     'notes',
 ] as const satisfies readonly (keyof AttendeeForm)[];
@@ -107,6 +124,16 @@ function toForm(a: Attendee): AttendeeForm {
         blood_group: a.blood_group ?? '',
         participant_type: a.participant_type,
         ssc_batch_year: a.ssc_batch_year ? String(a.ssc_batch_year) : '',
+        whatsapp_number: a.whatsapp_number ?? '',
+        designation: a.designation ?? '',
+        organization: a.organization ?? '',
+        tshirt_required: a.tshirt_required,
+        tshirt_size: a.tshirt_size ?? '',
+        // CHAR(2) NOT NULL with a default of BD, so a blank here is a row
+        // that predates the column being read, not "unknown".
+        country: a.country || DEFAULT_COUNTRY,
+        emergency_contact_name: a.emergency_contact_name ?? '',
+        emergency_contact_phone: a.emergency_contact_phone ?? '',
         is_verified: a.is_verified,
         notes: a.notes ?? '',
     };
@@ -132,6 +159,16 @@ function toPayload(f: AttendeeForm): UpdateAttendeePayload {
         blood_group: text(f.blood_group),
         participant_type: f.participant_type,
         ssc_batch_year: f.ssc_batch_year ? Number(f.ssc_batch_year) : null,
+        whatsapp_number: text(f.whatsapp_number),
+        designation: text(f.designation),
+        organization: text(f.organization),
+        tshirt_required: f.tshirt_required,
+        // A size with no shirt requested is stale, not a preference — the
+        // server would keep it, and the fulfilment list would count it.
+        tshirt_size: f.tshirt_required && f.tshirt_size ? (f.tshirt_size as TshirtSize) : null,
+        country: f.country || DEFAULT_COUNTRY,
+        emergency_contact_name: text(f.emergency_contact_name),
+        emergency_contact_phone: text(f.emergency_contact_phone),
         is_verified: f.is_verified,
         notes: text(f.notes),
     };
@@ -192,18 +229,14 @@ function RecordHeader({ attendee, form }: { attendee: Attendee; form: AttendeeFo
 }
 
 /**
- * The fields an admin cannot edit here but often needs to read — shirt size on
- * a fulfilment call, blood group at the gate, who to ring in an emergency.
+ * The few fields no edit path accepts — neither this dialog nor the attendee's
+ * own profile page — but that are still worth reading.
  *
  * A native `<details>` rather than a state-driven panel: it collapses, it is
  * keyboard-operable, and it is announced correctly without any of that being
  * re-implemented. Collapsed by default because it is reference, not the task.
  */
 function RecordDetails({ attendee }: { attendee: Attendee }) {
-    const tshirt = attendee.tshirt_required
-        ? (attendee.tshirt_size ?? 'Requested, size not set')
-        : 'Not requested';
-
     return (
         <details className="group rounded-xl border border-border">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3.5 py-2.5 text-[12.5px] font-semibold text-text-muted hover:text-text">
@@ -212,13 +245,7 @@ function RecordDetails({ attendee }: { attendee: Attendee }) {
             </summary>
             <dl className="divide-y divide-border border-t border-border px-3.5 py-1">
                 <DetailRow label="Gender" value={attendee.gender ? titleCase(attendee.gender) : null} />
-                <DetailRow label="Designation" value={attendee.designation} />
-                <DetailRow label="Organization" value={attendee.organization} />
                 <DetailRow label="Current class" value={attendee.current_class} />
-                <DetailRow label="T-shirt" value={tshirt} />
-                <DetailRow label="Country" value={attendee.country} />
-                <DetailRow label="Emergency contact" value={attendee.emergency_contact_name} />
-                <DetailRow label="Emergency phone" value={attendee.emergency_contact_phone} />
                 <DetailRow label="On file since" value={fullDate(attendee.created_at)} />
             </dl>
         </details>
@@ -451,6 +478,18 @@ function AttendeeDetail({ ulid, onClose }: { ulid: string; onClose: () => void }
                                     onChange={(e) => set('email', e.target.value)}
                                 />
                             </Field>
+                            <Field id="attendee-whatsapp_number" label="WhatsApp number" optional hint="Leave blank if it is the mobile number." error={fieldErrors.whatsapp_number} className="sm:col-span-2">
+                                <Input
+                                    id="attendee-whatsapp_number"
+                                    type="tel"
+                                    inputMode="tel"
+                                    value={form.whatsapp_number}
+                                    maxLength={20}
+                                    disabled={!canEdit}
+                                    aria-invalid={Boolean(fieldErrors.whatsapp_number)}
+                                    onChange={(e) => set('whatsapp_number', e.target.value)}
+                                />
+                            </Field>
                             <Field id="attendee-current_address" label="Current address" optional error={fieldErrors.current_address} className="sm:col-span-2">
                                 <Textarea
                                     id="attendee-current_address"
@@ -500,6 +539,48 @@ function AttendeeDetail({ ulid, onClose }: { ulid: string; onClose: () => void }
                                     disabled={!canEdit}
                                     aria-invalid={Boolean(fieldErrors.address_district)}
                                     onChange={(e) => set('address_district', e.target.value)}
+                                />
+                            </Field>
+                            {/* A picker, not a text box: the column is a
+                                two-letter ISO code, and "Bangladesh" typed
+                                into it dies in MySQL rather than saving. */}
+                            <Field id="attendee-country" label="Country" error={fieldErrors.country}>
+                                <Select
+                                    id="attendee-country"
+                                    value={form.country}
+                                    disabled={!canEdit}
+                                    onChange={(e) => set('country', e.target.value)}
+                                >
+                                    {countryOptions().map((c) => (
+                                        <option key={c.code} value={c.code}>{c.name}</option>
+                                    ))}
+                                </Select>
+                            </Field>
+                        </div>
+                    </FormSection>
+
+                    <FormSection title="Emergency contact" description="Who to ring on the day if something happens to them.">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <Field id="attendee-emergency_contact_name" label="Name" optional error={fieldErrors.emergency_contact_name}>
+                                <Input
+                                    id="attendee-emergency_contact_name"
+                                    value={form.emergency_contact_name}
+                                    maxLength={200}
+                                    disabled={!canEdit}
+                                    aria-invalid={Boolean(fieldErrors.emergency_contact_name)}
+                                    onChange={(e) => set('emergency_contact_name', e.target.value)}
+                                />
+                            </Field>
+                            <Field id="attendee-emergency_contact_phone" label="Phone" optional error={fieldErrors.emergency_contact_phone}>
+                                <Input
+                                    id="attendee-emergency_contact_phone"
+                                    type="tel"
+                                    inputMode="tel"
+                                    value={form.emergency_contact_phone}
+                                    maxLength={20}
+                                    disabled={!canEdit}
+                                    aria-invalid={Boolean(fieldErrors.emergency_contact_phone)}
+                                    onChange={(e) => set('emergency_contact_phone', e.target.value)}
                                 />
                             </Field>
                         </div>
@@ -594,6 +675,59 @@ function AttendeeDetail({ ulid, onClose }: { ulid: string; onClose: () => void }
                                     onChange={(e) => set('occupation', e.target.value)}
                                 />
                             </Field>
+                            <Field id="attendee-designation" label="Designation" optional error={fieldErrors.designation}>
+                                <Input
+                                    id="attendee-designation"
+                                    value={form.designation}
+                                    maxLength={100}
+                                    disabled={!canEdit}
+                                    aria-invalid={Boolean(fieldErrors.designation)}
+                                    onChange={(e) => set('designation', e.target.value)}
+                                />
+                            </Field>
+                            <Field id="attendee-organization" label="Organization" optional error={fieldErrors.organization}>
+                                <Input
+                                    id="attendee-organization"
+                                    value={form.organization}
+                                    maxLength={200}
+                                    disabled={!canEdit}
+                                    aria-invalid={Boolean(fieldErrors.organization)}
+                                    onChange={(e) => set('organization', e.target.value)}
+                                />
+                            </Field>
+                        </div>
+                    </FormSection>
+
+                    <FormSection title="T-shirt" description="What the fulfilment list is printed from.">
+                        <div className="space-y-3">
+                            <div className="flex items-start justify-between gap-4 rounded-xl border border-border px-3.5 py-3">
+                                <div className="min-w-0">
+                                    <div className="text-[13px] font-semibold text-text">T-shirt requested</div>
+                                    <p className="mt-0.5 text-[12px] text-text-muted">Turning this off clears the size on save.</p>
+                                </div>
+                                <Switch
+                                    checked={form.tshirt_required}
+                                    disabled={!canEdit}
+                                    onChange={(next) => set('tshirt_required', next)}
+                                    label="T-shirt requested"
+                                />
+                            </div>
+                            {form.tshirt_required && (
+                                <Field id="attendee-tshirt_size" label="Size" error={fieldErrors.tshirt_size} className="sm:w-1/2">
+                                    <Select
+                                        id="attendee-tshirt_size"
+                                        value={form.tshirt_size}
+                                        disabled={!canEdit}
+                                        aria-invalid={Boolean(fieldErrors.tshirt_size)}
+                                        onChange={(e) => set('tshirt_size', e.target.value)}
+                                    >
+                                        <option value="">Pick a size</option>
+                                        {TSHIRT_SIZES.map((size) => (
+                                            <option key={size} value={size}>{size}</option>
+                                        ))}
+                                    </Select>
+                                </Field>
+                            )}
                         </div>
                     </FormSection>
 
