@@ -34,20 +34,46 @@ class TicketTypeSeeder extends Seeder
         // nothing refuses it: the public page, the admin console and
         // CreateRegistration all divide by 100 on the way out.
         $types = [
-            ['code' => 'ALM', 'name' => 'Alumni', 'base_admits' => 1, 'max_admits' => 1, 'base_price_tk' => 152000, 'allowed_participant_types' => ['former_student'], 'quantity_total' => 3000],
-            ['code' => 'STU', 'name' => 'Current Student', 'base_admits' => 1, 'max_admits' => 1, 'base_price_tk' => 102000, 'allowed_participant_types' => ['current_student'], 'quantity_total' => 1700],
-            ['code' => 'TCH', 'name' => 'Teacher', 'base_admits' => 1, 'max_admits' => 1, 'base_price_tk' => 152000, 'allowed_participant_types' => ['teacher'], 'quantity_total' => 200],
-            ['code' => 'STF', 'name' => 'Staff', 'base_admits' => 1, 'max_admits' => 1, 'base_price_tk' => 152000, 'allowed_participant_types' => ['staff'], 'quantity_total' => 15],
-            ['code' => 'VIP', 'name' => 'VIP Guest', 'base_admits' => 2, 'max_admits' => 2, 'base_price_tk' => 306000, 'allowed_participant_types' => ['guest'], 'quantity_total' => 200, 'requires_approval' => true, 'is_public' => false],
-
-            // The centennial ticket the public ticket page sells. This row is
-            // the money authority for that page — it renders these columns,
-            // it does not carry its own constants.
+            // One row per audience. Since 2026-09-15 the public form sells
+            // each participant type its own ticket — the most specific
+            // public type that admits them — and only falls back to CEN for
+            // an audience no narrower row names (guardians, "other"). So
+            // every audience row carries the columns the form reads for
+            // that audience: its member rates, its family switch and its
+            // T-shirt flag, not only a base price.
             //
-            // ONE centennial ticket, not a single/family pair. Every
-            // participant type registers on this row and may bring family;
-            // bringing nobody is simply a party of one, so there is no
-            // "family ticket" to pick and no way to pick the wrong one.
+            // Figures mirror the admin console as of 2026-09-15:
+            //   registrant (alumni, teacher, staff)  → ৳1,520 = 152000
+            //   registrant (current student)         → ৳1,020 = 102000
+            //   each family member                   → ৳1,020 = 102000
+            //   VIP guest (two seats, approval-gated) → ৳3,060 = 306000
+            //
+            // `allows_family` is the whole family decision — on, the party
+            // is bounded by the `registration.max_family_size` setting; off,
+            // it is one. `max_admits` no longer bounds anything (see
+            // PartySize) and is kept only as a descriptive figure.
+            ['code' => 'ALM', 'name' => 'Alumni', 'base_admits' => 1, 'max_admits' => 4, 'allows_family' => true, 'base_price_tk' => 152000, 'additional_adult_price_tk' => 102000, 'additional_child_price_tk' => 102000, 'allowed_participant_types' => ['former_student'], 'quantity_total' => 3000, 'includes_tshirt' => true],
+            ['code' => 'STU', 'name' => 'Current Student', 'base_admits' => 1, 'max_admits' => 1, 'allows_family' => false, 'base_price_tk' => 102000, 'allowed_participant_types' => ['current_student'], 'quantity_total' => 1700, 'includes_tshirt' => true],
+            // Family is on for teachers in the console, but their member
+            // rates were never set there and quote ৳0 — seeded at the
+            // standard member rate rather than as a free ticket.
+            ['code' => 'TCH', 'name' => 'Teacher', 'base_admits' => 1, 'max_admits' => 1, 'allows_family' => true, 'base_price_tk' => 152000, 'additional_adult_price_tk' => 102000, 'additional_child_price_tk' => 102000, 'allowed_participant_types' => ['teacher'], 'quantity_total' => 200, 'includes_tshirt' => true],
+            ['code' => 'STF', 'name' => 'Staff', 'base_admits' => 1, 'max_admits' => 1, 'allows_family' => false, 'base_price_tk' => 152000, 'allowed_participant_types' => ['staff'], 'quantity_total' => 15, 'includes_tshirt' => false],
+            ['code' => 'VIP', 'name' => 'VIP Guest', 'base_admits' => 2, 'max_admits' => 2, 'allows_family' => true, 'base_price_tk' => 306000, 'allowed_participant_types' => ['guest'], 'quantity_total' => 200, 'requires_approval' => true, 'is_public' => false, 'includes_tshirt' => false],
+
+            // The centennial ticket: what the public ticket page's pricing
+            // card shows, what the form quotes before the reader says who
+            // they are, and the ticket an audience with no row of its own
+            // (guardian, other) registers on. This row is the money
+            // authority for that page — it renders these columns, it does
+            // not carry its own constants.
+            //
+            // It was the one ticket for everyone from 2026-09-13 until
+            // 2026-09-15, when the form began selling each audience its own
+            // row (see above). It still admits every centennial audience so
+            // it can stand in for any of them. Seeded with family on, since a
+            // fallback row that could not carry a party would strand the
+            // audiences it exists for; the console can turn it off.
             //
             // The tiered columns carry the whole rule:
             //   registrant        → base_price_tk             (৳1,520 = 152000)
