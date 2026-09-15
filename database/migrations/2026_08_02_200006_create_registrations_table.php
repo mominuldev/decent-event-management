@@ -18,6 +18,10 @@ return new class extends Migration
             $table->string('participation_type', 16);
             $table->unsignedTinyInteger('adults_count')->default(1);
             $table->unsignedTinyInteger('children_count')->default(0);
+            // Children under the ticket type's child_free_under_age: never
+            // priced, always admitted (admits_total = adults + children +
+            // infants). Counted server-side from the guests' own ages.
+            $table->unsignedTinyInteger('infants_count')->default(0);
             $table->unsignedTinyInteger('total_persons')->storedAs('adults_count + children_count');
             $table->string('status', 32);
             $table->unsignedBigInteger('subtotal_paisa');
@@ -25,7 +29,7 @@ return new class extends Migration
             $table->unsignedBigInteger('total_paisa');
             $table->char('currency', 3)->default('BDT');
             $table->string('discount_code', 32)->nullable();
-            $table->text('comments')->nullable();
+            // The one free-text field a registration carries.
             $table->text('special_notes')->nullable();
             $table->string('source', 32);
             $table->timestamp('submitted_at')->nullable();

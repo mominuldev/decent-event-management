@@ -10,6 +10,9 @@ return new class extends Migration
     {
         Schema::create('notification_templates', function (Blueprint $table) {
             $table->id();
+            // Templates are editable over the API, and an auto-increment id
+            // must not cross that boundary.
+            $table->char('ulid', 26)->unique('uk_notification_templates_ulid');
             $table->string('key', 64);
             $table->string('channel', 16);
             $table->string('locale', 8);

@@ -21,6 +21,10 @@ return new class extends Migration
             $table->char('checksum_sha256', 64);
             $table->unsignedSmallInteger('width')->nullable();
             $table->unsignedSmallInteger('height')->nullable();
+            // Parent -> derivative. The 128px rendition an avatar or a
+            // directory card loads instead of the full-size original; the
+            // child row is marked by collection = 'thumbnail'.
+            $table->foreignId('thumbnail_media_id')->nullable()->constrained('media_files')->nullOnDelete();
             $table->boolean('is_public')->default(false);
             $table->string('scan_status', 16)->default('pending');
             $table->timestamp('scanned_at')->nullable();

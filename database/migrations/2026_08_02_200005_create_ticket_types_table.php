@@ -15,12 +15,24 @@ return new class extends Migration
             $table->string('name', 100);
             $table->string('name_bn', 100)->nullable();
             $table->text('description')->nullable();
-            $table->unsignedBigInteger('base_price_paisa');
-            $table->unsignedBigInteger('additional_adult_price_paisa')->default(0);
-            $table->unsignedBigInteger('additional_child_price_paisa')->default(0);
+            // The `_tk` suffix is the requested column name; the VALUE is
+            // still integer paisa (250000 = ৳2,500), like every other money
+            // column here. Never a decimal.
+            $table->unsignedBigInteger('base_price_tk');
+            $table->unsignedBigInteger('additional_adult_price_tk')->default(0);
+            $table->unsignedBigInteger('additional_child_price_tk')->default(0);
+            // What a current student pays for their own seat. NULL = no
+            // student rate (they pay base), 0 = free — never conflate them.
+            $table->unsignedBigInteger('current_student_price_tk')->nullable();
             $table->char('currency', 3)->default('BDT');
             $table->unsignedTinyInteger('base_admits');
             $table->unsignedTinyInteger('max_admits');
+            // Whether the public form offers family rows at all. Off, the
+            // party is capped at 1 whatever max_admits says.
+            $table->boolean('allows_family')->default(false);
+            // A child under this age is admitted free (counted in
+            // registrations.infants_count). NULL = no such rule.
+            $table->unsignedTinyInteger('child_free_under_age')->nullable();
             $table->json('allowed_participant_types');
             $table->unsignedInteger('quantity_total')->nullable();
             $table->unsignedInteger('quantity_sold')->default(0);
