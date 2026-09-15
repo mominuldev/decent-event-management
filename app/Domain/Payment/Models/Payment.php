@@ -4,6 +4,7 @@ namespace App\Domain\Payment\Models;
 
 use App\Domain\Registration\Models\Attendee;
 use App\Domain\Registration\Models\Registration;
+use App\Domain\Shared\Models\EventSetting;
 use App\Domain\Shared\Models\MediaFile;
 use App\Domain\Shared\Models\User;
 use App\Domain\Shared\Support\HasStateMachine;
@@ -78,6 +79,19 @@ class Payment extends Model
             'failed_at' => 'datetime',
             'reconciled_at' => 'datetime',
         ];
+    }
+
+    /**
+     * How long an online payment intent holds its seat before the expiry
+     * sweeper reclaims it — the event's own setting, defaulting to 30
+     * minutes. Read at each creation, never cached: the organiser can
+     * tighten it mid-sale.
+     */
+    public static function intentTtlMinutes(): int
+    {
+        $value = EventSetting::where('key', 'payment.intent_ttl_minutes')->value('value');
+
+        return $value !== null ? max(1, (int) $value) : 30;
     }
 
     /**

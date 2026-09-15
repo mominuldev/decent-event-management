@@ -12,7 +12,6 @@ use App\Domain\Registration\Models\RegistrationGuest;
 use App\Domain\Registration\Support\AttendeeIdentity;
 use App\Domain\Registration\Support\RegistrationContext;
 use App\Domain\Shared\Models\ActivityLog;
-use App\Domain\Shared\Models\EventSetting;
 use App\Domain\Shared\Models\User;
 use App\Domain\Ticketing\Models\TicketType;
 use Illuminate\Support\Facades\DB;
@@ -207,7 +206,7 @@ class CreateRegistration
                 // counter sale has no TTL: capacity taken at a desk is not
                 // an abandoned checkout, and the sweeper must never
                 // release a seat somebody is standing there paying for.
-                'expires_at' => $context->paymentExpires ? now()->addMinutes($this->intentTtlMinutes()) : null,
+                'expires_at' => $context->paymentExpires ? now()->addMinutes(Payment::intentTtlMinutes()) : null,
             ]);
 
             $this->logIfStaffCreated($registration, $context, $ip, $requestId);
@@ -347,13 +346,6 @@ class CreateRegistration
         }
 
         return $count;
-    }
-
-    private function intentTtlMinutes(): int
-    {
-        $value = EventSetting::where('key', 'payment.intent_ttl_minutes')->value('value');
-
-        return $value !== null ? max(1, (int) $value) : 30;
     }
 
     /**

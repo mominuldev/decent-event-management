@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Public;
 
 use App\Domain\Payment\Actions\InitiatePayment;
+use App\Domain\Payment\Actions\ResolvePayablePayment;
 use App\Domain\Payment\Actions\VerifyPayment;
 use App\Domain\Registration\Models\Registration;
 use App\Http\Controllers\Controller;
@@ -15,10 +16,14 @@ class PaymentController extends Controller
 {
     #[OAT\Post(
         path: '/public/registrations/{registration}/payment/initiate',
-        summary: 'Start a gateway payment session for a registration\'s pending payment',
+        summary: 'Start (or retry) a gateway payment session for a registration',
         description: 'Creates a gateway session via the payment method chosen at registration time and returns '
-            .'the URL to redirect the payer\'s browser to. This never marks the payment `succeeded` — only a '
-            .'server-to-server webhook ({@see \App\Http\Controllers\Webhooks}) or the expiry sweeper can do that.',
+            .'the URL to redirect the payer\'s browser to. Safe to call again after an abandoned, declined or '
+            .'expired attempt: the gateway is first asked whether the previous attempt actually settled, and if '
+            .'not a fresh payment row is opened (an invoice number is single-use at the gateway). A declined or '
+            .'expired attempt gave its seat back, so a retry re-reserves capacity and can meet `sold_out`. '
+            .'This never marks the payment `succeeded` — only a server-to-server webhook '
+            .'({@see \App\Http\Controllers\Webhooks}) or the expiry sweeper can do that.',
         tags: ['Public'],
         parameters: [
             new OAT\Parameter(
@@ -68,12 +73,20 @@ class PaymentController extends Controller
             new OAT\Response(response: 404, description: 'Registration not found'),
             new OAT\Response(
                 response: 422,
-                description: 'Registration has no payment awaiting initiation',
+                description: 'Nothing to pay right now. `already_paid` means an abandoned checkout had in fact '.
+                    'settled (the registration is now paid — reload it); `payment_in_progress` and '.
+                    '`payment_under_review` mean an attempt is being confirmed or reconciled; `sold_out` means '.
+                    'the seat a failed attempt released has since been taken; `no_payable_payment` covers a '.
+                    'registration that is settled, cancelled or has no payment at all.',
                 content: new OAT\MediaType(
                     mediaType: 'application/json',
                     schema: new OAT\Schema(
                         properties: [
-                            new OAT\Property(property: 'code', type: 'string', example: 'no_payable_payment'),
+                            new OAT\Property(
+                                property: 'code',
+                                type: 'string',
+                                enum: ['no_payable_payment', 'already_paid', 'payment_in_progress', 'payment_under_review', 'sold_out'],
+                            ),
                             new OAT\Property(property: 'message', type: 'string'),
                         ]
                     )
@@ -81,19 +94,14 @@ class PaymentController extends Controller
             ),
         ]
     )]
-    public function initiate(Registration $registration, InitiatePayment $action): JsonResponse
-    {
-        $payment = $registration->payments()
-            ->where('status', 'pending')
-            ->latest('id')
-            ->first();
-
-        if ($payment === null) {
-            return response()->json([
-                'code' => 'no_payable_payment',
-                'message' => 'This registration has no payment awaiting initiation.',
-            ], 422);
-        }
+    public function initiate(
+        Registration $registration,
+        ResolvePayablePayment $resolve,
+        InitiatePayment $action,
+    ): JsonResponse {
+        // Throws a self-rendering 422 when there is nothing to pay — see
+        // PaymentNotPayableException for the codes the status page reads.
+        $payment = $resolve->handle($registration);
 
         $callbackUrl = rtrim((string) config('services.frontend.url'), '/')."/registrations/{$registration->ulid}";
 
