@@ -7,6 +7,9 @@ import type { Ticket, TicketType, TicketTypePayload } from './types';
 
 export interface TicketFilters extends SortParams {
     status?: string;
+    /** Ticket type ULID. Never the numeric id — that is an internal key. */
+    ticket_type?: string;
+    /** @deprecated Legacy numeric form; new callers filter by `ticket_type`. */
     ticket_type_id?: number | '';
     search?: string;
     page?: number;
@@ -17,6 +20,7 @@ export async function fetchTickets(filters: TicketFilters): Promise<PaginatedRes
     const { data } = await api.get('/admin/tickets', {
         params: {
             status: filters.status || undefined,
+            ticket_type: filters.ticket_type || undefined,
             ticket_type_id: filters.ticket_type_id || undefined,
             search: filters.search || undefined,
             sort: filters.sort,
@@ -113,6 +117,9 @@ export async function resendTicket(ulid: string, channels: string[]): Promise<Re
  */
 export interface ResendScope {
     status?: string;
+    /** Ticket type ULID. */
+    ticket_type?: string;
+    /** @deprecated Legacy numeric form; new callers filter by `ticket_type`. */
     ticket_type_id?: number | '';
     search?: string;
     ulids?: string[];
@@ -134,6 +141,7 @@ export async function fetchResendPreview(scope: ResendScope): Promise<ResendPrev
     const { data } = await api.get('/admin/tickets/resend-preview', {
         params: {
             status: scope.status || undefined,
+            ticket_type: scope.ticket_type || undefined,
             ticket_type_id: scope.ticket_type_id || undefined,
             search: scope.search || undefined,
             // A query string cannot carry an empty array, so an emptied
@@ -167,6 +175,7 @@ export async function resendAllTickets(
                 // to more people than were agreed to.
                 expected_count: expectedCount,
                 status: scope.status || undefined,
+                ticket_type: scope.ticket_type || undefined,
                 ticket_type_id: scope.ticket_type_id || undefined,
                 search: scope.search || undefined,
                 // Sent as-is, empty array included: JSON can express "none",

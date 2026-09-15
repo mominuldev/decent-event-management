@@ -4,6 +4,7 @@ namespace App\Domain\Ticketing\Support;
 
 use App\Domain\Shared\Support\ListSort;
 use App\Domain\Ticketing\Models\Ticket;
+use App\Domain\Ticketing\Models\TicketType;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -106,6 +107,22 @@ class TicketListFilters
             $query->where('status', $status);
         }
 
+        // By ULID — the public identifier — via a subquery rather than a
+        // join, so the sort columns stay unambiguous. A ULID that names no
+        // ticket type selects nothing rather than everything: the same
+        // rule as `ulids`, for the same reason — a filter that silently
+        // falls open turns a filtered bulk send into an unfiltered one.
+        $ticketType = self::str($params, 'ticket_type');
+        if ($ticketType !== null) {
+            $query->whereIn(
+                'ticket_type_id',
+                TicketType::query()->select('id')->where('ulid', $ticketType),
+            );
+        }
+
+        // Legacy numeric form, kept for callers that predate the ULID one.
+        // Do not extend it: an auto-increment id must not cross the API
+        // boundary, and new clients filter by `ticket_type` above.
         $ticketTypeId = $params['ticket_type_id'] ?? null;
         if (is_numeric($ticketTypeId) && (int) $ticketTypeId > 0) {
             $query->where('ticket_type_id', (int) $ticketTypeId);

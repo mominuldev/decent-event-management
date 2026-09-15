@@ -424,6 +424,97 @@ class TicketResendTest extends TestCase
      * is no second code path that could disagree with the first about who
      * gets a message.
      */
+    /**
+     * The ticket-type filter takes the type's ULID, never its numeric id —
+     * an auto-increment key must not cross the API boundary. It lives in
+     * `TicketListFilters`, so the list, the preview and the bulk send all
+     * select the same tickets for it.
+     */
+    public function test_tickets_can_be_filtered_by_ticket_type_ulid(): void
+    {
+        $this->seed(NotificationTemplateSeeder::class);
+        $this->as();
+        $cen = $this->ticket();
+        $this->ticket();
+
+        $vip = TicketType::factory()->create(['code' => 'VIP']);
+        $vipTicket = Ticket::factory()->create([
+            'attendee_id' => $cen->attendee_id,
+            'registration_id' => $cen->registration_id,
+            'ticket_type_id' => $vip->id,
+            'status' => 'active',
+        ]);
+
+        $listed = collect($this->getJson(route('api.v1.admin.tickets.index', ['ticket_type' => $vip->ulid]))
+            ->assertOk()
+            ->json('data'))
+            ->pluck('ulid');
+
+        $this->assertSame([$vipTicket->ulid], $listed->all());
+
+        $this->getJson('/api/v1/admin/tickets/resend-preview?ticket_type='.$vip->ulid)
+            ->assertOk()
+            ->assertJsonPath('data.tickets', 1);
+
+        $this->getJson('/api/v1/admin/tickets/resend-preview?ticket_type='.$cen->ticketType->ulid)
+            ->assertOk()
+            ->assertJsonPath('data.tickets', 2);
+    }
+
+    /**
+     * A ULID that names no ticket type must select nothing, not everything.
+     * The alternative turns a filtered bulk send into an unfiltered one
+     * while looking filtered — the failure the search-escaping fix already
+     * closed for `%`.
+     */
+    public function test_an_unknown_ticket_type_selects_nothing_rather_than_everything(): void
+    {
+        $this->seed(NotificationTemplateSeeder::class);
+        $this->as();
+        $this->ticket();
+        $this->ticket();
+
+        $unknown = (string) Str::ulid();
+
+        $this->getJson(route('api.v1.admin.tickets.index', ['ticket_type' => $unknown]))
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $this->getJson('/api/v1/admin/tickets/resend-preview?ticket_type='.$unknown)
+            ->assertOk()
+            ->assertJsonPath('data.tickets', 0);
+    }
+
+    public function test_a_bulk_resend_honours_the_ticket_type_filter(): void
+    {
+        Queue::fake();
+        $this->seed(NotificationTemplateSeeder::class);
+        $this->as();
+        $cen = $this->ticket();
+        $this->ticket();
+
+        $vip = TicketType::factory()->create(['code' => 'VIP']);
+        $vipTicket = Ticket::factory()->create([
+            'attendee_id' => $cen->attendee_id,
+            'registration_id' => $cen->registration_id,
+            'ticket_type_id' => $vip->id,
+            'status' => 'active',
+        ]);
+
+        $this->send('/api/v1/admin/tickets/resend-all', [
+            'channels' => ['email'],
+            'expected_count' => 1,
+            'ticket_type' => $vip->ulid,
+        ])
+            ->assertStatus(202)
+            ->assertJsonPath('data.tickets', 1);
+
+        $this->assertSame(
+            [$vipTicket->ulid],
+            ResendTicketNotificationsJob::query(['ticket_type' => $vip->ulid])->pluck('ulid')->all(),
+        );
+    }
+
     public function test_the_preview_prices_only_the_tickets_that_were_picked(): void
     {
         $this->seed(NotificationTemplateSeeder::class);

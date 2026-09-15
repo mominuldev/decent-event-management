@@ -37,6 +37,7 @@ class BulkResendTicketsRequest extends FormRequest
             // The filter set, mirroring the admin list exactly — the bulk
             // send is meant to hit what the screen is showing.
             'status' => ['nullable', 'string', 'max:40'],
+            'ticket_type' => ['nullable', 'string', 'size:26'],
             'ticket_type_id' => ['nullable', 'integer', 'min:1'],
             'search' => ['nullable', 'string', 'max:200'],
 
@@ -74,6 +75,7 @@ class BulkResendTicketsRequest extends FormRequest
     {
         return [
             'status' => $this->input('status'),
+            'ticket_type' => $this->input('ticket_type'),
             'ticket_type_id' => $this->input('ticket_type_id'),
             'search' => $this->input('search'),
             'ulids' => $this->input('ulids'),

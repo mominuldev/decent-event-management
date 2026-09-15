@@ -44,8 +44,13 @@ class TicketController extends Controller
                 schema: new OAT\Schema(type: 'string')
             ),
             new OAT\QueryParameter(
+                name: 'ticket_type',
+                description: 'Filter by ticket type ULID. An unknown ULID selects nothing.',
+                schema: new OAT\Schema(type: 'string')
+            ),
+            new OAT\QueryParameter(
                 name: 'ticket_type_id',
-                description: 'Filter by ticket type ID',
+                description: 'Filter by ticket type ID (legacy; prefer `ticket_type`)',
                 schema: new OAT\Schema(type: 'integer')
             ),
             new OAT\QueryParameter(
@@ -507,7 +512,8 @@ class TicketController extends Controller
         security: [['bearerAuth' => []]],
         parameters: [
             new OAT\QueryParameter(name: 'status', schema: new OAT\Schema(type: 'string')),
-            new OAT\QueryParameter(name: 'ticket_type_id', schema: new OAT\Schema(type: 'integer')),
+            new OAT\QueryParameter(name: 'ticket_type', description: 'Ticket type ULID', schema: new OAT\Schema(type: 'string')),
+            new OAT\QueryParameter(name: 'ticket_type_id', description: 'Legacy; prefer `ticket_type`', schema: new OAT\Schema(type: 'integer')),
             new OAT\QueryParameter(name: 'search', schema: new OAT\Schema(type: 'string')),
             new OAT\QueryParameter(
                 name: 'ulids',
@@ -609,7 +615,8 @@ class TicketController extends Controller
                         new OAT\Property(property: 'channels', type: 'array', items: new OAT\Items(type: 'string', enum: ['email', 'sms'])),
                         new OAT\Property(property: 'expected_count', type: 'integer', description: 'The count the preview returned.'),
                         new OAT\Property(property: 'status', type: 'string', nullable: true),
-                        new OAT\Property(property: 'ticket_type_id', type: 'integer', nullable: true),
+                        new OAT\Property(property: 'ticket_type', type: 'string', nullable: true, description: 'Ticket type ULID'),
+                        new OAT\Property(property: 'ticket_type_id', type: 'integer', nullable: true, description: 'Legacy; prefer `ticket_type`'),
                         new OAT\Property(property: 'search', type: 'string', nullable: true),
                         new OAT\Property(
                             property: 'ulids',

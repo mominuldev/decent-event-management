@@ -176,7 +176,7 @@ export function ResendAllDialog({
         onError: (e: Error) => push('critical', e.message),
     });
 
-    const filtered = Boolean(scope.status || scope.search || scope.ticket_type_id);
+    const filtered = Boolean(scope.status || scope.search || scope.ticket_type || scope.ticket_type_id);
     const smsCost = preview && channels.includes('sms') ? preview.sms_cost_paisa_total : 0;
 
     const reach = useMemo(() => {

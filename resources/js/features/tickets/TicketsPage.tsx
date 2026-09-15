@@ -239,6 +239,9 @@ function TicketsTab() {
     const { can } = useAuth();
     const { push } = useToast();
     const [status, setStatus] = useState('');
+    // The ticket type's ULID, never its numeric id — that is an internal
+    // key and must not cross the API boundary.
+    const [ticketType, setTicketType] = useState('');
     const [search, setSearch] = useState('');
     const [pageIndex, setPageIndex] = useState(0);
     const [selected, setSelected] = useState<string | null>(null);
@@ -259,8 +262,18 @@ function TicketsTab() {
     const { sorting, setSorting, sortParams } = useTableSorting(undefined, resetPage);
 
     const { data, isLoading, isError, refetch } = useQuery({
-        queryKey: ['tickets', status, search, sortParams, pageIndex],
-        queryFn: () => ticketsApi.fetchTickets({ status, search, ...sortParams, page: pageIndex + 1, per_page: pageSize }),
+        queryKey: ['tickets', status, ticketType, search, sortParams, pageIndex],
+        queryFn: () => ticketsApi.fetchTickets({ status, ticket_type: ticketType, search, ...sortParams, page: pageIndex + 1, per_page: pageSize }),
+    });
+
+    // Same key as the Ticket types tab, so the dropdown is served from
+    // cache once either has loaded and a type edited over there is
+    // reflected here without a second fetch. Inactive and retired types
+    // are listed too: tickets sold on them still exist and still need
+    // finding.
+    const { data: ticketTypes } = useQuery({
+        queryKey: ['ticket-types'],
+        queryFn: ticketsApi.fetchTicketTypes,
     });
 
     const rows = useMemo(() => data?.data ?? [], [data]);
@@ -390,6 +403,15 @@ function TicketsTab() {
                         />
                     </div>
                 </div>
+                <div className="w-52">
+                    <Label htmlFor="ticket_type_filter">Ticket type</Label>
+                    <Select id="ticket_type_filter" value={ticketType} onChange={(e) => { setTicketType(e.target.value); setPageIndex(0); }}>
+                        <option value="">All ticket types</option>
+                        {(ticketTypes ?? []).map((t) => (
+                            <option key={t.ulid} value={t.ulid}>{t.name}{t.is_active ? '' : ' (inactive)'}</option>
+                        ))}
+                    </Select>
+                </div>
                 <div className="w-44">
                     <Label htmlFor="ticket_status">Status</Label>
                     <Select id="ticket_status" value={status} onChange={(e) => { setStatus(e.target.value); setPageIndex(0); }}>
@@ -451,7 +473,7 @@ function TicketsTab() {
             {/* The same filters the table is showing, so the dialog's count and
                 the rows on screen cannot disagree. */}
             {resendingAll && (
-                <ResendAllDialog scope={{ status, search }} onClose={() => setResendingAll(false)} />
+                <ResendAllDialog scope={{ status, ticket_type: ticketType, search }} onClose={() => setResendingAll(false)} />
             )}
 
             {/* The picks and nothing else — deliberately no status or search,
