@@ -9,6 +9,8 @@ import ResetPasswordPage from '@/features/auth/ResetPasswordPage';
 import DashboardPage from '@/features/dashboard/DashboardPage';
 import AttendeesPage from '@/features/attendees/AttendeesPage';
 import RegistrationsPage from '@/features/registrations/RegistrationsPage';
+import NewRegistrationPage from '@/features/registrations/NewRegistrationPage';
+import RegistrationDetailPage from '@/features/registrations/RegistrationDetailPage';
 import FinancePage from '@/features/finance/FinancePage';
 import TicketsPage from '@/features/tickets/TicketsPage';
 import CheckInPage from '@/features/checkin/CheckInPage';
@@ -41,6 +43,9 @@ export const router = createBrowserRouter([
     { path: '/', element: page(<DashboardPage />) },
     { path: '/attendees', element: page(<AttendeesPage />) },
     { path: '/registrations', element: page(<RegistrationsPage />) },
+    // Declared before the `:ulid` route so "new" is never read as a ULID.
+    { path: '/registrations/new', element: page(<NewRegistrationPage />) },
+    { path: '/registrations/:ulid', element: page(<RegistrationDetailPage />) },
     { path: '/finance', element: page(<FinancePage />) },
     { path: '/tickets', element: page(<TicketsPage />) },
     { path: '/check-in', element: page(<CheckInPage />) },

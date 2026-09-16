@@ -93,6 +93,8 @@ class UpdateAttendeeRequest extends FormRequest
             // in every other field. The console omits the key when the
             // recorded value is not in the catalogue.
             'current_class' => ['nullable', 'string', Rule::in(Attendee::CURRENT_CLASSES)],
+            'current_section' => ['nullable', 'string', 'max:32'],
+            'current_roll' => ['nullable', 'string', 'max:16'],
             // The rest of what the attendee can edit on their own profile
             // page, so the console can correct anything the person can —
             // a field only its owner may fix is a support call waiting to

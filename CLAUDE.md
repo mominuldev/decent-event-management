@@ -2082,6 +2082,75 @@ endpoint anywhere could change them once a volunteer was created.
   151-character name answered 422, the row restored to its original values and the probe
   token revoked. Not checked in a browser (no driver here).
 
+### ✅ A current student gives their section and roll, and registrations are pages, not dialogs — 2026-09-16
+
+Two changes made together at the client's request.
+
+**`attendees.current_section` (VARCHAR 32) and `attendees.current_roll` (VARCHAR 16)** sit
+beside `current_class` and follow it exactly: **required of a current student** on both
+create paths (`StoreRegistrationRequest`, `StoreAdminRegistrationRequest` —
+`required_if:participant_type,current_student`), `nullable` on the admin edit path so a
+legacy row stays editable, carried by `CreateRegistration` in both the new- and
+returning-attendee branches, published on `AttendeeResource`, and asked for on the public
+ticket form, the counter form and the admin attendee dialog — shown for a current student
+only, the way the batch year is shown for a former one.
+
+- **Both are free text, and the roll is a string.** A section may be a letter today and a
+  stream tomorrow, and the school writes a roll as `07` — a numeric column or input would
+  hand back `7`. Same reasoning as the mobile number in the spreadsheet export.
+- **Neither is on `PublicAttendeeResource`.** The directory already publishes the class; a
+  roll number pins down one specific child in it, which is more than a public card should
+  say about a minor. That resource's key set is asserted exactly, so adding them later is a
+  decision someone makes, not an accident.
+- Added to the **create-table migration**, per the 2026-09-16 fold ("nothing has shipped").
+  The dev database had the columns added by hand (`ALTER TABLE`), since `migrate:fresh` would
+  have destroyed its rows. Any other database that predates this needs the same two columns.
+- 2 tests in `AttendeeAddressAndIdentityFieldsTest` (missing / blank / over-length refused on
+  both create paths, stored and published, nobody else asked, admin corrects and clears);
+  every current-student request fixture in `CentennialTicketFlowTest` gained the two fields.
+
+**The registration dialogs are gone.** `/registrations/new` (`NewRegistrationPage`) is the
+counter form and `/registrations/:ulid` (`RegistrationDetailPage`) is a registration's own
+page; the list's row click and New button navigate. `NewRegistrationDialog.tsx` is deleted and
+the detail dialog folded into the page. The reason is the one the 2026-08-21 modal rebuild
+already met halfway: the counter form collects the same twenty fields the public one does,
+and a dialog that scrolls inside itself hides its own Save button behind a large party.
+
+- **`AttendeeFields` (`features/registrations/AttendeeFields.tsx`) is the one attendee form**,
+  used by both pages with `mode: 'create' | 'edit'`. Gender is asked on create (the counter
+  request requires it) and shown read-only on edit (`UpdateAttendeeRequest` does not accept
+  it). Class, section and roll render as their own "Current student" section.
+- **The detail page edits two records with one Save.** The person's details go to
+  `PATCH /admin/attendees/{ulid}` and status/notes to `PATCH /admin/registrations/{ulid}`;
+  each half is sent only when it changed *and* the operator holds that permission
+  (`attendee.update` / `registration.update`), as a **diff against what was loaded**
+  (`attendeeChanges()`), so an unrelated edit never resends every field. A 422 from either
+  lands on its control — `updateRegistration()` now throws `ApiRequestError` like
+  `updateAttendee()` already did. Switching participant type clears the other type's
+  placement (batch year vs class/section/roll) rather than leaving it stale.
+- The create page keeps the two-step shape (details → *Cash received — ৳X* against the
+  server's own total) for the reason the counter-sales section gives: no third copy of the
+  pricing formula. "Take payment later" and a settled payment both land on the registration's
+  page. A sticky summary card on the right carries the action; the detail page pins Save /
+  Discard to the bottom of the viewport.
+- `Registration.attendee` in the SPA is now the full `Attendee` type — both admin endpoints
+  return the full `AttendeeResource` and the narrow hand-written shape was discarding it. The
+  timeline, party summary and price breakdown moved to `RegistrationParts.tsx`, shared by the
+  list and the page.
+
+**Shipped in `centennial-celebration`**: `StepDetails` asks a current student for section and
+roll beside the class (required, Zod-mirrored with the column lengths), `StepReview` shows
+them, the payload builder sends them gated on the participant type like the class, and all
+copy is bilingual (`শাখা` / `রোল নম্বর`). `tsc`, ESLint (0 errors) and `next build` clean.
+
+Full suite **979 passing / 2 skipped**, Pint and PHPStan level 8 clean, admin SPA typecheck +
+build clean. OpenAPI regenerated (still 129 paths — request/response shape changes).
+**Verified live**: a counter registration for a current student without the two fields
+answered 422 naming both; with `B`/`07` it created `pending_payment` at ৳1,020 with the
+fields stored; the admin edit changed them to `C`/`08`; a 17-character roll answered 422.
+Probe rows removed, CEN counters restored, token revoked. **The two new pages are not
+checked in a browser** (no driver here) — typecheck and build only.
+
 ### 🚨 External Dependencies (start during Phase 2!)
 - [ ] **PayStation live merchant account** — the only gateway relationship now needed. Sandbox is self-service (credentials are published in their docs and are already the defaults here), so nothing is blocked until go-live; what is needed is a live `PAYSTATION_MERCHANT_ID`/`PAYSTATION_MERCHANT_PASSWORD` plus the IPN URL registered in their dashboard. See [§PayStation replaces SSLCommerz](#-paystation-replaces-sslcommerz--2026-09-10).
 - [ ] ~~Payment gateway merchant applications (bKash, Nagad, Rocket, SSLCommerz)~~ — **no longer on the critical path** (2026-09-10). PayStation aggregates all of these on one hosted checkout, so direct adapters are now an optional optimisation rather than a prerequisite for launch.

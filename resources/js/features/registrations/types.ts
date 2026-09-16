@@ -1,3 +1,5 @@
+import type { Attendee } from '@/features/attendees/types';
+
 export type RegistrationStatus =
     | 'draft'
     | 'pending_payment'
@@ -51,7 +53,11 @@ export interface Registration {
     confirmed_at: string | null;
     cancelled_at: string | null;
     created_at: string;
-    attendee?: { ulid?: string; full_name?: string; mobile?: string; participant_type?: string | null } | null;
+    /**
+     * The full AttendeeResource — both admin endpoints eager-load `attendee`
+     * and the console always holds an `admin` token, so every field is here.
+     */
+    attendee?: Attendee | null;
     /**
      * The nested resource is the full TicketTypeResource, price columns
      * included — the detail endpoint eager-loads `ticketType`. The prices
@@ -137,6 +143,9 @@ export interface CreateRegistrationPayload {
     participant_type: string;
     ssc_batch_year?: number | null;
     current_class?: string | null;
+    /** Required of a current student alongside the class; sent as typed, so a roll keeps its leading zero. */
+    current_section?: string | null;
+    current_roll?: string | null;
     ticket_type_ulid: string;
     event_session_ulid?: string | null;
     participation_type: 'single' | 'couple' | 'family';

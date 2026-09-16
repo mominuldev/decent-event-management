@@ -93,6 +93,8 @@ class CreateRegistration
                     'tshirt_required' => $data['tshirt_required'] ?? $attendee->tshirt_required,
                     'tshirt_size' => $data['tshirt_size'] ?? $attendee->tshirt_size,
                     'current_class' => $data['current_class'] ?? $attendee->current_class,
+                    'current_section' => $data['current_section'] ?? $attendee->current_section,
+                    'current_roll' => $data['current_roll'] ?? $attendee->current_roll,
                 ]);
 
                 $this->setInitialPassword($attendee, $data['password'] ?? null);
@@ -118,6 +120,8 @@ class CreateRegistration
                     'participant_type' => $data['participant_type'],
                     'ssc_batch_year' => $data['ssc_batch_year'] ?? null,
                     'current_class' => $data['current_class'] ?? null,
+                    'current_section' => $data['current_section'] ?? null,
+                    'current_roll' => $data['current_roll'] ?? null,
                     'tshirt_required' => $data['tshirt_required'] ?? false,
                     'tshirt_size' => $data['tshirt_size'] ?? null,
                 ]);

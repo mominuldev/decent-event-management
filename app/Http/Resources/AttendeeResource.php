@@ -53,6 +53,8 @@ class AttendeeResource extends JsonResource
             'participant_type' => $this->participant_type,
             'ssc_batch_year' => $this->ssc_batch_year,
             'current_class' => $this->current_class,
+            'current_section' => $this->current_section,
+            'current_roll' => $this->current_roll,
             'tshirt_required' => $this->tshirt_required,
             'tshirt_size' => $this->tshirt_size,
             'address_district' => $this->address_district,

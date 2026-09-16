@@ -44,12 +44,13 @@ export async function fetchRegistration(ulid: string): Promise<Registration> {
     return unwrap<Registration>(data);
 }
 
+/** Throws ApiRequestError so a 422 on `status` or `special_notes` lands on its field. */
 export async function updateRegistration(ulid: string, payload: UpdateRegistrationPayload): Promise<Registration> {
     try {
         const { data } = await api.patch(`/admin/registrations/${ulid}`, payload);
         return unwrap<Registration>(data);
     } catch (e) {
-        throw new Error(toApiError(e).message);
+        throw new ApiRequestError(e);
     }
 }
 

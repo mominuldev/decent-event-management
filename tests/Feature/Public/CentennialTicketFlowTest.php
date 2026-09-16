@@ -307,6 +307,8 @@ class CentennialTicketFlowTest extends TestCase
         $registration = $this->register($this->payload($this->centennialType(), [
             'participant_type' => 'current_student',
             'current_class' => '9',
+            'current_section' => 'A',
+            'current_roll' => '12',
         ]));
 
         $this->assertSame(102000, $registration->total_paisa);
@@ -327,6 +329,8 @@ class CentennialTicketFlowTest extends TestCase
         $registration = $this->register($this->payload($this->centennialType(), [
             'participant_type' => 'current_student',
             'current_class' => '9',
+            'current_section' => 'A',
+            'current_roll' => '12',
             'participation_type' => 'family',
             'adults_count' => 2,
             'children_count' => 1,
@@ -374,6 +378,8 @@ class CentennialTicketFlowTest extends TestCase
         $registration = $this->register($this->payload($ticketType, [
             'participant_type' => 'current_student',
             'current_class' => '9',
+            'current_section' => 'A',
+            'current_roll' => '12',
         ]));
 
         $this->assertSame(100000, $registration->total_paisa);
@@ -399,6 +405,8 @@ class CentennialTicketFlowTest extends TestCase
         $registration = $this->register($this->payload($ticketType, [
             'participant_type' => 'current_student',
             'current_class' => '9',
+            'current_section' => 'A',
+            'current_roll' => '12',
         ]));
 
         $this->assertSame(0, $registration->total_paisa);
@@ -434,6 +442,8 @@ class CentennialTicketFlowTest extends TestCase
                 'participant_type' => $type,
                 'ssc_batch_year' => $needsBatch ? 2004 : null,
                 'current_class' => $type === 'current_student' ? '10' : null,
+                'current_section' => $type === 'current_student' ? 'B' : null,
+                'current_roll' => $type === 'current_student' ? '07' : null,
             ]));
 
             // A current student is the one type with its own rate; the

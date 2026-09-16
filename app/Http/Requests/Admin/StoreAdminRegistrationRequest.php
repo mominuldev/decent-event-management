@@ -85,6 +85,8 @@ class StoreAdminRegistrationRequest extends FormRequest
             // Required of a current student, as the batch year is of a
             // former one: it is the one fact that places them in the school.
             'current_class' => ['required_if:participant_type,current_student', 'nullable', 'string', Rule::in(Attendee::CURRENT_CLASSES)],
+            'current_section' => ['required_if:participant_type,current_student', 'nullable', 'string', 'max:32'],
+            'current_roll' => ['required_if:participant_type,current_student', 'nullable', 'string', 'max:16'],
             'ticket_type_ulid' => ['required', 'string', Rule::exists('ticket_types', 'ulid')],
             'event_session_ulid' => ['nullable', 'string', Rule::exists('event_sessions', 'ulid')],
             'participation_type' => ['required', 'string', Rule::in(['single', 'couple', 'family'])],

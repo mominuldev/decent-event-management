@@ -64,6 +64,8 @@ interface AttendeeForm {
     participant_type: ParticipantType;
     ssc_batch_year: string;
     current_class: string;
+    current_section: string;
+    current_roll: string;
     whatsapp_number: string;
     designation: string;
     organization: string;
@@ -93,6 +95,8 @@ const FORM_KEYS = [
     'participant_type',
     'ssc_batch_year',
     'current_class',
+    'current_section',
+    'current_roll',
     'whatsapp_number',
     'designation',
     'organization',
@@ -127,6 +131,8 @@ function toForm(a: Attendee): AttendeeForm {
         participant_type: a.participant_type,
         ssc_batch_year: a.ssc_batch_year ? String(a.ssc_batch_year) : '',
         current_class: a.current_class ?? '',
+        current_section: a.current_section ?? '',
+        current_roll: a.current_roll ?? '',
         whatsapp_number: a.whatsapp_number ?? '',
         designation: a.designation ?? '',
         organization: a.organization ?? '',
@@ -169,6 +175,8 @@ function toPayload(f: AttendeeForm): UpdateAttendeePayload {
         ...(f.current_class === '' || isCatalogueClass(f.current_class)
             ? { current_class: f.current_class || null }
             : {}),
+        current_section: text(f.current_section),
+        current_roll: text(f.current_roll),
         whatsapp_number: text(f.whatsapp_number),
         designation: text(f.designation),
         organization: text(f.organization),
@@ -682,6 +690,31 @@ function AttendeeDetail({ ulid, onClose }: { ulid: string; onClose: () => void }
                                             <option key={c.value} value={c.value}>{c.label}</option>
                                         ))}
                                     </Select>
+                                </Field>
+                            )}
+                            {form.participant_type === 'current_student' && (
+                                <Field id="attendee-current_section" label="Section" optional error={fieldErrors.current_section}>
+                                    <Input
+                                        id="attendee-current_section"
+                                        value={form.current_section}
+                                        disabled={!canEdit}
+                                        aria-invalid={Boolean(fieldErrors.current_section)}
+                                        onChange={(e) => set('current_section', e.target.value)}
+                                        placeholder="A"
+                                    />
+                                </Field>
+                            )}
+                            {form.participant_type === 'current_student' && (
+                                <Field id="attendee-current_roll" label="Roll" optional error={fieldErrors.current_roll}>
+                                    <Input
+                                        id="attendee-current_roll"
+                                        value={form.current_roll}
+                                        disabled={!canEdit}
+                                        inputMode="numeric"
+                                        aria-invalid={Boolean(fieldErrors.current_roll)}
+                                        onChange={(e) => set('current_roll', e.target.value)}
+                                        placeholder="07"
+                                    />
                                 </Field>
                             )}
                             <Field id="attendee-ssc_batch_year" label="SSC batch year" optional error={fieldErrors.ssc_batch_year}>

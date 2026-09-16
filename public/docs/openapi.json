@@ -169,6 +169,14 @@
                                                         "type": "string",
                                                         "nullable": true
                                                     },
+                                                    "current_section": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
+                                                    "current_roll": {
+                                                        "type": "string",
+                                                        "nullable": true
+                                                    },
                                                     "tshirt_required": {
                                                         "type": "boolean"
                                                     },
@@ -476,6 +484,14 @@
                                                     "type": "string",
                                                     "nullable": true
                                                 },
+                                                "current_section": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "current_roll": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
                                                 "tshirt_required": {
                                                     "type": "boolean"
                                                 },
@@ -749,6 +765,16 @@
                                             "new_10",
                                             "10"
                                         ]
+                                    },
+                                    "current_section": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 32
+                                    },
+                                    "current_roll": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 16
                                     },
                                     "designation": {
                                         "type": "string",
@@ -6301,6 +6327,18 @@
                                             "new_10",
                                             "10"
                                         ]
+                                    },
+                                    "current_section": {
+                                        "description": "Required when participant_type is current_student.",
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 32
+                                    },
+                                    "current_roll": {
+                                        "description": "Required when participant_type is current_student.",
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 16
                                     },
                                     "ticket_type_ulid": {
                                         "type": "string"
@@ -12207,6 +12245,18 @@
                                             "new_10",
                                             "10"
                                         ]
+                                    },
+                                    "current_section": {
+                                        "description": "Required when participant_type is current_student.",
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 32
+                                    },
+                                    "current_roll": {
+                                        "description": "Required when participant_type is current_student.",
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 16
                                     },
                                     "ticket_type_ulid": {
                                         "description": "ULID of an active, public TicketType",

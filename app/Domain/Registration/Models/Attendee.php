@@ -38,6 +38,8 @@ class Attendee extends AuthUserBase
         'participant_type',
         'ssc_batch_year',
         'current_class',
+        'current_section',
+        'current_roll',
         'profile_photo_media_id',
         'tshirt_required',
         'tshirt_size',

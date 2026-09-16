@@ -65,6 +65,12 @@ class AttendeeFactory extends Factory
                 'current_class' => $attendee->participant_type === 'current_student'
                     ? $attendee->current_class ?? fake()->randomElement(['9', '10'])
                     : null,
+                'current_section' => $attendee->participant_type === 'current_student'
+                    ? $attendee->current_section ?? fake()->randomElement(['A', 'B', 'C'])
+                    : null,
+                'current_roll' => $attendee->participant_type === 'current_student'
+                    ? $attendee->current_roll ?? (string) fake()->numberBetween(1, 120)
+                    : null,
             ]);
         });
     }
@@ -149,6 +155,8 @@ class AttendeeFactory extends Factory
             // what reconciles these two when a caller overrides that type.
             'ssc_batch_year' => $needsBatchYear ? fake()->numberBetween(1971, 2024) : null,
             'current_class' => $participantType === 'current_student' ? fake()->randomElement(['9', '10']) : null,
+            'current_section' => $participantType === 'current_student' ? fake()->randomElement(['A', 'B', 'C']) : null,
+            'current_roll' => $participantType === 'current_student' ? (string) fake()->numberBetween(1, 120) : null,
             'tshirt_required' => fake()->boolean(70),
             'tshirt_size' => fake()->randomElement(['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL']),
             // Drawn as a whole triple, not three independent picks: a post

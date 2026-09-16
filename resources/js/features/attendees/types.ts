@@ -24,6 +24,9 @@ export interface Attendee {
     participant_type: ParticipantType;
     ssc_batch_year: number | null;
     current_class: string | null;
+    /** A current student's section and roll, beside their class. Free text; a roll keeps its leading zero. */
+    current_section: string | null;
+    current_roll: string | null;
     tshirt_required: boolean;
     tshirt_size: string | null;
     address_district: string | null;
@@ -64,6 +67,8 @@ export interface UpdateAttendeePayload {
     ssc_batch_year?: number | null;
     /** One of CURRENT_CLASSES; omit the key to leave a legacy free-text value as recorded. */
     current_class?: string | null;
+    current_section?: string | null;
+    current_roll?: string | null;
     whatsapp_number?: string | null;
     designation?: string | null;
     organization?: string | null;

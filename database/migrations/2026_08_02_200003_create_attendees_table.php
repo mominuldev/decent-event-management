@@ -39,6 +39,11 @@ return new class extends Migration
             $table->string('participant_type', 32);
             $table->unsignedSmallInteger('ssc_batch_year')->nullable();
             $table->string('current_class', 32)->nullable();
+            // A current student's section and roll number, beside their class.
+            // Roll is a string, not an integer: a leading zero ("07") is part of
+            // how the school writes it, and nothing here does arithmetic on it.
+            $table->string('current_section', 32)->nullable();
+            $table->string('current_roll', 16)->nullable();
             $table->foreignId('profile_photo_media_id')->nullable()->constrained('media_files')->nullOnDelete();
             $table->boolean('tshirt_required')->default(false);
             $table->string('tshirt_size', 8)->nullable();

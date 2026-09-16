@@ -332,7 +332,7 @@ class AttendeeAddressAndIdentityFieldsTest extends TestCase
     {
         $ticketType = $this->ticketType();
 
-        $current = $this->payload($ticketType, ['participant_type' => 'current_student', 'current_class' => '10']);
+        $current = $this->payload($ticketType, ['participant_type' => 'current_student', 'current_class' => '10', 'current_section' => 'A', 'current_roll' => '12']);
         unset($current['ssc_batch_year']);
         $this->submit($current)->assertStatus(201);
 
@@ -368,20 +368,20 @@ class AttendeeAddressAndIdentityFieldsTest extends TestCase
         unset($missing['ssc_batch_year'], $missing['current_class']);
         $this->submit($missing)->assertStatus(422)->assertJsonValidationErrors(['current_class']);
 
-        $freeText = $this->payload($ticketType, ['participant_type' => 'current_student', 'current_class' => 'Class 9, Section B']);
+        $freeText = $this->payload($ticketType, ['participant_type' => 'current_student', 'current_class' => 'Class 9, Section B', 'current_section' => 'A', 'current_roll' => '12']);
         unset($freeText['ssc_batch_year']);
         $this->submit($freeText)->assertStatus(422)->assertJsonValidationErrors(['current_class']);
 
-        $eleven = $this->payload($ticketType, ['participant_type' => 'current_student', 'current_class' => '11']);
+        $eleven = $this->payload($ticketType, ['participant_type' => 'current_student', 'current_class' => '11', 'current_section' => 'A', 'current_roll' => '12']);
         unset($eleven['ssc_batch_year']);
         $this->submit($eleven)->assertStatus(422)->assertJsonValidationErrors(['current_class']);
 
-        $seven = $this->payload($ticketType, ['participant_type' => 'current_student', 'current_class' => '7']);
+        $seven = $this->payload($ticketType, ['participant_type' => 'current_student', 'current_class' => '7', 'current_section' => 'A', 'current_roll' => '12']);
         unset($seven['ssc_batch_year']);
         $this->submit($seven)->assertStatus(201)->assertJsonPath('data.attendee.current_class', '7');
 
         // "New Ten" — just promoted into class ten — is its own value.
-        $newTen = $this->payload($ticketType, ['participant_type' => 'current_student', 'current_class' => 'new_10', 'mobile' => '+8801799000001', 'email' => 'newten@example.test']);
+        $newTen = $this->payload($ticketType, ['participant_type' => 'current_student', 'current_class' => 'new_10', 'current_section' => 'A', 'current_roll' => '12', 'mobile' => '+8801799000001', 'email' => 'newten@example.test']);
         unset($newTen['ssc_batch_year']);
         $this->submit($newTen)->assertStatus(201)->assertJsonPath('data.attendee.current_class', 'new_10');
 
@@ -396,6 +396,89 @@ class AttendeeAddressAndIdentityFieldsTest extends TestCase
             ->postJson(route('api.v1.admin.registrations.store'), $counter)
             ->assertStatus(422)
             ->assertJsonValidationErrors(['current_class']);
+    }
+
+    /**
+     * Beside the class, a current student gives their section and roll —
+     * required of exactly that type on both the public form and the
+     * counter, and asked of nobody else. Free text, not a catalogue: the
+     * school's sections are letters today and could be streams tomorrow,
+     * and a roll is written as the school writes it ("07"), never as an
+     * integer that would lose its leading zero.
+     */
+    public function test_a_current_student_gives_a_section_and_a_roll_and_nobody_else_is_asked(): void
+    {
+        $ticketType = $this->ticketType();
+
+        $missing = $this->payload($ticketType, ['participant_type' => 'current_student', 'current_class' => '9']);
+        unset($missing['ssc_batch_year']);
+        $this->submit($missing)->assertStatus(422)->assertJsonValidationErrors(['current_section', 'current_roll']);
+
+        $blank = $this->payload($ticketType, ['participant_type' => 'current_student', 'current_class' => '9', 'current_section' => '', 'current_roll' => '']);
+        unset($blank['ssc_batch_year']);
+        $this->submit($blank)->assertStatus(422)->assertJsonValidationErrors(['current_section', 'current_roll']);
+
+        $tooLong = $this->payload($ticketType, ['participant_type' => 'current_student', 'current_class' => '9', 'current_section' => str_repeat('A', 33), 'current_roll' => str_repeat('1', 17)]);
+        unset($tooLong['ssc_batch_year']);
+        $this->submit($tooLong)->assertStatus(422)->assertJsonValidationErrors(['current_section', 'current_roll']);
+
+        $student = $this->payload($ticketType, ['participant_type' => 'current_student', 'current_class' => '9', 'current_section' => 'B', 'current_roll' => '07']);
+        unset($student['ssc_batch_year']);
+        $this->submit($student)
+            ->assertStatus(201)
+            ->assertJsonPath('data.attendee.current_section', 'B')
+            ->assertJsonPath('data.attendee.current_roll', '07');
+
+        $registrant = $this->registrant();
+        $this->assertSame('B', $registrant->current_section);
+        $this->assertSame('07', $registrant->current_roll);
+
+        // A former student is not asked, and sends none.
+        $former = $this->payload($ticketType, ['mobile' => '+8801799000010', 'email' => 'former-no-roll@example.test']);
+        unset($former['current_section'], $former['current_roll']);
+        $this->submit($former)->assertStatus(201)
+            ->assertJsonPath('data.attendee.current_section', null)
+            ->assertJsonPath('data.attendee.current_roll', null);
+
+        // The counter form asks the same question.
+        $this->actingAsAdmin();
+        $counter = $this->payload($ticketType, ['participant_type' => 'current_student', 'current_class' => '10', 'mobile' => '+8801799000011', 'email' => 'desk-roll@example.test']);
+        unset($counter['idempotency_key'], $counter['ssc_batch_year']);
+        $this->withHeader('Idempotency-Key', (string) Str::ulid())
+            ->postJson(route('api.v1.admin.registrations.store'), $counter)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['current_section', 'current_roll']);
+
+        $counter['current_section'] = 'C';
+        $counter['current_roll'] = '41';
+        $this->withHeader('Idempotency-Key', (string) Str::ulid())
+            ->postJson(route('api.v1.admin.registrations.store'), $counter)
+            ->assertStatus(201)
+            ->assertJsonPath('data.attendee.current_section', 'C')
+            ->assertJsonPath('data.attendee.current_roll', '41');
+    }
+
+    /** An admin corrects either on any attendee, and may clear them. */
+    public function test_an_admin_corrects_the_section_and_roll_and_may_clear_them(): void
+    {
+        $attendee = Attendee::factory()->create([
+            'participant_type' => 'current_student',
+            'current_class' => '8',
+            'current_section' => null,
+            'current_roll' => null,
+        ]);
+
+        $this->actingAsAdmin();
+
+        $this->patchJson(route('api.v1.admin.attendees.update', $attendee->ulid), ['current_section' => 'A', 'current_roll' => '03'])
+            ->assertStatus(200)
+            ->assertJsonPath('data.current_section', 'A')
+            ->assertJsonPath('data.current_roll', '03');
+
+        $this->patchJson(route('api.v1.admin.attendees.update', $attendee->ulid), ['current_section' => null, 'current_roll' => null])
+            ->assertStatus(200)
+            ->assertJsonPath('data.current_section', null)
+            ->assertJsonPath('data.current_roll', null);
     }
 
     /**
