@@ -19,18 +19,39 @@
     --font-display: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
     --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
 
-    /* Brand — a confident teal, distinct from a generic admin-template blue */
-    --color-brand-50: oklch(97.5% 0.02 195);
-    --color-brand-100: oklch(94% 0.045 195);
-    --color-brand-200: oklch(88% 0.07 195);
-    --color-brand-300: oklch(80% 0.09 195);
-    --color-brand-400: oklch(70% 0.1 195);
-    --color-brand-500: oklch(60% 0.11 195);
-    --color-brand-600: oklch(50% 0.105 195);
-    --color-brand-700: oklch(42% 0.09 195);
-    --color-brand-800: oklch(35% 0.07 195);
-    --color-brand-900: oklch(28% 0.055 195);
-    --color-brand-950: oklch(20% 0.04 195);
+    /*
+     * Brand — the client's blue. brand-600 is #1B4EF5 exactly; every other
+     * step keeps the same hue and is fitted inside sRGB gamut, so nothing here
+     * is silently clipped by the browser.
+     */
+    --color-brand-50: oklch(97.5% 0.012 265);
+    --color-brand-100: oklch(94.5% 0.026 265);
+    --color-brand-200: oklch(89% 0.052 265);
+    --color-brand-300: oklch(81% 0.094 265);
+    --color-brand-400: oklch(69% 0.16 265);
+    --color-brand-500: oklch(59% 0.22 265);
+    --color-brand-600: oklch(51.5% 0.253 264.7); /* #1B4EF5 */
+    --color-brand-700: oklch(44% 0.23 265);
+    --color-brand-800: oklch(37% 0.19 265);
+    --color-brand-900: oklch(30% 0.15 265);
+    --color-brand-950: oklch(22% 0.1 265);
+
+    /*
+     * Secondary — the client's orange. secondary-500 is #F6850C exactly.
+     * A highlight colour for emphasis and calls to action, not a status: the
+     * warning axis below stays its own hue so "attention" never reads as brand.
+     */
+    --color-secondary-50: oklch(97.5% 0.015 57);
+    --color-secondary-100: oklch(94.5% 0.032 57);
+    --color-secondary-200: oklch(89% 0.068 57);
+    --color-secondary-300: oklch(83% 0.11 57);
+    --color-secondary-400: oklch(78% 0.15 57);
+    --color-secondary-500: oklch(72.8% 0.174 56.8); /* #F6850C */
+    --color-secondary-600: oklch(64% 0.155 57);
+    --color-secondary-700: oklch(54% 0.13 57);
+    --color-secondary-800: oklch(45% 0.108 57);
+    --color-secondary-900: oklch(37% 0.09 57);
+    --color-secondary-950: oklch(26% 0.063 57);
 
     /* Status axis — separate from brand, never reused decoratively */
     --color-success-500: oklch(62% 0.15 150);
@@ -57,6 +78,8 @@
     --border-strong: oklch(82% 0.012 260);
     --accent: var(--color-brand-600);
     --accent-fg: oklch(100% 0 0);
+    --secondary: var(--color-secondary-500);
+    --secondary-fg: oklch(20% 0.04 57);
 
     --success-bg: oklch(95% 0.04 150);
     --success-fg: oklch(38% 0.1 150);
@@ -86,7 +109,9 @@
         --border: oklch(32% 0.02 260);
         --border-strong: oklch(40% 0.02 260);
         --accent: var(--color-brand-400);
-        --accent-fg: oklch(15% 0.02 195);
+        --accent-fg: oklch(15% 0.02 265);
+        --secondary: var(--color-secondary-400);
+        --secondary-fg: oklch(20% 0.04 57);
 
         --success-bg: oklch(28% 0.06 150);
         --success-fg: oklch(85% 0.09 150);
@@ -116,7 +141,9 @@
     --border: oklch(32% 0.02 260);
     --border-strong: oklch(40% 0.02 260);
     --accent: var(--color-brand-400);
-    --accent-fg: oklch(15% 0.02 195);
+    --accent-fg: oklch(15% 0.02 265);
+    --secondary: var(--color-secondary-400);
+    --secondary-fg: oklch(20% 0.04 57);
 
     --success-bg: oklch(28% 0.06 150);
     --success-fg: oklch(85% 0.09 150);
@@ -146,6 +173,8 @@
     --border-strong: oklch(82% 0.012 260);
     --accent: var(--color-brand-600);
     --accent-fg: oklch(100% 0 0);
+    --secondary: var(--color-secondary-500);
+    --secondary-fg: oklch(20% 0.04 57);
 
     --success-bg: oklch(95% 0.04 150);
     --success-fg: oklch(38% 0.1 150);
@@ -176,6 +205,8 @@
     --color-border-strong: var(--border-strong);
     --color-accent: var(--accent);
     --color-accent-fg: var(--accent-fg);
+    --color-secondary: var(--secondary);
+    --color-secondary-fg: var(--secondary-fg);
 
     --color-success-bg: var(--success-bg);
     --color-success-fg: var(--success-fg);

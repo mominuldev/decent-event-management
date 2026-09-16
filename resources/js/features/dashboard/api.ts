@@ -2,28 +2,26 @@ import { api } from '@/lib/api';
 import type { PaginatedResponse } from '@/lib/pagination';
 import type { Registration, ReportRow, TicketType } from './types';
 
-export async function fetchRegistrations(params: { per_page: number; page?: number }): Promise<PaginatedResponse<Registration>> {
+export async function fetchRegistrations(params: { per_page: number; page?: number; status?: string }): Promise<PaginatedResponse<Registration>> {
     const { data } = await api.get('/admin/registrations', { params });
     return data as PaginatedResponse<Registration>;
 }
 
-export async function fetchAttendeesCount(): Promise<number> {
-    const { data } = await api.get('/admin/attendees', { params: { per_page: 1 } });
+/**
+ * A count is a one-row page's `meta.total` — every admin list is paginated
+ * server-side, and there is no dedicated count endpoint, so this is the
+ * cheapest honest way to ask "how many".
+ */
+async function countOf(path: string, params: Record<string, unknown> = {}): Promise<number> {
+    const { data } = await api.get(path, { params: { ...params, per_page: 1 } });
     const page = data as PaginatedResponse<unknown>;
     return page.meta?.total ?? page.data.length;
 }
 
-export async function fetchTicketsCount(): Promise<number> {
-    const { data } = await api.get('/admin/tickets', { params: { per_page: 1 } });
-    const page = data as PaginatedResponse<unknown>;
-    return page.meta?.total ?? page.data.length;
-}
-
-export async function fetchPaymentsSucceededCount(): Promise<number> {
-    const { data } = await api.get('/admin/payments', { params: { per_page: 1, status: 'succeeded' } });
-    const page = data as PaginatedResponse<unknown>;
-    return page.meta?.total ?? page.data.length;
-}
+export const fetchRegistrationsCount = (status?: string) => countOf('/admin/registrations', status ? { status } : {});
+export const fetchAttendeesCount = () => countOf('/admin/attendees');
+export const fetchTicketsCount = () => countOf('/admin/tickets');
+export const fetchPaymentsSucceededCount = () => countOf('/admin/payments', { status: 'succeeded' });
 
 export async function fetchTicketTypes(): Promise<TicketType[]> {
     const { data } = await api.get('/admin/ticket-types');
