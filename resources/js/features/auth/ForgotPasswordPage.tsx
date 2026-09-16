@@ -37,7 +37,7 @@ export default function ForgotPasswordPage() {
                         <MailCheck size={20} />
                     </div>
                     <div>
-                        <h1 className="text-[15px] font-semibold text-text">Check your email</h1>
+                        <h1 className="font-display text-[22px] font-bold tracking-tight text-text">Check your email</h1>
                         {/* Deliberately does not confirm the address has an account — the
                             API answers the same either way, and so must this. */}
                         <p className="mt-1 text-[12.5px] leading-relaxed text-text-muted">
@@ -57,7 +57,7 @@ export default function ForgotPasswordPage() {
         <AuthShell>
             <form onSubmit={onSubmit} className="space-y-4">
                 <div>
-                    <h1 className="text-[15px] font-semibold text-text">Forgot your password?</h1>
+                    <h1 className="font-display text-[22px] font-bold tracking-tight text-text">Forgot your password?</h1>
                     <p className="mt-1 text-[12.5px] leading-relaxed text-text-muted">
                         Enter the address you sign in with and we will email you a link to set a new password.
                     </p>

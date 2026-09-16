@@ -285,3 +285,106 @@
     background: #fff;
     color-scheme: light;
 }
+
+/* ---- Signed-out pages: the ticket shell (features/auth/AuthShell.tsx) ---- */
+@keyframes auth-rise {
+    from { opacity: 0; transform: translateY(18px) scale(0.985); }
+    to { opacity: 1; transform: none; }
+}
+@keyframes auth-fade-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+}
+@keyframes auth-drift {
+    from { transform: translate3d(0, 0, 0); }
+    to { transform: translate3d(5%, -6%, 0); }
+}
+
+.auth-card {
+    animation: auth-rise 620ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.auth-stagger > * {
+    animation: auth-fade-up 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation-delay: calc(180ms + var(--i, 0) * 90ms);
+}
+
+.auth-glow {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(72px);
+    pointer-events: none;
+    animation: auth-drift 18s ease-in-out infinite alternate;
+}
+.auth-glow-brand {
+    top: -14rem;
+    right: -10rem;
+    width: 38rem;
+    height: 38rem;
+    background: color-mix(in oklch, var(--color-brand-500) 22%, transparent);
+}
+.auth-glow-secondary {
+    bottom: -12rem;
+    left: -8rem;
+    width: 30rem;
+    height: 30rem;
+    background: color-mix(in oklch, var(--color-secondary-500) 18%, transparent);
+    animation-direction: alternate-reverse;
+}
+.auth-dots {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(color-mix(in oklch, var(--text) 10%, transparent) 1px, transparent 1px);
+    background-size: 22px 22px;
+    mask-image: radial-gradient(ellipse at center, black 25%, transparent 72%);
+}
+
+/*
+ * The counterfoil is dark blue in both themes — a ticket's printed half does
+ * not change with the room's lighting. The dot texture is a nod to the QR
+ * modules every ticket in this system carries, fading before it reaches the
+ * text. The dashed edge is the perforation: white over the dark side so it
+ * reads in either theme, stopping short of the notches at each end.
+ */
+.auth-counterfoil {
+    background:
+        radial-gradient(60% 50% at 100% 0%, color-mix(in oklch, var(--color-brand-500) 45%, transparent), transparent 70%),
+        linear-gradient(160deg, oklch(34% 0.17 265) 0%, oklch(24% 0.11 265) 55%, oklch(19% 0.06 265) 100%);
+}
+.auth-counterfoil::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(oklch(100% 0 0 / 9%) 1.2px, transparent 1.2px);
+    background-size: 14px 14px;
+    mask-image: linear-gradient(to bottom, black, transparent 65%);
+}
+.auth-counterfoil::after {
+    content: '';
+    position: absolute;
+    left: 1.5rem;
+    right: 1.5rem;
+    bottom: 0;
+    border-top: 2px dashed oklch(100% 0 0 / 32%);
+    pointer-events: none;
+}
+@media (min-width: 48rem) {
+    .auth-counterfoil::after {
+        left: auto;
+        right: 0;
+        top: 1.5rem;
+        bottom: 1.5rem;
+        border-top: 0;
+        border-left: 2px dashed oklch(100% 0 0 / 32%);
+    }
+}
+.auth-notch {
+    position: absolute;
+    z-index: 10;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 9999px;
+    background: var(--bg);
+    box-shadow: inset 0 1px 3px oklch(20% 0.02 250 / 10%);
+}

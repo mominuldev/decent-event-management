@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#0d5c5c">
+    <meta name="theme-color" content="#1B4EF5">
     <title>{{ config('app.name', 'Decent Ticket Management') }} — Admin</title>
 
     {{-- Applied before first paint so a dark-mode user never sees a light flash. --}}

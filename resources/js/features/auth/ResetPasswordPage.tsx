@@ -54,7 +54,7 @@ export default function ResetPasswordPage() {
         return (
             <AuthShell>
                 <div className="space-y-4 text-center">
-                    <h1 className="text-[15px] font-semibold text-text">This link is incomplete</h1>
+                    <h1 className="font-display text-[22px] font-bold tracking-tight text-text">This link is incomplete</h1>
                     <p className="text-[12.5px] leading-relaxed text-text-muted">
                         Open the link straight from the email, or request a new one.
                     </p>
@@ -74,7 +74,7 @@ export default function ResetPasswordPage() {
                         <CheckCircle2 size={20} />
                     </div>
                     <div>
-                        <h1 className="text-[15px] font-semibold text-text">Password set</h1>
+                        <h1 className="font-display text-[22px] font-bold tracking-tight text-text">Password set</h1>
                         <p className="mt-1 text-[12.5px] leading-relaxed text-text-muted">
                             Sign in with your new password. If two-factor authentication is set up on this account,
                             you will still be asked for your authenticator code.
@@ -92,7 +92,7 @@ export default function ResetPasswordPage() {
         <AuthShell>
             <form onSubmit={onSubmit} className="space-y-4">
                 <div>
-                    <h1 className="text-[15px] font-semibold text-text">Choose a new password</h1>
+                    <h1 className="font-display text-[22px] font-bold tracking-tight text-text">Choose a new password</h1>
                     <p className="mt-1 text-[12.5px] leading-relaxed text-text-muted">
                         For <span className="font-medium text-text">{email}</span>. At least {MIN_LENGTH} characters.
                     </p>
