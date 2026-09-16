@@ -11,7 +11,11 @@ import type { BlockType } from './types';
  * editors fill known fields on known types.
  */
 
-export type FieldKind = 'text' | 'textarea' | 'url' | 'list' | 'repeater';
+/**
+ * `image` at block level is the same path-or-library control a repeater row
+ * gets: untranslatable, written to both halves identically.
+ */
+export type FieldKind = 'text' | 'textarea' | 'url' | 'image' | 'list' | 'repeater';
 
 /**
  * The field kinds a repeater row may contain. `image` is a path or absolute
@@ -1275,9 +1279,19 @@ export const BLOCK_SCHEMAS: Record<BlockType, BlockSchema> = {
     },
 
     // ---------------------------------------------------------------------
-    // Site footer. These live on the `footer` page, which is not a route:
-    // the public site reads its blocks into the footer under every page.
+    // Site chrome. These live on the `site` page, which is not a route: the
+    // public site reads its blocks into the header and footer on every page.
     // ---------------------------------------------------------------------
+
+    site_logo: {
+        label: 'Site logo',
+        description: 'The logo in the header and the one in the footer. Leave either blank to keep the shipped centenary logo.',
+        media: 'none',
+        fields: [
+            { key: 'header_logo', label: 'Header logo', kind: 'image', help: 'PNG or WebP with a transparent background, at least 1200px wide — it is shown 40px tall on a white bar.' },
+            { key: 'footer_logo', label: 'Footer logo', kind: 'image', help: 'Shown 64px tall on white. Leave blank to reuse the header logo.' },
+        ],
+    },
 
     footer_identity: {
         label: 'Footer identity',

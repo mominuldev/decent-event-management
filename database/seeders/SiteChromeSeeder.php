@@ -7,33 +7,36 @@ use Database\Seeders\Concerns\SeedsContentBlocks;
 use Illuminate\Database\Seeder;
 
 /**
- * The site footer, block by block, on the same contract as
- * {@see HomePageSeeder}: every value is the copy the public site ships with.
+ * The site chrome — header logo and the whole footer — block by block, on
+ * the same contract as {@see HomePageSeeder}: every value is the copy the
+ * public site ships with.
  *
- * The `footer` slug is not a routed page. The public site reads its blocks
- * into the footer under every marketing route, so an editor changes the
- * motto, the link columns or the credit here and it lands site-wide. The
- * helpline, email, address and social links are *not* blocks — they are the
- * `contact.*` event settings, so the Settings screen stays the one place
- * those are changed.
+ * The `site` slug is not a routed page. The public site reads its blocks
+ * into the header and footer under every marketing route, so an editor
+ * swaps the logo or changes the motto, the link columns or the credit here
+ * and it lands site-wide. The helpline, email, address and social links are
+ * *not* blocks — they are the `contact.*` event settings, so the Settings
+ * screen stays the one place those are changed.
  *
+ * The logo fields ship blank: blank means the centenary SVG the public site
+ * bundles, which the media library cannot hold (SVG uploads are refused).
  * Columns are one `footer_links` block each so a column can be added or
  * removed like any other block. The page is unindexable by construction.
  */
-class FooterSeeder extends Seeder
+class SiteChromeSeeder extends Seeder
 {
     use SeedsContentBlocks;
 
     public function run(): void
     {
         $page = ContentPage::updateOrCreate(
-            ['slug' => 'footer'],
+            ['slug' => 'site'],
             [
                 'template' => 'standard',
-                'title' => 'Site footer',
-                'title_bn' => 'সাইট ফুটার',
-                'excerpt' => 'The motto, link columns and credit shown under every page.',
-                'excerpt_bn' => 'প্রতিটি পাতার নিচে দেখানো মূলমন্ত্র, লিংক কলাম ও ক্রেডিট।',
+                'title' => 'Site header & footer',
+                'title_bn' => 'সাইটের হেডার ও ফুটার',
+                'excerpt' => 'The logo, and the motto, link columns and credit shown under every page.',
+                'excerpt_bn' => 'লোগো এবং প্রতিটি পাতার নিচে দেখানো মূলমন্ত্র, লিংক কলাম ও ক্রেডিট।',
                 'seo_title' => null,
                 'seo_title_bn' => null,
                 'seo_description' => null,
@@ -54,6 +57,7 @@ class FooterSeeder extends Seeder
     private function blocks(): array
     {
         return [
+            $this->logo(),
             $this->identity(),
             $this->column('Our Heritage', 'আমাদের ঐতিহ্য', [
                 ['/history', 'Our History', 'আমাদের ইতিহাস'],
@@ -74,6 +78,20 @@ class FooterSeeder extends Seeder
                 ['/tickets', 'Registration Guide', 'নিবন্ধন নির্দেশিকা'],
             ]),
             $this->credit(),
+        ];
+    }
+
+    /**
+     * @return array{type: string, fields: array<string, mixed>}
+     */
+    private function logo(): array
+    {
+        return [
+            'type' => 'site_logo',
+            'fields' => [
+                'header_logo' => '',
+                'footer_logo' => '',
+            ],
         ];
     }
 

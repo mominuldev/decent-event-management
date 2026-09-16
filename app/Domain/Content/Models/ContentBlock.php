@@ -106,9 +106,11 @@ class ContentBlock extends Model
         // only places it; the hero's counts come from the same query.
         'attendees_hero',
         'attendee_directory',
-        // Site footer, seeded on the `footer` page by FooterSeeder. Not a
-        // routed page — the public site reads these blocks into the chrome
-        // under every marketing route. One `footer_links` block per column.
+        // Site chrome, seeded on the `site` page by SiteChromeSeeder. Not a
+        // routed page — the public site reads these blocks into the header
+        // and footer under every marketing route. One `footer_links` block
+        // per column.
+        'site_logo',
         'footer_identity',
         'footer_links',
         'footer_credit',

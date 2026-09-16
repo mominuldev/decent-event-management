@@ -25,7 +25,7 @@ class UploadMediaRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'file' => ['required', 'file', 'max:8192', 'mimetypes:image/jpeg,image/png,image/webp'],
+            'file' => ['required', 'file', 'max:8192', 'mimetypes:image/jpeg,image/png,image/webp,image/svg+xml'],
             'collection' => ['sometimes', 'string', Rule::in(UploadContentMedia::COLLECTIONS)],
         ];
     }

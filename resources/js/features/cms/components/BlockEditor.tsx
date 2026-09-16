@@ -316,6 +316,17 @@ function BlockCard({
                                 block={block}
                                 onChange={onChange}
                             />
+                        ) : field.kind === 'image' ? (
+                            <div key={field.key}>
+                                <ImagePathField
+                                    label={field.label}
+                                    value={readText(block.data[field.key]) || readText(block.data_bn[field.key])}
+                                    onChange={(next) =>
+                                        onChange(withField(withField(block, 'en', field.key, next), 'bn', field.key, next))
+                                    }
+                                />
+                                {field.help && <p className="mt-1 text-[11.5px] text-text-faint">{field.help}</p>}
+                            </div>
                         ) : field.kind === 'list' ? (
                             <ListField
                                 key={field.key}

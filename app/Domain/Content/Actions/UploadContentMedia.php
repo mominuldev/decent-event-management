@@ -2,6 +2,7 @@
 
 namespace App\Domain\Content\Actions;
 
+use App\Domain\Content\Support\SvgSanitizer;
 use App\Domain\Shared\Models\ActivityLog;
 use App\Domain\Shared\Models\MediaFile;
 use App\Domain\Shared\Models\User;
@@ -30,13 +31,17 @@ use RuntimeException;
  */
 class UploadContentMedia
 {
+    public function __construct(private readonly SvgSanitizer $svgSanitizer = new SvgSanitizer) {}
+
     /** Public disk — see the class note on why CMS media is not signed-URL only. */
     private const string DISK = 'public';
 
     /**
-     * Raster formats GD can fully re-encode. SVG is deliberately absent: it
-     * is a script-bearing XML document, not a raster image, and there is no
-     * re-encode step that makes it safe to serve from our own origin.
+     * The three raster formats GD can fully re-encode, plus SVG, which gets
+     * the document equivalent: {@see SvgSanitizer} rebuilds it from an
+     * allowlist so scripts, event handlers and external references never
+     * reach the stored file. Logos are the reason — a raster logo blurs on
+     * the header's retina bar.
      *
      * @var array<string, string>
      */
@@ -44,6 +49,7 @@ class UploadContentMedia
         'image/jpeg' => 'jpg',
         'image/png' => 'png',
         'image/webp' => 'webp',
+        'image/svg+xml' => 'svg',
     ];
 
     /**
@@ -68,10 +74,12 @@ class UploadContentMedia
         $mime = $this->detectMimeType($file);
 
         if (! array_key_exists($mime, self::ACCEPTED)) {
-            throw new InvalidArgumentException('Only JPEG, PNG and WebP images can be uploaded.');
+            throw new InvalidArgumentException('Only JPEG, PNG, WebP and SVG images can be uploaded.');
         }
 
-        [$binary, $width, $height] = $this->reencode($file, $mime);
+        [$binary, $width, $height] = $mime === 'image/svg+xml'
+            ? $this->sanitizeSvg($file)
+            : $this->reencode($file, $mime);
 
         $extension = self::ACCEPTED[$mime];
         $path = 'content/'.Str::lower((string) Str::ulid()).'.'.$extension;
@@ -93,9 +101,9 @@ class UploadContentMedia
                 'width' => $width,
                 'height' => $height,
                 'is_public' => true,
-                // The stored bytes are GD's output, not the uploader's: for
-                // the three raster formats accepted here, the re-encode *is*
-                // the sanitising step this column tracks. Wiring a real AV
+                // The stored bytes are GD's output (or the sanitizer's rebuilt
+                // SVG), not the uploader's: for the formats accepted here that
+                // rebuild *is* the sanitising step this column tracks. Wiring a real AV
                 // scanner for the private collections is separate work.
                 'scan_status' => 'clean',
                 'scanned_at' => now(),
@@ -115,7 +123,7 @@ class UploadContentMedia
                     'collection' => $collection,
                     'mime_type' => $mime,
                     'size_bytes' => $media->size_bytes,
-                    'dimensions' => "{$width}x{$height}",
+                    'dimensions' => $width !== null && $height !== null ? "{$width}x{$height}" : null,
                 ],
                 'ip_address' => $ip,
                 'request_id' => $requestId,
@@ -148,6 +156,23 @@ class UploadContentMedia
         finfo_close($finfo);
 
         return $mime === false ? '' : $mime;
+    }
+
+    /**
+     * Rebuilds an SVG from its allowlisted content — see {@see SvgSanitizer}.
+     *
+     * @return array{0: string, 1: int|null, 2: int|null} sanitised bytes, width, height
+     */
+    private function sanitizeSvg(UploadedFile $file): array
+    {
+        $path = $file->getRealPath();
+        $contents = $path === false ? false : file_get_contents($path);
+
+        if ($contents === false) {
+            throw new InvalidArgumentException('The uploaded file could not be read.');
+        }
+
+        return $this->svgSanitizer->sanitize($contents);
     }
 
     /**

@@ -78,7 +78,7 @@ export function MediaPicker({
                             <input
                                 ref={fileInput}
                                 type="file"
-                                accept="image/jpeg,image/png,image/webp"
+                                accept="image/jpeg,image/png,image/webp,image/svg+xml"
                                 className="hidden"
                                 onChange={(e) => {
                                     const file = e.target.files?.[0];
