@@ -9,9 +9,12 @@
     template must never be able to break or remove it.
 
     Palette is the public site's own design system verbatim
-    (centennial-celebration/src/app/globals.css — brand/purple-600 #7c3aed,
-    purple-700 #6d28d9, purple-100 #ede9fe, ink/heading #3d1d7a), so a
-    confirmation email and the page it was bought on read as one product.
+    (centennial-celebration/src/app/globals.css, v4.1 tokens — primary
+    #1b4ef5, primary-dark #1338b0, primary-soft #e4eafe, primary-tint
+    #f4f6fe, accent #f6850c, accent-light #f8a449, dark #08174a, ink
+    #1f2937, border #e8edfe), so a confirmation email and the page it was
+    bought on read as one product. The hero mirrors the site's `.hero-purple`
+    surface and the masthead badge its `QrTicketCard` (orange disc, dark mark).
 
     Email HTML rules that look like clutter but are not:
       - Tables and inline styles, because Outlook renders through Word.
@@ -49,7 +52,9 @@
     $hasCard = $hasCounterfoil || count($facts) > 0;
 
     $sans = "'Noto Sans Bengali','Hind Siliguri','Segoe UI',Roboto,Helvetica,Arial,sans-serif";
-    $serif = "Georgia,'Times New Roman','Noto Serif Bengali',serif";
+    // The site's display face is Outfit (Latin) over Noto Sans Bengali; no
+    // client loads a webfont, so this is the same stack, one weight heavier.
+    $display = "Outfit,'Noto Sans Bengali','Hind Siliguri','Segoe UI',Roboto,Helvetica,Arial,sans-serif";
     $mono = "'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace";
 @endphp
 <!DOCTYPE html>
@@ -74,7 +79,7 @@
     .hero-copy p { margin: 0 0 10px; }
     .hero-copy p:last-child { margin-bottom: 0; }
     .hero-copy strong { color: #ffffff; font-weight: 700; }
-    .hero-copy a { color: #c4b5fd; }
+    .hero-copy a { color: #a4b8fb; }
     .hero-copy ul, .hero-copy ol { margin: 0 0 10px; padding-left: 20px; }
 
     @media only screen and (max-width: 620px) {
@@ -84,19 +89,19 @@
         /* The ticket splits top/bottom instead of left/right, and the
            perforation turns with it. */
         .stack { display: block !important; width: 100% !important; }
-        .perforation { border-left: 0 !important; border-top: 2px dashed #ded8ef !important; padding-left: 0 !important; padding-top: 24px !important; margin-top: 24px !important; }
-        .note-cell { display: block !important; width: 100% !important; border-left: 0 !important; border-top: 1px solid #e6e0f7 !important; }
+        .perforation { border-left: 0 !important; border-top: 2px dashed #d1dcfd !important; padding-left: 0 !important; padding-top: 24px !important; margin-top: 24px !important; }
+        .note-cell { display: block !important; width: 100% !important; border-left: 0 !important; border-top: 1px solid #e8edfe !important; }
     }
 </style>
 </head>
-<body style="margin:0; padding:0; width:100%; background-color:#f5f3fb;">
+<body style="margin:0; padding:0; width:100%; background-color:#f8fafc;">
 
 {{-- Inbox preview line. Kept off-screen so it never renders twice. --}}
 <div style="display:none; font-size:1px; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden; mso-hide:all;">
     {{ $preheader }}&#8203;&#847;&#847;&#847;&#847;&#847;&#847;&#847;&#847;&#847;&#847;&#847;&#847;&#847;&#847;&#847;&#847;
 </div>
 
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f3fb;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f8fafc;">
 <tr>
 <td align="center" style="padding:26px 12px 34px;">
 
@@ -104,7 +109,7 @@
 
         {{-- ── Hero ─────────────────────────────────────────────────── --}}
         <tr>
-            <td class="gutter" bgcolor="#1c1033" style="background-color:#1c1033; background-image:linear-gradient(135deg,#241243 0%,#150b28 55%,#2a1257 100%); border-radius:{{ $hasCard ? '16px 16px 0 0' : '16px' }}; padding:30px 36px 32px;">
+            <td class="gutter" bgcolor="#1338b0" style="background-color:#1338b0; background-image:linear-gradient(135deg,#1b4ef5 0%,#1338b0 48%,#08174a 100%); border-radius:{{ $hasCard ? '16px 16px 0 0' : '16px' }}; padding:30px 36px 32px;">
 
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                     <tr>
@@ -112,7 +117,7 @@
                             <td width="44" style="width:44px; padding-right:12px;">
                                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="44" style="width:44px;">
                                     <tr>
-                                        <td align="center" bgcolor="#7c3aed" height="44" style="background-color:#7c3aed; border-radius:12px; height:44px;">
+                                        <td align="center" bgcolor="#f6850c" height="44" style="background-color:#f6850c; border-radius:22px; height:44px;">
                                             <img src="{{ $icon('mark') }}" width="22" height="22" alt="" style="display:block; width:22px; height:22px;">
                                         </td>
                                     </tr>
@@ -122,21 +127,21 @@
                         <td style="vertical-align:middle;">
                             <p style="margin:0; font-family:{{ $sans }}; font-size:15px; line-height:1.3; font-weight:700; color:#ffffff;">{{ $eventName }}</p>
                             @if ($mastheadKicker !== null)
-                                <p style="margin:3px 0 0; font-family:{{ $sans }}; font-size:11.5px; line-height:1.35; text-transform:uppercase; color:#a78bfa;">{{ $mastheadKicker }}</p>
+                                <p style="margin:3px 0 0; font-family:{{ $sans }}; font-size:11.5px; line-height:1.35; text-transform:uppercase; font-weight:600; color:#f8a449;">{{ $mastheadKicker }}</p>
                             @endif
                         </td>
                     </tr>
                 </table>
 
-                <p class="headline" style="margin:26px 0 0; font-family:{{ $serif }}; font-size:34px; line-height:1.18; font-weight:700; color:#ffffff;">
-                    {{ $headline }}@if ($headlineAccent !== null)<br><span style="color:#b998fb;">{{ $headlineAccent }}</span>@endif
+                <p class="headline" style="margin:26px 0 0; font-family:{{ $display }}; font-size:34px; line-height:1.18; font-weight:700; color:#ffffff;">
+                    {{ $headline }}@if ($headlineAccent !== null)<br><span style="color:#f8a449;">{{ $headlineAccent }}</span>@endif
                 </p>
 
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0 0;">
-                    <tr><td bgcolor="#7c3aed" height="3" width="48" style="background-color:#7c3aed; height:3px; width:48px; line-height:3px; font-size:0; border-radius:2px;">&nbsp;</td></tr>
+                    <tr><td bgcolor="#f6850c" height="3" width="48" style="background-color:#f6850c; height:3px; width:48px; line-height:3px; font-size:0; border-radius:2px;">&nbsp;</td></tr>
                 </table>
 
-                <div class="hero-copy" style="margin:18px 0 0; font-family:{{ $sans }}; font-size:14.5px; line-height:1.65; color:#c9c2dd;">
+                <div class="hero-copy" style="margin:18px 0 0; font-family:{{ $sans }}; font-size:14.5px; line-height:1.65; color:#d6def7;">
                     {!! $bodyHtml !!}
                 </div>
             </td>
@@ -152,13 +157,13 @@
                             <td class="stack" width="{{ $hasCounterfoil ? '54%' : '100%' }}" style="width:{{ $hasCounterfoil ? '54%' : '100%' }}; vertical-align:top; padding-right:{{ $hasCounterfoil ? '24px' : '0' }};">
 
                                 @if ($cardTitle !== null)
-                                    <p style="margin:0; font-family:{{ $sans }}; font-size:11.5px; line-height:1.35; text-transform:uppercase; font-weight:700; color:#7c3aed;">{{ $cardEyebrow }}</p>
-                                    <p style="margin:6px 0 0; font-family:{{ $serif }}; font-size:23px; line-height:1.25; font-weight:700; color:#3d1d7a;">{{ $cardTitle }}</p>
+                                    <p style="margin:0; font-family:{{ $sans }}; font-size:11.5px; line-height:1.35; text-transform:uppercase; font-weight:700; color:#1b4ef5;">{{ $cardEyebrow }}</p>
+                                    <p style="margin:6px 0 0; font-family:{{ $display }}; font-size:23px; line-height:1.25; font-weight:700; color:#08174a;">{{ $cardTitle }}</p>
                                     @if ($cardSubtitle !== null)
                                         <p style="margin:7px 0 0; font-family:{{ $sans }}; font-size:14px; line-height:1.5; color:#6b7280;">{{ $cardSubtitle }}</p>
                                     @endif
                                     <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0 4px;"><tr>
-                                        <td bgcolor="#ede9fe" height="1" width="56" style="background-color:#ede9fe; height:1px; width:56px; line-height:1px; font-size:0;">&nbsp;</td>
+                                        <td bgcolor="#e8edfe" height="1" width="56" style="background-color:#e8edfe; height:1px; width:56px; line-height:1px; font-size:0;">&nbsp;</td>
                                     </tr></table>
                                 @endif
 
@@ -168,14 +173,14 @@
                                             <td width="40" style="width:40px; padding:12px 12px 0 0; vertical-align:top;">
                                                 @if ($icon($fact['icon']) !== null)
                                                     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="38" style="width:38px;"><tr>
-                                                        <td align="center" bgcolor="#f3efff" height="38" style="background-color:#f3efff; border-radius:10px; height:38px;">
+                                                        <td align="center" bgcolor="#e4eafe" height="38" style="background-color:#e4eafe; border-radius:10px; height:38px;">
                                                             <img src="{{ $icon($fact['icon']) }}" width="19" height="19" alt="" style="display:block; width:19px; height:19px;">
                                                         </td>
                                                     </tr></table>
                                                 @endif
                                             </td>
                                             <td style="padding:12px 0 0; vertical-align:top;">
-                                                <p style="margin:0; font-family:{{ $sans }}; font-size:11.5px; line-height:1.35; text-transform:uppercase; font-weight:700; color:#7c3aed;">{{ $fact['label'] }}</p>
+                                                <p style="margin:0; font-family:{{ $sans }}; font-size:11.5px; line-height:1.35; text-transform:uppercase; font-weight:700; color:#1b4ef5;">{{ $fact['label'] }}</p>
                                                 <p style="margin:4px 0 0; font-family:{{ $sans }}; font-size:14.5px; line-height:1.45; font-weight:700; color:#1f2937;">{{ $fact['value'] }}</p>
                                                 @if (($fact['note'] ?? null) !== null)
                                                     <p style="margin:2px 0 0; font-family:{{ $sans }}; font-size:13px; line-height:1.45; color:#9ca3af;">{{ $fact['note'] }}</p>
@@ -188,12 +193,12 @@
 
                             {{-- Counterfoil: the code that admits --}}
                             @if ($hasCounterfoil)
-                            <td class="stack perforation" width="46%" style="width:46%; vertical-align:top; border-left:2px dashed #ded8ef; padding-left:24px;">
-                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #ece8f8; border-radius:14px;">
+                            <td class="stack perforation" width="46%" style="width:46%; vertical-align:top; border-left:2px dashed #d1dcfd; padding-left:24px;">
+                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #d1dcfd; border-radius:14px;">
                                         @if ($ticketId !== null)
                                             <tr>
-                                                <td align="center" bgcolor="#6d28d9" style="background-color:#6d28d9; background-image:linear-gradient(135deg,#7c3aed 0%,#5b21b6 100%); border-radius:13px 13px 0 0; padding:14px 12px 16px;">
-                                                    <p style="margin:0; font-family:{{ $sans }}; font-size:11px; line-height:1.35; text-transform:uppercase; color:#ddd0ff;">{{ $ticketIdLabel }}</p>
+                                                <td align="center" bgcolor="#1b4ef5" style="background-color:#1b4ef5; background-image:linear-gradient(135deg,#1b4ef5 0%,#1338b0 100%); border-radius:13px 13px 0 0; padding:14px 12px 16px;">
+                                                    <p style="margin:0; font-family:{{ $sans }}; font-size:11px; line-height:1.35; text-transform:uppercase; color:#d1dcfd;">{{ $ticketIdLabel }}</p>
                                                     <p style="margin:6px 0 0; font-family:{{ $mono }}; font-size:14px; line-height:1.3; font-weight:700; color:#ffffff; white-space:nowrap;">{{ $ticketId }}</p>
                                                 </td>
                                             </tr>
@@ -213,14 +218,14 @@
                                             <td width="38" style="width:38px; padding-right:12px; vertical-align:top;">
                                                 @if ($icon('ticket') !== null)
                                                     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="38" style="width:38px;"><tr>
-                                                        <td align="center" bgcolor="#f3efff" height="38" style="background-color:#f3efff; border-radius:19px; height:38px;">
+                                                        <td align="center" bgcolor="#e4eafe" height="38" style="background-color:#e4eafe; border-radius:19px; height:38px;">
                                                             <img src="{{ $icon('ticket') }}" width="19" height="19" alt="" style="display:block; width:19px; height:19px;">
                                                         </td>
                                                     </tr></table>
                                                 @endif
                                             </td>
                                             <td style="vertical-align:top;">
-                                                <p style="margin:0; font-family:{{ $sans }}; font-size:11.5px; line-height:1.35; text-transform:uppercase; font-weight:700; color:#7c3aed;">{{ $qrHeading }}</p>
+                                                <p style="margin:0; font-family:{{ $sans }}; font-size:11.5px; line-height:1.35; text-transform:uppercase; font-weight:700; color:#1b4ef5;">{{ $qrHeading }}</p>
                                                 <p style="margin:4px 0 0; font-family:{{ $sans }}; font-size:13px; line-height:1.55; color:#6b7280;">{!! nl2br(e($qrCaption)) !!}</p>
                                             </td>
                                         </tr>
@@ -238,10 +243,10 @@
             {{-- ── Before you travel ────────────────────────────────── --}}
             <tr>
                 <td style="padding:18px 0 0;">
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f2eefc" style="background-color:#f2eefc; border-radius:16px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f4f6fe" style="background-color:#f4f6fe; border-radius:16px;">
                         <tr>
                             @foreach ($notes as $index => $note)
-                                <td class="note-cell" width="25%" align="center" style="width:25%; vertical-align:top; padding:22px 14px 24px; border-left:{{ $index === 0 ? '0' : '1px' }} solid #e6e0f7;">
+                                <td class="note-cell" width="25%" align="center" style="width:25%; vertical-align:top; padding:22px 14px 24px; border-left:{{ $index === 0 ? '0' : '1px' }} solid #e8edfe;">
                                     @if ($icon($note['icon']) !== null)
                                         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="42" style="width:42px; margin:0 auto 10px;"><tr>
                                             <td align="center" bgcolor="#ffffff" height="42" style="background-color:#ffffff; border-radius:21px; height:42px;">
@@ -249,7 +254,7 @@
                                             </td>
                                         </tr></table>
                                     @endif
-                                    <p style="margin:0; font-family:{{ $sans }}; font-size:11.5px; line-height:1.4; text-transform:uppercase; font-weight:700; color:#6d28d9;">{{ $note['label'] }}</p>
+                                    <p style="margin:0; font-family:{{ $sans }}; font-size:11.5px; line-height:1.4; text-transform:uppercase; font-weight:700; color:#1338b0;">{{ $note['label'] }}</p>
                                     <p style="margin:6px 0 0; font-family:{{ $sans }}; font-size:12.5px; line-height:1.6; color:#4b5563;">{!! nl2br(e($note['text'])) !!}</p>
                                 </td>
                             @endforeach
@@ -305,7 +310,7 @@
         @if ($supportLine !== null)
             <tr>
                 <td align="center" style="padding:22px 24px 0;">
-                    <p style="margin:0; font-family:{{ $sans }}; font-size:13.5px; line-height:1.4; font-weight:700; color:#3d1d7a;">{{ $supportHeading }}</p>
+                    <p style="margin:0; font-family:{{ $sans }}; font-size:13.5px; line-height:1.4; font-weight:700; color:#08174a;">{{ $supportHeading }}</p>
                     <p style="margin:5px 0 0; font-family:{{ $sans }}; font-size:13px; line-height:1.6; color:#6b7280;">{{ $supportLine }}</p>
                 </td>
             </tr>
@@ -314,14 +319,19 @@
         {{-- ── Footer ───────────────────────────────────────────────── --}}
         <tr>
             <td style="padding:26px 0 0;">
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#1c1033" style="background-color:#1c1033; border-radius:16px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#08174a" style="background-color:#08174a; border-radius:16px;">
+                    {{-- The site's celebration ribbon (blue → sky → orange), the same
+                         one that runs along its footer; Outlook shows it solid blue. --}}
+                    <tr>
+                        <td colspan="2" bgcolor="#1b4ef5" height="4" style="background-color:#1b4ef5; background-image:linear-gradient(90deg,#1b4ef5 0%,#31b1e5 55%,#f6850c 100%); height:4px; line-height:4px; font-size:0; border-radius:16px 16px 0 0;">&nbsp;</td>
+                    </tr>
                     <tr>
                         <td class="stack gutter" width="58%" style="width:58%; vertical-align:top; padding:24px 26px;">
                             <p style="margin:0; font-family:{{ $sans }}; font-size:14px; line-height:1.35; font-weight:700; color:#ffffff;">{{ $eventName }}</p>
-                            <p style="margin:6px 0 0; font-family:{{ $sans }}; font-size:12px; line-height:1.55; color:#9d94b8;">{{ $footerTagline }}</p>
+                            <p style="margin:6px 0 0; font-family:{{ $sans }}; font-size:12px; line-height:1.55; color:#a3b0c4;">{{ $footerTagline }}</p>
                         </td>
                         <td class="stack gutter" width="42%" style="width:42%; vertical-align:top; padding:24px 26px 24px 0;">
-                            <p style="margin:0; font-family:{{ $sans }}; font-size:12px; line-height:1.6; color:#9d94b8;">&copy; {{ $year }} {{ $eventName }}<br>{{ $rightsLine }}</p>
+                            <p style="margin:0; font-family:{{ $sans }}; font-size:12px; line-height:1.6; color:#a3b0c4;">&copy; {{ $year }} {{ $eventName }}<br>{{ $rightsLine }}</p>
                         </td>
                     </tr>
                 </table>
@@ -330,7 +340,7 @@
 
         <tr>
             <td align="center" style="padding:18px 24px 0;">
-                <p style="margin:0; font-family:{{ $sans }}; font-size:11.5px; line-height:1.7; color:#8b8699;">
+                <p style="margin:0; font-family:{{ $sans }}; font-size:11.5px; line-height:1.7; color:#6b7280;">
                     {!! nl2br(e($footerNote)) !!}<br>
                     {{ $footerAddressLine }}
                 </p>

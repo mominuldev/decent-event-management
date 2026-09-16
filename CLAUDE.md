@@ -633,6 +633,10 @@ Email was real but plain: `MailDriver` handed `notifications.body_rendered` stra
 
 **Not verified:** delivery to a real inbox, and no email client has rendered it — Outlook's Word engine in particular will square the rounded corners and drop the two gradients to their solid `bgcolor` fallbacks, which is why every gradient has one. Rendering was checked by screenshotting the actual mailable output at 600px and inside a real 390px viewport. Note that headless Chrome on macOS clamps its window to ~532px, so a naive `--window-size=390` screenshot silently lays out wider than the shot and looks broken — render inside an iframe to test the breakpoint.
 
+#### The email shell was retinted to the site's v4.1 tokens — 2026-09-16
+
+The public site moved from purple/amber to the school logo's blue/orange on 2026-09-16 (`centennial-celebration/src/app/globals.css`, primary `#1b4ef5`, primary-dark `#1338b0`, accent `#f6850c`, dark `#08174a`, ink `#1f2937`, border `#e8edfe`), and `notification.blade.php` followed it value for value — no section was added or removed. Display type is the sans stack now (the site dropped its serif; `$serif` is gone), the masthead badge is an orange disc with a navy mark and the CTA a 48px pill, both copied from the site's own `QrTicketCard`, and the footer carries the site's 4px blue→sky→orange ribbon along its top edge (solid blue in Outlook, like every gradient here). The icon PNGs in `resources/images/email/` were recoloured in place, alpha preserved (`#1b4ef5`; `mark.png` is `#08174a` because it sits on orange). The Figma file's `Email Template` frame (`202:762`) holds before/after/mobile renders. Verified by rendering the real mailable through the `array` transport at 600px and inside a 390px iframe; `tests/Feature/Notification` 83 passing.
+
 #### Notifications are written in Bangla — 2026-08-21
 
 Every notification this system sends is now Bangla by default, end to end: the template row that is picked, the greeting inside it, and the chrome the email shell renders around it. Bilingual "English · বাংলা" labels are gone from the email — a message is written in one language, the one its reader reads.
