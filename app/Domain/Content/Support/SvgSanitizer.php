@@ -2,13 +2,14 @@
 
 namespace App\Domain\Content\Support;
 
+use App\Domain\Content\Actions\UploadContentMedia;
 use DOMDocument;
 use DOMElement;
 use DOMNode;
 use InvalidArgumentException;
 
 /**
- * The SVG counterpart of the GD re-encode in {@see \App\Domain\Content\Actions\UploadContentMedia}.
+ * The SVG counterpart of the GD re-encode in {@see UploadContentMedia}.
  *
  * A raster upload is made safe by decoding and re-emitting its pixels, so
  * nothing of the original container survives. An SVG has no pixels to
