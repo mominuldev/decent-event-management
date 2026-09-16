@@ -248,7 +248,7 @@ export const BLOCK_SCHEMAS: Record<BlockType, BlockSchema> = {
             { key: 'secondary_label', label: 'Secondary button label', kind: 'text' },
             { key: 'secondary_url', label: 'Secondary button link', kind: 'url' },
             { key: 'countdown_target', label: 'Countdown target', kind: 'text', help: 'ISO 8601 with an offset, e.g. 2027-01-01T09:00:00+06:00. Blank hides the countdown.' },
-            { key: 'image', label: 'Hero artwork', kind: 'url', help: 'Path on the public site, e.g. /images/home/hero/hero-composition.png' },
+            { key: 'image', label: 'Hero artwork', kind: 'image', help: 'Pick from the media library, or type a path the public site ships, e.g. /images/home/hero/hero-composition.png' },
         ],
     },
 

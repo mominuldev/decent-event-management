@@ -108,6 +108,7 @@ Route::prefix('content')->name('content.')->group(function (): void {
     // swallow them and 404 on the failed ULID lookup.
     Route::get('media', [MediaController::class, 'index'])->name('media.index');
     Route::post('media', [MediaController::class, 'store'])->name('media.store');
+    Route::patch('media/{media:ulid}', [MediaController::class, 'update'])->name('media.update');
     Route::delete('media/{media:ulid}', [MediaController::class, 'destroy'])->name('media.destroy');
 
     Route::post('pages/{page:ulid}/status', [PageController::class, 'changeStatus'])->name('pages.status');

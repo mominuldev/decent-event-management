@@ -15,6 +15,10 @@ return new class extends Migration
             $table->string('disk', 32);
             $table->string('path', 255);
             $table->string('original_name', 190)->nullable();
+            // Editor-written description for screen readers, a `field`/`field_bn`
+            // pair like every other CMS string. Only CMS collections ever set it.
+            $table->string('alt_text', 255)->nullable();
+            $table->string('alt_text_bn', 255)->nullable();
             $table->string('mime_type', 100);
             $table->string('extension', 12);
             $table->unsignedInteger('size_bytes');

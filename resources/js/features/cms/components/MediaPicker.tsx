@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ImageIcon, Upload, X } from 'lucide-react';
+import { ImageIcon, Upload, UploadCloud, X } from 'lucide-react';
 import { Button, EmptyState, Input, Label, Skeleton } from '@/components/ui';
 import { Dialog } from '@/components/Dialog';
 import { useToast } from '@/components/Toast';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { cn } from '@/lib/cn';
+import { useFileDrop } from '@/lib/useFileDrop';
 import * as cmsApi from '../api';
 import type { MediaCollection, MediaFile } from '../types';
 
@@ -15,6 +16,11 @@ import type { MediaCollection, MediaFile } from '../types';
  * Upload is a plain multipart POST with no client-side type sniffing: the
  * server decides what a file is from its magic bytes and re-encodes it, so
  * anything we checked here would be advisory at best and misleading at worst.
+ *
+ * The dialog body is also a drop target. It takes one file, because the picker
+ * exists to attach one image and closes as soon as it has it — dropping a
+ * batch belongs in the Media tab, and the toast says so rather than silently
+ * uploading only the first.
  */
 export function MediaPicker({
     open,
@@ -51,10 +57,32 @@ export function MediaPicker({
     });
 
     const canUpload = can('content.manage_media');
+    const { isOver, dropProps } = useFileDrop({
+        onFiles: (files) => {
+            if (files.length > 1) {
+                push('info', 'Drop one image to attach it here. To add several to the library at once, use the Media tab.');
+                return;
+            }
+            uploadMutation.mutate(files[0]);
+        },
+        disabled: !canUpload || uploadMutation.isPending,
+    });
 
     return (
         <Dialog open={open} onClose={onClose} title="Choose an image" className="max-w-3xl">
-            <div className="space-y-4">
+            <div className="relative space-y-4" {...dropProps}>
+                {isOver && (
+                    <div
+                        aria-hidden
+                        className="pointer-events-none absolute -inset-2 z-10 grid place-items-center rounded-2xl border-2 border-dashed border-accent bg-surface/85 backdrop-blur-[2px]"
+                    >
+                        <div className="flex items-center gap-3 rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-accent-fg shadow-[var(--shadow-soft)]">
+                            <UploadCloud size={18} />
+                            Drop to upload and attach
+                        </div>
+                    </div>
+                )}
+
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <div className="w-52">
                         <Label htmlFor="media-collection">Collection</Label>
@@ -104,7 +132,7 @@ export function MediaPicker({
                         <EmptyState
                             icon={<ImageIcon size={22} />}
                             title="No images yet"
-                            description={canUpload ? 'Upload a JPEG, PNG or WebP to get started.' : 'Ask someone with media permissions to upload one.'}
+                            description={canUpload ? 'Upload or drop a JPEG, PNG, WebP or SVG to get started.' : 'Ask someone with media permissions to upload one.'}
                         />
                     )}
 

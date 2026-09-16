@@ -270,6 +270,18 @@ export async function uploadMedia(file: File, collection: MediaCollection = 'con
     });
 }
 
+export interface MediaAltTextPayload {
+    alt_text: string | null;
+    alt_text_bn: string | null;
+}
+
+export async function updateMedia(ulid: string, payload: MediaAltTextPayload): Promise<MediaFile> {
+    return rethrow(async () => {
+        const { data } = await api.patch(`/admin/content/media/${ulid}`, payload);
+        return unwrap<MediaFile>(data);
+    });
+}
+
 export async function deleteMedia(ulid: string): Promise<void> {
     return rethrow(async () => {
         await api.delete(`/admin/content/media/${ulid}`);

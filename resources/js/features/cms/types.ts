@@ -71,6 +71,9 @@ export interface MediaFile {
     ulid: string;
     collection: string;
     original_name: string | null;
+    /** Screen-reader description, EN/BN pair. Null until an editor writes one. */
+    alt_text: string | null;
+    alt_text_bn: string | null;
     mime_type: string;
     extension: string;
     size_bytes: number;

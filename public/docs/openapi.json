@@ -2389,6 +2389,66 @@
                         "bearerAuth": []
                     }
                 ]
+            },
+            "patch": {
+                "tags": [
+                    "CMS Media"
+                ],
+                "summary": "Describe an image in the media library",
+                "description": "Sets the alt text (EN/BN pair). The public API serves it as `alt` on every embedded media object, localised with the usual English fallback, so renderers without a better description of their own have one. The file itself is immutable — replacing the picture is a new upload.",
+                "operationId": "49f20359e9c06b580bf9214e6c39843b",
+                "parameters": [
+                    {
+                        "name": "media",
+                        "in": "path",
+                        "description": "Media ULID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "alt_text": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 255
+                                    },
+                                    "alt_text_bn": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 255
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "The updated media row"
+                    },
+                    "403": {
+                        "description": "Missing content.manage_media permission"
+                    },
+                    "404": {
+                        "description": "Not found, or not a CMS collection"
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
             }
         },
         "/admin/content/menus": {

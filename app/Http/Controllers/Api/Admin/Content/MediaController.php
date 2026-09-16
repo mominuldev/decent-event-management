@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Api\Admin\Content;
 
+use App\Domain\Content\Actions\SaveContentResource;
 use App\Domain\Content\Actions\UploadContentMedia;
 use App\Domain\Content\Models\GalleryItem;
 use App\Domain\Shared\Models\ActivityLog;
 use App\Domain\Shared\Models\MediaFile;
 use App\Http\Concerns\ResolvesRequestContext;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\Content\UpdateMediaRequest;
 use App\Http\Requests\Admin\Content\UploadMediaRequest;
 use App\Http\Resources\MediaFileResource;
 use Illuminate\Http\JsonResponse;
@@ -121,6 +123,57 @@ class MediaController extends Controller
         return (new MediaFileResource($media))
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
+    }
+
+    #[OAT\Patch(
+        path: '/admin/content/media/{media}',
+        summary: 'Describe an image in the media library',
+        description: 'Sets the alt text (EN/BN pair). The public API serves it as `alt` on every embedded media object, localised with the usual English fallback, so renderers without a better description of their own have one. The file itself is immutable — replacing the picture is a new upload.',
+        tags: ['CMS Media'],
+        security: [['bearerAuth' => []]],
+        parameters: [new OAT\PathParameter(name: 'media', description: 'Media ULID', schema: new OAT\Schema(type: 'string'))],
+        requestBody: new OAT\RequestBody(
+            required: true,
+            content: new OAT\JsonContent(
+                properties: [
+                    new OAT\Property(property: 'alt_text', type: 'string', nullable: true, maxLength: 255),
+                    new OAT\Property(property: 'alt_text_bn', type: 'string', nullable: true, maxLength: 255),
+                ]
+            )
+        ),
+        responses: [
+            new OAT\Response(response: 200, description: 'The updated media row'),
+            new OAT\Response(response: 403, description: 'Missing content.manage_media permission'),
+            new OAT\Response(response: 404, description: 'Not found, or not a CMS collection'),
+            new OAT\Response(response: 422, description: 'Validation error'),
+        ]
+    )]
+    public function update(UpdateMediaRequest $request, MediaFile $media, SaveContentResource $saveContentResource): MediaFileResource
+    {
+        // Same scoping as destroy(): a payment proof or ticket PDF shares the
+        // table but is not the content team's to describe.
+        abort_unless(in_array($media->collection, UploadContentMedia::COLLECTIONS, true), Response::HTTP_NOT_FOUND);
+
+        /** @var array<string, mixed> $attributes */
+        $attributes = $request->validated();
+
+        // A blank box is "no alt text", not an alt text of "".
+        foreach (['alt_text', 'alt_text_bn'] as $key) {
+            if (array_key_exists($key, $attributes) && is_string($attributes[$key]) && trim($attributes[$key]) === '') {
+                $attributes[$key] = null;
+            }
+        }
+
+        $saveContentResource->execute(
+            $media,
+            $attributes,
+            $this->actor($request),
+            'media',
+            $request->ip(),
+            $this->requestId($request),
+        );
+
+        return new MediaFileResource($media->refresh());
     }
 
     #[OAT\Delete(

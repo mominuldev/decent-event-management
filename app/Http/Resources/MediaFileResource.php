@@ -26,6 +26,8 @@ class MediaFileResource extends JsonResource
             'ulid' => $this->ulid,
             'collection' => $this->collection,
             'original_name' => $this->original_name,
+            'alt_text' => $this->alt_text,
+            'alt_text_bn' => $this->alt_text_bn,
             'mime_type' => $this->mime_type,
             'extension' => $this->extension,
             'size_bytes' => $this->size_bytes,

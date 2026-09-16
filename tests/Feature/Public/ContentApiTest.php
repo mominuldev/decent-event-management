@@ -456,8 +456,10 @@ class ContentApiTest extends TestCase
             ->assertOk()
             ->json('data.items.0.media');
 
+        // `alt` is editor-written copy, not a storage detail — the point of
+        // this allowlist is that disk, path, checksum and uploader never appear.
         $this->assertSame(
-            ['ulid', 'url', 'mime_type', 'width', 'height'],
+            ['ulid', 'url', 'alt', 'mime_type', 'width', 'height'],
             array_keys($item),
         );
     }

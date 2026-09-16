@@ -27,6 +27,8 @@ class MediaFile extends Model
         'disk',
         'path',
         'original_name',
+        'alt_text',
+        'alt_text_bn',
         'mime_type',
         'extension',
         'size_bytes',
