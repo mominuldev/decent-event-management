@@ -139,6 +139,17 @@ class Ticket extends Model implements ProvidesMailPresentation
     }
 
     /**
+     * The "আমি থাকছি!" share card, rendered by `GenerateTicketAssetsJob` (or
+     * on demand by the confirmation email, whichever runs first).
+     *
+     * @return BelongsTo<MediaFile, $this>
+     */
+    public function shareImage(): BelongsTo
+    {
+        return $this->belongsTo(MediaFile::class, 'share_image_media_id');
+    }
+
+    /**
      * @return HasOne<QrCode, $this>
      */
     public function qrCode(): HasOne

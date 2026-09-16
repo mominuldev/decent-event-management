@@ -40,6 +40,8 @@ class TicketResource extends JsonResource
             'ticket_type' => new TicketTypeResource($this->whenLoaded('ticketType')),
             'qr_code_payload' => $this->whenLoaded('qrCode', fn () => $this->qrCode?->payload),
             'qr_code_image_url' => $this->whenLoaded('qrCode', fn () => $this->qrCode?->image?->temporarySignedUrl()),
+            // The "আমি থাকছি!" share card, once the asset job has drawn it.
+            'share_image_url' => $this->whenLoaded('shareImage', fn () => $this->shareImage?->temporarySignedUrl()),
             'replaces' => new TicketResource($this->whenLoaded('replaces')),
         ];
     }

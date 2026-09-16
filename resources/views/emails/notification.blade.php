@@ -18,9 +18,10 @@
       - A <style> block is additive only (Gmail honours it, some clients
         drop it) — nothing load-bearing lives there except the one
         small-screen breakpoint.
-      - Icons and the QR travel as inline CID parts, not remote URLs: a
-        blocked remote image leaves a broken box where the design was, and
-        a signed URL would expire long before this email is opened.
+      - Icons, the QR and the share card travel as inline CID parts, not
+        remote URLs: a blocked remote image leaves a broken box where the
+        design was, and a signed URL would expire long before this email
+        is opened.
       - This design is committed to light. `color-scheme: light` asks
         clients not to auto-invert, because a scanner reads a dark module
         on a light quiet zone — an inverted QR will not scan at the gate.
@@ -37,6 +38,10 @@
     };
 
     $qrSrc = $qrPng !== null ? $message->embedData($qrPng, 'ticket-qr.png', 'image/png') : null;
+    // One part, inline: every major client lists an inline image among the
+    // message's attachments too, so it is saveable without carrying the
+    // same 300 KB twice.
+    $shareSrc = $shareJpeg !== null ? $message->embedData($shareJpeg, $shareFileName, 'image/jpeg') : null;
     // The counterfoil is the half that identifies the ticket; without a
     // number *and* without a code there is nothing to put in it, so the
     // stub takes the whole card rather than leaving a dangling perforation.
@@ -254,14 +259,42 @@
             </tr>
         @endif
 
+        @if ($shareSrc !== null)
+            {{-- ── Share card ───────────────────────────────────────── --}}
+            <tr>
+                <td style="padding:18px 0 0;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="background-color:#ffffff; border-radius:16px;">
+                        <tr>
+                            <td class="gutter" style="padding:24px 30px 8px;">
+                                <p style="margin:0; font-family:{{ $sans }}; font-size:11.5px; line-height:1.35; text-transform:uppercase; font-weight:700; color:#1b4ef5;">{{ $shareHeading }}</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="gutter" style="padding:0 30px;">
+                                {{-- The card is a fixed 878×713 frame; 540 wide is the shell's
+                                     content width, and the height keeps the ratio so a client
+                                     that lays out before the image loads reserves the space. --}}
+                                <img src="{{ $shareSrc }}" width="540" height="439" alt="{{ $shareAlt }}" style="display:block; width:100%; max-width:540px; height:auto; border-radius:12px;">
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="gutter" style="padding:12px 30px 24px;">
+                                <p style="margin:0; font-family:{{ $sans }}; font-size:13px; line-height:1.6; color:#6b7280;">{{ $shareCaption }}</p>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        @endif
+
         @if ($ctaUrl !== null)
             <tr>
                 <td align="center" style="padding:26px 24px 0;">
                     <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                         <tr>
-                            <td align="center" bgcolor="#6d28d9" style="background-color:#6d28d9; border-radius:10px;">
+                            <td align="center" bgcolor="#1b4ef5" style="background-color:#1b4ef5; border-radius:24px;">
                                 <a href="{{ $ctaUrl }}" target="_blank" rel="noopener"
-                                   style="display:inline-block; padding:15px 32px; font-family:{{ $sans }}; font-size:14.5px; font-weight:700; line-height:1; color:#ffffff; text-decoration:none; border-radius:10px;">{{ $ctaLabel }}</a>
+                                   style="display:inline-block; padding:16px 30px; font-family:{{ $sans }}; font-size:15px; font-weight:600; line-height:1; color:#ffffff; text-decoration:none; border-radius:24px;">{{ $ctaLabel }}</a>
                             </td>
                         </tr>
                     </table>

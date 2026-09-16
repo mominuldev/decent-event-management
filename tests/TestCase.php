@@ -2,8 +2,10 @@
 
 namespace Tests;
 
+use App\Domain\Shared\Services\HtmlToImageRenderer;
 use App\Domain\Shared\Services\HtmlToPdfRenderer;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Tests\Support\FakeImageRenderer;
 use Tests\Support\FakePdfRenderer;
 
 abstract class TestCase extends BaseTestCase
@@ -22,12 +24,24 @@ abstract class TestCase extends BaseTestCase
      */
     protected bool $rendersRealPdfs = false;
 
+    /**
+     * The same switch for the share card, which is drawn by Chrome as a
+     * side effect of issuing a ticket just as the PDF is.
+     *
+     * @see FakeImageRenderer
+     */
+    protected bool $rendersRealImages = false;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         if (! $this->rendersRealPdfs) {
             $this->app->instance(HtmlToPdfRenderer::class, new FakePdfRenderer);
+        }
+
+        if (! $this->rendersRealImages) {
+            $this->app->instance(HtmlToImageRenderer::class, new FakeImageRenderer);
         }
     }
 }

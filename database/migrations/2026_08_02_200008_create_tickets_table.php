@@ -34,6 +34,10 @@ return new class extends Migration
             $table->timestamp('first_admitted_at')->nullable();
             $table->timestamp('last_admitted_at')->nullable();
             $table->foreignId('pdf_media_id')->nullable()->constrained('media_files')->nullOnDelete();
+            // The "আমি থাকছি!" share card (2026-09-16) — rendered off the
+            // issuance transaction like the PDF, and outside $fillable for
+            // the same reason.
+            $table->foreignId('share_image_media_id')->nullable()->constrained('media_files')->nullOnDelete();
             $table->unsignedInteger('manifest_version')->default(1);
             $table->timestamps();
 

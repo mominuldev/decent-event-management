@@ -1,12 +1,19 @@
-# Bundled PDF fonts
+# Bundled rendering fonts
 
-Used only by PDF rendering (`config/pdf.php`, `HtmlToPdfRenderer::fontFaceCss()`),
-never by the admin SPA — Vite does not touch this directory.
+Used only by headless-Chrome rendering (`config/pdf.php`,
+`HtmlToPdfRenderer::fontFaceCss()`) — the ticket and directory PDFs and the
+"আমি থাকছি!" share card — never by the admin SPA; Vite does not touch this
+directory.
 
-| File | Family | Licence |
-|---|---|---|
-| `NotoSans.ttf` | Noto Sans (variable, `wdth`/`wght`) | SIL Open Font License 1.1 — see `OFL.txt` |
-| `NotoSansBengali.ttf` | Noto Sans Bengali (variable, `wdth`/`wght`) | SIL Open Font License 1.1 — see `OFL.txt` |
+| File | Family | Used by | Licence |
+|---|---|---|---|
+| `NotoSans.ttf` | Noto Sans (variable, `wdth`/`wght`) | PDFs | SIL Open Font License 1.1 — see `OFL.txt` |
+| `NotoSansBengali.ttf` | Noto Sans Bengali (variable, `wdth`/`wght`) | PDFs | SIL Open Font License 1.1 — see `OFL.txt` |
+| `NotoSerifBengali.ttf` | Noto Serif Bengali (variable, `wdth`/`wght`) | share card | SIL Open Font License 1.1 — see `OFL.txt` |
+| `JetBrainsMono.ttf` | JetBrains Mono (variable, `wght`) | share card (registration number) | SIL Open Font License 1.1 — see `OFL.txt` |
+
+The share card's two faces are the ones its Figma frame is set in
+("Event Ticket — v7", node 227:731); they are not substitutes.
 
 **Why bundled rather than installed into the image.** A ticket is printed and
 checked at a gate, so it must look the same on a developer's machine and in

@@ -5,10 +5,12 @@ namespace App\Domain\Ticketing\Services;
 use App\Domain\Notification\Mail\MailPresentation;
 use App\Domain\Shared\Models\EventSetting;
 use App\Domain\Shared\Support\BanglaNumerals;
+use App\Domain\Ticketing\Actions\ResendTicketNotification;
 use App\Domain\Ticketing\Models\Ticket;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
@@ -32,7 +34,10 @@ use Throwable;
  */
 class TicketMailPresentation
 {
-    public function __construct(private readonly RenderTicketQrImage $qrImage) {}
+    public function __construct(
+        private readonly RenderTicketQrImage $qrImage,
+        private readonly TicketShareCard $shareCard,
+    ) {}
 
     public function for(Ticket $ticket): MailPresentation
     {
@@ -58,7 +63,49 @@ class TicketMailPresentation
             ctaUrl: $this->registrationUrl($ticket),
             ctaLabel: $this->line('cta'),
             footerNote: $this->line('footer_note'),
+            shareJpeg: $this->shareJpeg($ticket),
+            shareFileName: $this->shareCard->fileName($ticket),
+            shareHeading: $this->line('share.heading'),
+            shareCaption: $this->line('share.caption'),
+            shareAlt: $this->line('share.alt', ['name' => $this->holderName($ticket)]),
         );
+    }
+
+    /**
+     * The "আমি থাকছি!" card — stored by the asset job if it has run, drawn
+     * now if it has not (and stored, so the job finds it).
+     *
+     * Best-effort, unlike the QR. The QR *is* the ticket, so failing to
+     * resolve it fails the send; the card is a picture to post, and a host
+     * without Chromium must not lose every confirmation email over it. The
+     * failure is logged so it is not silent, and the email goes out
+     * without the section.
+     */
+    private function shareJpeg(Ticket $ticket): ?string
+    {
+        if (! $this->isResendable($ticket)) {
+            return null;
+        }
+
+        try {
+            return $this->shareCard->bytes($ticket);
+        } catch (Throwable $e) {
+            Log::warning('Ticket share card could not be rendered; sending the confirmation without it.', [
+                'ticket' => $ticket->ticket_number,
+                'reason' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
+     * A ticket voided between issuance and the outbox draining still gets
+     * its queued email; an "I'm in!" card beside it would be a lie.
+     */
+    private function isResendable(Ticket $ticket): bool
+    {
+        return in_array($ticket->status, ResendTicketNotification::RESENDABLE_STATUSES, true);
     }
 
     /**

@@ -9,6 +9,8 @@ use App\Domain\Ticketing\Actions\IssueTicket;
 use App\Domain\Ticketing\Models\TicketType;
 use App\Domain\Ticketing\Services\GenerateTicketPdf;
 use App\Domain\Ticketing\Services\RenderTicketQrImage;
+use App\Domain\Ticketing\Services\TicketAssetStore;
+use App\Domain\Ticketing\Services\TicketShareCard;
 use App\Jobs\GenerateTicketAssetsJob;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Process;
@@ -70,6 +72,8 @@ class GenerateTicketAssetsJobTest extends TestCase
         (new GenerateTicketAssetsJob($ticket->id))->handle(
             app(RenderTicketQrImage::class),
             app(GenerateTicketPdf::class),
+            app(TicketAssetStore::class),
+            app(TicketShareCard::class),
         );
 
         $ticket->refresh();

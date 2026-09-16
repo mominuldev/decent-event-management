@@ -60,7 +60,7 @@ return [
     | container base image's font package set is not something to leave to
     | chance on a document that gets printed and checked at a gate.
     |
-    | Both are variable fonts: one file carries every weight, so bold Bangla
+    | All are variable fonts: one file carries every weight, so bold Bangla
     | works. That is the second defect this replaces — mpdf's bundled
     | FreeSerifBold.ttf has zero Bengali coverage, so bold Bangla did not
     | degrade, it vanished from the page.
@@ -70,6 +70,11 @@ return [
     'fonts' => [
         'latin' => 'fonts/NotoSans.ttf',
         'bengali' => 'fonts/NotoSansBengali.ttf',
+        // The share card's faces (resources/views/tickets/share-card.blade.php),
+        // read off its Figma frame: a serif Bengali for the copy and a
+        // monospace for the registration number.
+        'bengali_serif' => 'fonts/NotoSerifBengali.ttf',
+        'mono' => 'fonts/JetBrainsMono.ttf',
     ],
 
 ];

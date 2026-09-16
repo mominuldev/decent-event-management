@@ -176,6 +176,7 @@ class TicketController extends Controller
                             new OAT\Property(property: 'ticket_type', type: 'object', description: 'Ticket type this ticket belongs to (see Ticket Types schema)'),
                             new OAT\Property(property: 'qr_code_payload', type: 'string', nullable: true, description: 'Signed QR payload, when loaded'),
                             new OAT\Property(property: 'qr_code_image_url', type: 'string', nullable: true, description: 'Short-TTL signed URL for the rendered QR PNG, when generated'),
+                            new OAT\Property(property: 'share_image_url', type: 'string', nullable: true, description: 'Short-TTL signed URL for the "আমি থাকছি!" share card JPEG, when generated'),
                             new OAT\Property(property: 'replaces', type: 'object', nullable: true, description: 'The ticket this one replaced via reissue, if any'),
                         ]
                     )
@@ -189,7 +190,7 @@ class TicketController extends Controller
     {
         abort_unless((bool) $request->user()?->can('ticket.view'), Response::HTTP_FORBIDDEN);
 
-        $ticket->load(['registration', 'attendee', 'ticketType', 'qrCode.image', 'checkIns']);
+        $ticket->load(['registration', 'attendee', 'ticketType', 'qrCode.image', 'shareImage', 'checkIns']);
 
         return new TicketResource($ticket);
     }

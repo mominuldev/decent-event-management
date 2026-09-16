@@ -42,6 +42,12 @@ return [
         'keep' => ['label' => 'Keep this email', 'text' => 'The code above is the ticket itself.'],
     ],
 
+    'share' => [
+        'heading' => "Tell your friends — I'm in!",
+        'caption' => 'Press and hold the picture to save it, then post it on Facebook or WhatsApp. It carries no QR code, so it is safe to share.',
+        'alt' => ':name\'s "I\'m in!" card',
+    ],
+
     'cta' => 'View your registration',
     'cta_generic' => 'Open your registration',
 

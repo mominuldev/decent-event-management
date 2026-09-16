@@ -52,6 +52,9 @@ class TicketController extends Controller
                             new OAT\Property(property: 'last_admitted_at', type: 'string', format: 'date-time', nullable: true),
                             new OAT\Property(property: 'manifest_version', nullable: true),
                             new OAT\Property(property: 'created_at', type: 'string', format: 'date-time', nullable: true),
+                            new OAT\Property(property: 'qr_code_payload', type: 'string', nullable: true, description: 'Signed QR payload'),
+                            new OAT\Property(property: 'qr_code_image_url', type: 'string', nullable: true, description: 'Short-TTL signed URL for the rendered QR PNG, when generated'),
+                            new OAT\Property(property: 'share_image_url', type: 'string', nullable: true, description: 'Short-TTL signed URL for the "আমি থাকছি!" share card JPEG, when generated'),
                         ]
                     )
                 )
@@ -83,7 +86,7 @@ class TicketController extends Controller
             ], 404);
         }
 
-        $ticket->load(['ticketType', 'qrCode.image', 'registration']);
+        $ticket->load(['ticketType', 'qrCode.image', 'registration', 'shareImage']);
 
         return new TicketResource($ticket);
     }

@@ -7729,6 +7729,11 @@
                                             "type": "string",
                                             "nullable": true
                                         },
+                                        "share_image_url": {
+                                            "description": "Short-TTL signed URL for the \"আমি থাকছি!\" share card JPEG, when generated",
+                                            "type": "string",
+                                            "nullable": true
+                                        },
                                         "replaces": {
                                             "description": "The ticket this one replaced via reissue, if any",
                                             "type": "object",
@@ -10686,6 +10691,21 @@
                                         "created_at": {
                                             "type": "string",
                                             "format": "date-time",
+                                            "nullable": true
+                                        },
+                                        "qr_code_payload": {
+                                            "description": "Signed QR payload",
+                                            "type": "string",
+                                            "nullable": true
+                                        },
+                                        "qr_code_image_url": {
+                                            "description": "Short-TTL signed URL for the rendered QR PNG, when generated",
+                                            "type": "string",
+                                            "nullable": true
+                                        },
+                                        "share_image_url": {
+                                            "description": "Short-TTL signed URL for the \"আমি থাকছি!\" share card JPEG, when generated",
+                                            "type": "string",
                                             "nullable": true
                                         }
                                     },

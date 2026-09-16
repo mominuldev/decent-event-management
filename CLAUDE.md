@@ -2151,6 +2151,113 @@ fields stored; the admin edit changed them to `C`/`08`; a 17-character roll answ
 Probe rows removed, CEN counters restored, token revoked. **The two new pages are not
 checked in a browser** (no driver here) — typecheck and build only.
 
+### ✅ The ticket confirmation carries an "আমি থাকছি!" share card — 2026-09-16
+
+Every ticket confirmation email now carries a second picture beside the QR: an
+878×713 **share card** drawn from the registration — the holder's name, who they
+are ("প্রাক্তন শিক্ষার্থী, এসএসসি ব্যাচ ১৯৯৮। পরিবারসহ ৩ জন।"), the batch
+year and party size on the stub, the registration number, and the event's date,
+time and venue — for the attendee to post on Facebook or WhatsApp. Built to the
+Figma frame **"Event Ticket — v7"** (Centennial Celebration — Home Page, node
+`227:731`); every dimension, colour and weight in
+`resources/views/tickets/share-card.blade.php` is read off that frame.
+
+**It is drawn by headless Chrome, like the PDFs, and for the same reason.** GD
+cannot shape Bangla at all, and the card is mostly Bangla in a serif face. So:
+
+- `App\Domain\Shared\Services\HtmlToImageRenderer` is the bitmap sibling of
+  `HtmlToPdfRenderer` — `--screenshot` at a fixed `--window-size` and
+  `--force-device-scale-factor=2`, so the frame comes out pixel-for-pixel at
+  1756×1426. What the two shared (binary lookup, the flags that matter, the
+  working directory) moved into `HeadlessChrome` rather than being copied;
+  `HtmlToPdfRenderer` keeps its no-argument constructor because
+  `FakePdfRenderer` extends it that way.
+- **Two more bundled fonts**, `resources/fonts/NotoSerifBengali.ttf` and
+  `JetBrainsMono.ttf` (both OFL, both variable), registered in `config/pdf.php`
+  and `fontFaceCss()` — which is now the one registry for every face; declaring
+  one costs nothing until a rule uses it.
+- **The card is a JPEG, not a PNG.** Chrome's PNG measured **870 KB** at 2×; the
+  same pixels re-encoded through GD at quality 90 measure **~300 KB**, on a
+  message sent 12,000 times and opened on mobile data. The card is opaque, so
+  no alpha is lost.
+- The assets the frame references travel with the repo:
+  `resources/images/share/school-wordmark.svg` is the public site's own
+  `logo.svg` (the same artwork the Figma frame crops from a raster, but vector),
+  and `centenary-logo.png` is the frame's round logo cropped to its content.
+  The die-cut ticket outline is the frame's own path, used as a `clip-path` on
+  the paper and stub layers and inline as SVG where a clipped div cannot do the
+  job — the soft shadow, which has to follow the notches, and the ghost
+  ticket's hairline inner stroke.
+
+**Two callers race for it, and `TicketShareCard::ensureStored()` is what makes
+them agree.** `GenerateTicketAssetsJob` draws it on the `tickets` lane as a third
+asset (`tickets.share_image_media_id`, collection `ticket_share_card`, outside
+`$fillable` like `pdf_media_id`), while the confirmation email drains on
+`notifications` — and the email is usually first. Whichever runs first renders
+and stores; the other finds the row. Losing the race *after* rendering costs one
+discarded render, never a duplicate row, because the ticket is re-read
+`lockForUpdate()` before anything is written. `TicketAssetStore` is the one
+writer of the three media rows (the job's private `storeMedia()` moved there).
+
+**Unlike the QR, the card is best-effort.** `MailDriver` fails the send when the
+QR cannot be resolved, because the QR *is* the ticket. `TicketMailPresentation::shareJpeg()`
+catches a render failure, logs a warning naming the ticket, and sends the email
+without the section — so a host with no Chromium (docs/09 §7: the Hostinger plan
+has none) does not lose every confirmation email over a picture.
+`test_a_card_that_cannot_be_drawn_does_not_stop_the_email` pins it. A ticket
+outside `ResendTicketNotification::RESENDABLE_STATUSES` gets no card either: a
+voided ticket's queued email must not say "I'm in".
+
+- **It travels as one inline CID part** (`ami-thakchi-{ticket_number}.jpg`), not
+  an attachment as well — every major client lists an inline image among the
+  message's attachments, so it is saveable without carrying 300 KB twice. The
+  shell's new section sits between the notes strip and the CTA: heading, the
+  card at the shell's 540px content width, and a caption saying to press and
+  hold to save it, and that it carries no QR and is safe to share.
+- **Language follows the email channel** (`notifications.locales.email`, Bangla
+  by default), resolved inside `TicketShareCard::html()` rather than from the
+  worker's app locale. Campaign copy — the shout, the kicker, the headline, the
+  invitation, the organiser line, the participant-type labels — lives in
+  `lang/{bn,en}/share_card.php`; everything else is read off the ticket. Dates
+  and times go through Carbon's `bn` locale and `BanglaNumerals`, so a session
+  at 08:00 reads "সকাল ৮:০০" with "রাত ১০:০০ পর্যন্ত" beneath it.
+- **Event facts resolve through `EventSettingCatalogue`**, so a key nobody has
+  saved yet answers with its configured default — the same value the Settings
+  screen shows — rather than leaving the date and venue off the card. (The email
+  presentation still reads the raw row; not changed here.) A session supplies
+  date, time and venue; without one the card shows `event.date` and
+  `event.venue`, and the time column is dropped rather than invented.
+- A holder with no batch year — a teacher, a guardian — gets "পরিচয়" and their
+  participant type on the stub where the batch would be, at a smaller size; a
+  party of one gets only the first sentence of the about line.
+- `share_image_url` (a 15-minute signed URL) is on `TicketResource`, loaded by
+  the attendee's own `GET /attendee/tickets/{ticket}` and the admin show
+  endpoint, so the dashboard can offer the card later.
+- **Tests do not render it unless they ask to.** `Tests\TestCase` binds
+  `FakeImageRenderer` over `HtmlToImageRenderer` (a real 4×4 PNG, so the JPEG
+  re-encode, the media row and the CID part all run) unless a class sets
+  `protected bool $rendersRealImages = true`; only `TicketShareCardRenderTest`
+  does, asserting the 1756×1426 size and that the backdrop and paper are
+  painted. 10 tests in `TicketShareCardTest` cover the content, the race, the
+  email part, the failure path and the voided case without Chrome.
+- **Column added to the create-table migration**, per the 2026-09-16 fold; the
+  dev database got it by hand. Any other database that predates this needs
+  `ALTER TABLE tickets ADD share_image_media_id BIGINT UNSIGNED NULL` with the FK
+  to `media_files`.
+
+**Verified against real data**, not only tests: the card rendered for the dev
+box's latest ticket in 6.4s (first Chrome start; ~2.5s after), 311 KB, and the
+real mailable built through the `array` transport — nothing sent — carried the
+QR PNG (3.5 KB) and the card JPEG (328 KB) as inline parts with the new section
+rendering between the notes and the CTA.
+
+**Still open:** no email client has rendered the section (same caveat as the
+shell itself); the public site's registration page does not yet offer the card
+for download, though `share_image_url` is there for it; and a Chrome render at
+send time on the `notifications` lane costs ~2.5s per email when the asset job
+has not won the race, which is fine at registration pace and worth watching in
+a bulk resend.
+
 ### 🚨 External Dependencies (start during Phase 2!)
 - [ ] **PayStation live merchant account** — the only gateway relationship now needed. Sandbox is self-service (credentials are published in their docs and are already the defaults here), so nothing is blocked until go-live; what is needed is a live `PAYSTATION_MERCHANT_ID`/`PAYSTATION_MERCHANT_PASSWORD` plus the IPN URL registered in their dashboard. See [§PayStation replaces SSLCommerz](#-paystation-replaces-sslcommerz--2026-09-10).
 - [ ] ~~Payment gateway merchant applications (bKash, Nagad, Rocket, SSLCommerz)~~ — **no longer on the critical path** (2026-09-10). PayStation aggregates all of these on one hosted checkout, so direct adapters are now an optional optimisation rather than a prerequisite for launch.

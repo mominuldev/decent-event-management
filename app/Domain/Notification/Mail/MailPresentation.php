@@ -6,9 +6,10 @@ use App\Domain\Notification\Channels\MailDriver;
 
 /**
  * What a notifiable contributes to the chrome of its own email — the
- * headline, the ticket card, the QR panel, the notes strip and the call
- * to action that `resources/views/emails/notification.blade.php` renders
- * around the editable template copy.
+ * headline, the ticket card, the QR panel, the notes strip, the share
+ * card and the call to action that
+ * `resources/views/emails/notification.blade.php` renders around the
+ * editable template copy.
  *
  * It exists so {@see MailDriver} stays
  * provider- and domain-agnostic: the driver asks the notifiable for one
@@ -48,6 +49,11 @@ final class MailPresentation
      * @param  string|null  $ticketId  the identifier itself, in monospace
      * @param  array<int, array{icon: string, label: string, value: string, note?: string|null}>  $facts
      * @param  array<int, array{icon: string, label: string, text: string}>  $notes
+     * @param  string|null  $shareJpeg  the "আমি থাকছি!" card, raw JPEG bytes, embedded as a CID part
+     * @param  string|null  $shareFileName  what a client names it when the reader saves it
+     * @param  string|null  $shareHeading  the line above the card
+     * @param  string|null  $shareCaption  how to save and post it
+     * @param  string|null  $shareAlt  what a client with images blocked shows instead
      */
     public function __construct(
         public readonly ?string $headline = null,
@@ -67,6 +73,11 @@ final class MailPresentation
         public readonly ?string $ctaUrl = null,
         public readonly ?string $ctaLabel = null,
         public readonly ?string $footerNote = null,
+        public readonly ?string $shareJpeg = null,
+        public readonly ?string $shareFileName = null,
+        public readonly ?string $shareHeading = null,
+        public readonly ?string $shareCaption = null,
+        public readonly ?string $shareAlt = null,
     ) {}
 
     /**

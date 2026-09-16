@@ -81,6 +81,12 @@ class NotificationMail extends Mailable
                 'notes' => $this->presentation->notes ?? [],
                 'icons' => $this->icons(),
 
+                'shareJpeg' => $this->presentation?->shareJpeg,
+                'shareFileName' => $this->presentation->shareFileName ?? 'share-card.jpg',
+                'shareHeading' => $this->presentation?->shareHeading,
+                'shareCaption' => $this->presentation?->shareCaption,
+                'shareAlt' => $this->presentation->shareAlt ?? '',
+
                 'ctaUrl' => $this->presentation?->ctaUrl,
                 'ctaLabel' => $this->presentation->ctaLabel ?? __('emails.cta_generic'),
 

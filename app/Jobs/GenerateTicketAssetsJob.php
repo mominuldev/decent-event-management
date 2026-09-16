@@ -2,34 +2,32 @@
 
 namespace App\Jobs;
 
-use App\Domain\Shared\Models\MediaFile;
 use App\Domain\Ticketing\Models\Ticket;
 use App\Domain\Ticketing\Services\GenerateTicketPdf;
 use App\Domain\Ticketing\Services\RenderTicketQrImage;
+use App\Domain\Ticketing\Services\TicketAssetStore;
+use App\Domain\Ticketing\Services\TicketShareCard;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 /**
  * The first job dispatched on the `tickets` Horizon lane (docs/08 Phase
- * 6). Renders the QR PNG and the bilingual A5 PDF for a freshly-issued
- * ticket and stores both as private `media_files` rows — kept off the
- * request/transaction path per the architecture rule that PDF/QR
- * rendering is async work (CLAUDE.md "Layering within a module").
+ * 6). Renders the QR PNG, the bilingual A5 PDF and the "আমি থাকছি!" share
+ * card for a freshly-issued ticket and stores all three as private
+ * `media_files` rows — kept off the request/transaction path per the
+ * architecture rule that PDF/QR rendering is async work (CLAUDE.md
+ * "Layering within a module").
  *
- * Idempotent by construction: both halves no-op once their media id is
+ * Idempotent by construction: every part no-ops once its media id is
  * already set, so a retry or an accidental double-dispatch never creates
  * duplicate media rows.
  */
 class GenerateTicketAssetsJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
-
-    private const string DISK = 'local';
 
     public int $tries = 3;
 
@@ -38,8 +36,12 @@ class GenerateTicketAssetsJob implements ShouldQueue
         $this->onQueue('tickets');
     }
 
-    public function handle(RenderTicketQrImage $qrImageRenderer, GenerateTicketPdf $pdfRenderer): void
-    {
+    public function handle(
+        RenderTicketQrImage $qrImageRenderer,
+        GenerateTicketPdf $pdfRenderer,
+        TicketAssetStore $store,
+        TicketShareCard $shareCard,
+    ): void {
         $ticket = Ticket::find($this->ticketId);
 
         if ($ticket === null) {
@@ -51,7 +53,7 @@ class GenerateTicketAssetsJob implements ShouldQueue
 
         if ($qrCode !== null && $qrCode->image_media_id === null) {
             $png = $qrImageRenderer->render($qrCode->payload);
-            $media = $this->storeMedia(
+            $media = $store->put(
                 binary: $png,
                 collection: 'ticket_qr',
                 mimeType: 'image/png',
@@ -66,7 +68,7 @@ class GenerateTicketAssetsJob implements ShouldQueue
 
         if ($ticket->pdf_media_id === null) {
             $pdf = $pdfRenderer->render($ticket);
-            $media = $this->storeMedia(
+            $media = $store->put(
                 binary: $pdf,
                 collection: 'ticket_pdf',
                 mimeType: 'application/pdf',
@@ -77,32 +79,10 @@ class GenerateTicketAssetsJob implements ShouldQueue
             // it out of reach of any request-driven ticket write.
             $ticket->forceFill(['pdf_media_id' => $media->id])->save();
         }
-    }
 
-    private function storeMedia(string $binary, string $collection, string $mimeType, string $extension, string $originalName): MediaFile
-    {
-        $path = "{$collection}/".Str::lower((string) Str::ulid()).".{$extension}";
-
-        Storage::disk(self::DISK)->put($path, $binary);
-
-        $size = getimagesizefromstring($binary);
-
-        return MediaFile::create([
-            'collection' => $collection,
-            'disk' => self::DISK,
-            'path' => $path,
-            'original_name' => $originalName,
-            'mime_type' => $mimeType,
-            'extension' => $extension,
-            'size_bytes' => strlen($binary),
-            'checksum_sha256' => hash('sha256', $binary),
-            'width' => $size !== false ? $size[0] : null,
-            'height' => $size !== false ? $size[1] : null,
-            'is_public' => false,
-            'scan_status' => 'clean',
-            'scanned_at' => now(),
-            'uploaded_by_type' => 'system',
-            'uploaded_by_id' => null,
-        ]);
+        // The confirmation email may already have drawn and stored this
+        // while the job was queued; `ensureStored()` is what makes the two
+        // paths agree on one row.
+        $shareCard->ensureStored($ticket);
     }
 }
