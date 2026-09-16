@@ -109,25 +109,39 @@ class ContentSeeder extends Seeder
 
     private function seedMenus(): void
     {
-        /** @var array<string, array{name: string, name_bn: string, items: array<int, array{label: string, label_bn: string, slug: string}>}> $menus */
+        // Entries carry a literal `url` rather than a `content_page_id`. The
+        // public site renders every one of these routes as a designed page
+        // (`/history`, `/attendees`, `/frame`...), not through the generic
+        // `[slug]` template, so a page reference would only add a way for the
+        // link to vanish — an unpublished `history` row would drop the header
+        // entry while `/history` itself still rendered. The list mirrors the
+        // frontend's shipped `primaryNav` and `footerColumns`, which are what
+        // render when this menu is unreachable or emptied.
+        /** @var array<string, array{name: string, name_bn: string, items: array<int, array{label: string, label_bn: string, url: string}>}> $menus */
         $menus = [
             'primary' => [
                 'name' => 'Primary navigation',
                 'name_bn' => 'প্রধান মেনু',
                 'items' => [
-                    ['label' => 'Home', 'label_bn' => 'হোম', 'slug' => 'home'],
-                    ['label' => 'About', 'label_bn' => 'পরিচিতি', 'slug' => 'about'],
-                    ['label' => 'Schedule', 'label_bn' => 'সময়সূচি', 'slug' => 'schedule'],
-                    ['label' => 'FAQ', 'label_bn' => 'সাধারণ জিজ্ঞাসা', 'slug' => 'faq'],
-                    ['label' => 'Contact', 'label_bn' => 'যোগাযোগ', 'slug' => 'contact'],
+                    ['label' => 'Home', 'label_bn' => 'হোম', 'url' => '/'],
+                    ['label' => 'Our History', 'label_bn' => 'আমাদের ইতিহাস', 'url' => '/history'],
+                    ['label' => 'Events', 'label_bn' => 'অনুষ্ঠানাবলী', 'url' => '/event'],
+                    ['label' => 'Attendees', 'label_bn' => 'অংশগ্রহণকারী', 'url' => '/attendees'],
+                    ['label' => 'Gallery', 'label_bn' => 'গ্যালারি', 'url' => '/gallery'],
+                    ['label' => 'Souvenir', 'label_bn' => 'স্মরণিকা', 'url' => '/souvenir'],
+                    ['label' => 'Frame', 'label_bn' => 'ফ্রেম', 'url' => '/frame'],
+                    ['label' => 'Contact', 'label_bn' => 'যোগাযোগ', 'url' => '/contact'],
                 ],
             ],
             'footer' => [
                 'name' => 'Footer navigation',
                 'name_bn' => 'ফুটার মেনু',
                 'items' => [
-                    ['label' => 'About', 'label_bn' => 'পরিচিতি', 'slug' => 'about'],
-                    ['label' => 'Contact', 'label_bn' => 'যোগাযোগ', 'slug' => 'contact'],
+                    ['label' => 'Our History', 'label_bn' => 'আমাদের ইতিহাস', 'url' => '/history'],
+                    ['label' => 'Programme Schedule', 'label_bn' => 'অনুষ্ঠানের সূচি', 'url' => '/event'],
+                    ['label' => 'Tickets & Registration', 'label_bn' => 'টিকিট ও নিবন্ধন', 'url' => '/tickets'],
+                    ['label' => 'FAQ', 'label_bn' => 'সাধারণ জিজ্ঞাসা (FAQ)', 'url' => '/faq'],
+                    ['label' => 'Contact Info', 'label_bn' => 'যোগাযোগের ঠিকানা', 'url' => '/contact'],
                 ],
             ],
         ];
@@ -139,14 +153,16 @@ class ContentSeeder extends Seeder
             );
 
             foreach ($menu['items'] as $position => $item) {
-                $page = ContentPage::where('slug', $item['slug'])->first();
-
                 MenuItem::updateOrCreate(
                     ['menu_id' => $model->id, 'position' => $position, 'parent_id' => null],
                     [
                         'label' => $item['label'],
                         'label_bn' => $item['label_bn'],
-                        'content_page_id' => $page?->id,
+                        // Cleared explicitly: a row seeded by the earlier
+                        // page-linked version of this list would otherwise
+                        // keep its reference, which wins over `url`.
+                        'content_page_id' => null,
+                        'url' => $item['url'],
                         'target' => '_self',
                         'is_visible' => true,
                     ]
