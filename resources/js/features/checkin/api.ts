@@ -1,4 +1,4 @@
-import { api, toApiError } from '@/lib/api';
+import { ApiRequestError, api, toApiError } from '@/lib/api';
 import type { PaginatedResponse } from '@/lib/pagination';
 import { unwrap } from '@/lib/pagination';
 import type {
@@ -182,12 +182,16 @@ export async function createVolunteer(payload: VolunteerCreatePayload): Promise<
     }
 }
 
+/**
+ * Throws ApiRequestError rather than a bare Error so the dialog keeps the
+ * per-field `errors` map and can mark the offending control.
+ */
 export async function updateVolunteer(ulid: string, payload: VolunteerUpdatePayload): Promise<Volunteer> {
     try {
         const { data } = await api.patch(`/admin/volunteers/${ulid}`, payload);
         return unwrap<Volunteer>(data);
     } catch (e) {
-        throw new Error(toApiError(e).message);
+        throw new ApiRequestError(e);
     }
 }
 

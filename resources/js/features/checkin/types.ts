@@ -123,6 +123,13 @@ export interface VolunteerCreatePayload {
 }
 
 export interface VolunteerUpdatePayload {
+    /** Account details — written to the linked staff user. */
+    name?: string;
+    email?: string;
+    phone?: string | null;
+    /** Optional reset; omit or null keeps the current password. */
+    password?: string | null;
+    /** Assignment — written to the volunteer profile. */
     team?: string | null;
     shift_starts_at?: string | null;
     shift_ends_at?: string | null;

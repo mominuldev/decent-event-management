@@ -2045,6 +2045,43 @@ admin SPA and `pricing.ts` in the public site are unchanged and still correct.
 - **A re-seed does not reprice an existing database** (the seeder leaves existing rows alone since 2026-08-22), so production still holds whatever it was seeded with — ৳2,500 unless someone has edited it. Reprice it in the admin console (Tickets → Centennial Ticket); the post-sale lock applies if CEN has sold.
 - `CentennialTicketFlowTest` and `AdminCashRegistrationTest` seed the real seeder and assert on its figures, so both moved with it. `CentennialTicketFlowTest` also follows the seeder's `child_free_under_age`, which is now **1** (was 2) — a child aged 1 is billed. ⚠️ The public site's FAQ copy (`centennial-celebration/src/features/ticket-system/config.ts`) still says "children under 2 are free"; it is prose, not read from the API, so it needs a manual edit to match.
 
+### ✅ A volunteer can be edited — 2026-09-16
+
+Reported as "I can't edit the volunteers info". There was nothing to edit with: the
+Volunteers tab offered *Assign gate* and *Revoke* only, and `updateVolunteer()` in
+`features/checkin/api.ts` was dead code nothing called. Behind it, `PATCH
+/admin/volunteers/{ulid}` accepted `team`, the two shift times and `is_active` — and
+nothing else. The person's **name, email and phone live on the linked `users` row**, and no
+endpoint anywhere could change them once a volunteer was created.
+
+- **`UpdateVolunteerRequest` now takes `name`, `email` (unique, ignoring the volunteer's own
+  user), `phone` and an optional `password`**, alongside the four profile fields.
+  `VolunteerController::update()` splits them — user columns to `users`, assignment columns
+  to `volunteer_profiles` — inside one transaction. A blank or null `password` means "keep
+  it": it is never written as an empty credential, and the SPA omits the key when the box is
+  empty rather than sending `''`.
+- **Re-activating a revoked volunteer now actually re-activates them.** Setting `is_active`
+  back to `true` used to leave `revoked_at` set, and `DeviceEnrolmentController` refuses on
+  `isRevoked()` independently of the flag — so the list would have shown *Active* while the
+  device could not enrol. `update()` clears `revoked_at`/`revoked_by_user_id` (via
+  `forceFill()`, both outside `$fillable`) when the flag flips on. The dialog says so beside
+  the switch when the record was revoked.
+- **Fixed in passing — a real 500:** `users.name` is VARCHAR(150) and `StoreVolunteerRequest`
+  validated `max:190`, the same column/rule mismatch the attendee name fields once had. Both
+  requests now say `max:150`, with a test.
+- SPA: a pencil on every row (gated on `volunteer.update`, which Event Manager already holds
+  — no `RbacSeeder` run needed) opens `VolunteerEditDialog`: name, email, phone, new
+  password, team, shift times, and an Active switch in the footer. `updateVolunteer()` throws
+  `ApiRequestError`, so a 422 lands on the field that caused it. The volunteer code is shown
+  and deliberately not editable — it is the identifier devices enrol against.
+- 5 tests added to `VolunteerTest` (account edit, password kept/refused/reset, email
+  uniqueness ignoring self, revocation cleared on re-activate, over-length name is 422).
+  Pint and PHPStan level 8 clean, SPA typecheck + build clean. OpenAPI regenerated (still
+  129 paths — a request-shape change to a documented endpoint).
+- **Verified against the running app**: phone and team edited over HTTP and read back, a
+  151-character name answered 422, the row restored to its original values and the probe
+  token revoked. Not checked in a browser (no driver here).
+
 ### 🚨 External Dependencies (start during Phase 2!)
 - [ ] **PayStation live merchant account** — the only gateway relationship now needed. Sandbox is self-service (credentials are published in their docs and are already the defaults here), so nothing is blocked until go-live; what is needed is a live `PAYSTATION_MERCHANT_ID`/`PAYSTATION_MERCHANT_PASSWORD` plus the IPN URL registered in their dashboard. See [§PayStation replaces SSLCommerz](#-paystation-replaces-sslcommerz--2026-09-10).
 - [ ] ~~Payment gateway merchant applications (bKash, Nagad, Rocket, SSLCommerz)~~ — **no longer on the critical path** (2026-09-10). PayStation aggregates all of these on one hosted checkout, so direct adapters are now an optional optimisation rather than a prerequisite for launch.

@@ -9346,7 +9346,8 @@
                 "tags": [
                     "Volunteers"
                 ],
-                "summary": "Update a volunteer profile",
+                "summary": "Update a volunteer — their account details and their assignment",
+                "description": "name, email, phone and password write to the linked staff account; team, shifts and is_active to the volunteer profile. Setting is_active to true on a revoked volunteer clears the revocation, so the device can enrol again.",
                 "operationId": "a4ccf086cdcd7057818e2ecaf856cc44",
                 "parameters": [
                     {
@@ -9365,6 +9366,27 @@
                         "application/json": {
                             "schema": {
                                 "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "maxLength": 150
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "maxLength": 190
+                                    },
+                                    "phone": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 20
+                                    },
+                                    "password": {
+                                        "description": "Optional reset; omit or send null to keep the current password.",
+                                        "type": "string",
+                                        "format": "password",
+                                        "nullable": true,
+                                        "minLength": 8
+                                    },
                                     "team": {
                                         "type": "string",
                                         "nullable": true

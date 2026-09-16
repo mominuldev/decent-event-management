@@ -171,7 +171,8 @@ class VolunteerController extends Controller
 
     #[OAT\Patch(
         path: '/admin/volunteers/{volunteer}',
-        summary: 'Update a volunteer profile',
+        summary: 'Update a volunteer — their account details and their assignment',
+        description: 'name, email, phone and password write to the linked staff account; team, shifts and is_active to the volunteer profile. Setting is_active to true on a revoked volunteer clears the revocation, so the device can enrol again.',
         tags: ['Volunteers'],
         security: [['bearerAuth' => []]],
         parameters: [
@@ -183,6 +184,10 @@ class VolunteerController extends Controller
                 mediaType: 'application/json',
                 schema: new OAT\Schema(
                     properties: [
+                        new OAT\Property(property: 'name', type: 'string', maxLength: 150),
+                        new OAT\Property(property: 'email', type: 'string', format: 'email', maxLength: 190),
+                        new OAT\Property(property: 'phone', type: 'string', maxLength: 20, nullable: true),
+                        new OAT\Property(property: 'password', type: 'string', format: 'password', minLength: 8, nullable: true, description: 'Optional reset; omit or send null to keep the current password.'),
                         new OAT\Property(property: 'team', type: 'string', nullable: true),
                         new OAT\Property(property: 'shift_starts_at', type: 'string', format: 'date-time', nullable: true),
                         new OAT\Property(property: 'shift_ends_at', type: 'string', format: 'date-time', nullable: true),
@@ -200,10 +205,34 @@ class VolunteerController extends Controller
     )]
     public function update(UpdateVolunteerRequest $request, VolunteerProfile $volunteer): VolunteerResource
     {
+        $volunteer->load('user');
         $oldData = $volunteer->toArray();
         $validated = $request->validated();
 
-        $volunteer->update($validated);
+        // The person lives on users, the assignment on volunteer_profiles.
+        $userData = array_intersect_key($validated, array_flip(['name', 'email', 'phone']));
+        $profileData = array_intersect_key($validated, array_flip(['team', 'shift_starts_at', 'shift_ends_at', 'is_active']));
+
+        // A blank password means "leave it alone" — never an empty credential.
+        if (($validated['password'] ?? null) !== null && $validated['password'] !== '') {
+            $userData['password'] = $validated['password'];
+        }
+
+        DB::transaction(function () use ($volunteer, $userData, $profileData): void {
+            if ($userData !== [] && $volunteer->user !== null) {
+                $volunteer->user->update($userData);
+            }
+
+            $volunteer->update($profileData);
+
+            // Re-activating a revoked volunteer has to clear the revocation too:
+            // DeviceEnrolmentController refuses on isRevoked() independently of
+            // is_active, so a flag flipped on its own would leave them unable to
+            // enrol while the list shows them as Active.
+            if (($profileData['is_active'] ?? false) === true && $volunteer->isRevoked()) {
+                $volunteer->forceFill(['revoked_at' => null, 'revoked_by_user_id' => null])->save();
+            }
+        });
 
         $requestId = substr((string) ($request->header('X-Request-Id') ?? Str::ulid()), 0, 26);
 
@@ -215,12 +244,12 @@ class VolunteerController extends Controller
             'causer_id' => $request->user()?->id,
             'subject_type' => $volunteer->getMorphClass(),
             'subject_id' => $volunteer->id,
-            'properties' => ['old' => $oldData, 'new' => $volunteer->toArray()],
+            'properties' => ['old' => $oldData, 'new' => $volunteer->refresh()->load('user')->toArray()],
             'ip_address' => $request->ip(),
             'request_id' => $requestId,
         ]);
 
-        return new VolunteerResource($volunteer->refresh()->load('user'));
+        return new VolunteerResource($volunteer);
     }
 
     #[OAT\Post(

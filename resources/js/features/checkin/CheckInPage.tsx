@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Ban, Plus, RefreshCw, ShieldAlert, Smartphone, Trash2, UserPlus } from 'lucide-react';
-import { Badge, Button, Card, CardHeader, Input, Label, Select, Skeleton, Textarea, type Tone } from '@/components/ui';
+import { Ban, Pencil, Plus, RefreshCw, ShieldAlert, Smartphone, Trash2, UserPlus } from 'lucide-react';
+import { Badge, Button, Card, CardHeader, Field, Input, Label, Select, Skeleton, Switch, Textarea, type Tone } from '@/components/ui';
 import { Dialog, ConfirmDialog } from '@/components/Dialog';
 import { DataTable } from '@/components/DataTable';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useToast } from '@/components/Toast';
+import { ApiRequestError } from '@/lib/api';
 import { cn, num } from '@/lib/cn';
 import { totalOf } from '@/lib/pagination';
 import * as checkinApi from './api';
@@ -18,6 +19,7 @@ import type {
     GatePayload,
     Volunteer,
     VolunteerCreatePayload,
+    VolunteerUpdatePayload,
 } from './types';
 
 function titleCase(s: string) {
@@ -640,6 +642,139 @@ function VolunteerCreateDialog({ onClose }: { onClose: () => void }) {
     );
 }
 
+/** An ISO timestamp as the `YYYY-MM-DDTHH:mm` a datetime-local input wants, in the browser's zone. */
+function toLocalInput(iso: string | null | undefined): string {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+interface VolunteerEditForm {
+    name: string;
+    email: string;
+    phone: string;
+    password: string;
+    team: string;
+    shift_starts_at: string;
+    shift_ends_at: string;
+    is_active: boolean;
+}
+
+function editFormFor(v: Volunteer): VolunteerEditForm {
+    return {
+        name: v.user?.name ?? '',
+        email: v.user?.email ?? '',
+        phone: v.user?.phone ?? '',
+        password: '',
+        team: v.team ?? '',
+        shift_starts_at: toLocalInput(v.shift_starts_at),
+        shift_ends_at: toLocalInput(v.shift_ends_at),
+        is_active: v.is_active,
+    };
+}
+
+function VolunteerEditDialog({ volunteer, onClose }: { volunteer: Volunteer; onClose: () => void }) {
+    const { push } = useToast();
+    const queryClient = useQueryClient();
+    const [form, setForm] = useState<VolunteerEditForm>(() => editFormFor(volunteer));
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+    const [error, setError] = useState<string | null>(null);
+
+    const set = <K extends keyof VolunteerEditForm>(key: K, value: VolunteerEditForm[K]) => {
+        setForm((f) => ({ ...f, [key]: value }));
+        if (fieldErrors[key]) setFieldErrors((e) => ({ ...e, [key]: '' }));
+    };
+
+    const mutation = useMutation({
+        mutationFn: () => {
+            const payload: VolunteerUpdatePayload = {
+                name: form.name.trim(),
+                email: form.email.trim(),
+                phone: form.phone.trim() || null,
+                team: form.team.trim() || null,
+                shift_starts_at: form.shift_starts_at || null,
+                shift_ends_at: form.shift_ends_at || null,
+                is_active: form.is_active,
+            };
+            // A password field left blank means "keep it" — it is never sent as ''.
+            if (form.password) payload.password = form.password;
+            return checkinApi.updateVolunteer(volunteer.ulid, payload);
+        },
+        onSuccess: () => {
+            push('success', 'Volunteer updated.');
+            void queryClient.invalidateQueries({ queryKey: ['volunteers'] });
+            onClose();
+        },
+        onError: (e: Error) => {
+            const fields = e instanceof ApiRequestError ? e.errors : undefined;
+            if (fields) {
+                setFieldErrors(Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v[0] ?? ''])));
+            }
+            setError(fields ? 'Fix the highlighted fields and save again.' : e.message);
+        },
+    });
+
+    const canSubmit = form.name.trim() !== '' && form.email.trim() !== '' && (form.password === '' || form.password.length >= 8);
+    const wasRevoked = volunteer.revoked_at !== null && !volunteer.is_active;
+
+    return (
+        <Dialog
+            open
+            onClose={onClose}
+            title={`Edit ${volunteer.user?.name ?? volunteer.volunteer_code}`}
+            description={`Volunteer code ${volunteer.volunteer_code} — the code itself cannot be changed.`}
+            className="max-w-lg"
+            footer={
+                <div className="flex w-full items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                        <Switch checked={form.is_active} onChange={(next) => set('is_active', next)} label="Active" />
+                        <span className="text-[12.5px] text-text-muted">
+                            {form.is_active ? 'Active' : 'Inactive'}
+                            {wasRevoked && form.is_active && ' — saving clears the revocation'}
+                        </span>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={onClose} disabled={mutation.isPending}>Cancel</Button>
+                        <Button size="sm" disabled={!canSubmit || mutation.isPending} onClick={() => void mutation.mutateAsync()}>
+                            {mutation.isPending ? 'Saving…' : 'Save changes'}
+                        </Button>
+                    </div>
+                </div>
+            }
+        >
+            <div className="max-h-[65vh] space-y-4 overflow-y-auto pr-1">
+                <div className="grid grid-cols-2 gap-3">
+                    <Field id="ve_name" label="Name" error={fieldErrors.name}>
+                        <Input id="ve_name" value={form.name} aria-invalid={Boolean(fieldErrors.name)} onChange={(e) => set('name', e.target.value)} />
+                    </Field>
+                    <Field id="ve_email" label="Email" error={fieldErrors.email}>
+                        <Input id="ve_email" type="email" value={form.email} aria-invalid={Boolean(fieldErrors.email)} onChange={(e) => set('email', e.target.value)} />
+                    </Field>
+                    <Field id="ve_phone" label="Phone" optional error={fieldErrors.phone}>
+                        <Input id="ve_phone" value={form.phone} aria-invalid={Boolean(fieldErrors.phone)} onChange={(e) => set('phone', e.target.value)} />
+                    </Field>
+                    <Field id="ve_password" label="New password" optional hint="Leave blank to keep the current one." error={fieldErrors.password}>
+                        <Input id="ve_password" type="password" autoComplete="new-password" value={form.password} aria-invalid={Boolean(fieldErrors.password)} onChange={(e) => set('password', e.target.value)} />
+                    </Field>
+                    <Field id="ve_team" label="Team" optional error={fieldErrors.team}>
+                        <Input id="ve_team" value={form.team} aria-invalid={Boolean(fieldErrors.team)} onChange={(e) => set('team', e.target.value)} />
+                    </Field>
+                    <div />
+                    <Field id="ve_shift_start" label="Shift starts" optional error={fieldErrors.shift_starts_at}>
+                        <Input id="ve_shift_start" type="datetime-local" value={form.shift_starts_at} aria-invalid={Boolean(fieldErrors.shift_starts_at)} onChange={(e) => set('shift_starts_at', e.target.value)} />
+                    </Field>
+                    <Field id="ve_shift_end" label="Shift ends" optional error={fieldErrors.shift_ends_at}>
+                        <Input id="ve_shift_end" type="datetime-local" value={form.shift_ends_at} aria-invalid={Boolean(fieldErrors.shift_ends_at)} onChange={(e) => set('shift_ends_at', e.target.value)} />
+                    </Field>
+                </div>
+                {error && <p className="text-[13px] text-critical-fg">{error}</p>}
+            </div>
+        </Dialog>
+    );
+}
+
 function AssignGateDialog({ volunteer, gates, onClose }: { volunteer: Volunteer; gates: Gate[]; onClose: () => void }) {
     const { push } = useToast();
     const queryClient = useQueryClient();
@@ -712,6 +847,7 @@ function VolunteersTab() {
     const [isActive, setIsActive] = useState('');
     const [pageIndex, setPageIndex] = useState(0);
     const [creating, setCreating] = useState(false);
+    const [editing, setEditing] = useState<Volunteer | null>(null);
     const [assigning, setAssigning] = useState<Volunteer | null>(null);
     const [confirmRevoke, setConfirmRevoke] = useState<Volunteer | null>(null);
     const pageSize = 20;
@@ -732,6 +868,7 @@ function VolunteersTab() {
     });
 
     const canCreate = can('volunteer.create');
+    const canUpdate = can('volunteer.update');
     const canAssign = can('volunteer.assign_gate');
     const canRevoke = can('volunteer.revoke_access');
 
@@ -742,6 +879,11 @@ function VolunteersTab() {
             header: '',
             cell: (ctx) => (
                 <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                    {canUpdate && (
+                        <Button variant="ghost" size="sm" aria-label="Edit volunteer" title="Edit" onClick={() => setEditing(ctx.row.original)}>
+                            <Pencil size={14} />
+                        </Button>
+                    )}
                     {canAssign && ctx.row.original.is_active && (
                         <Button variant="ghost" size="sm" onClick={() => setAssigning(ctx.row.original)}>Assign gate</Button>
                     )}
@@ -792,6 +934,7 @@ function VolunteersTab() {
             />
 
             {creating && <VolunteerCreateDialog onClose={() => setCreating(false)} />}
+            {editing && <VolunteerEditDialog volunteer={editing} onClose={() => setEditing(null)} />}
             {assigning && <AssignGateDialog volunteer={assigning} gates={gates ?? []} onClose={() => setAssigning(null)} />}
             {confirmRevoke && (
                 <ConfirmDialog
