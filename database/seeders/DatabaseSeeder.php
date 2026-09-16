@@ -30,6 +30,7 @@ class DatabaseSeeder extends Seeder
             ContactPageSeeder::class,
             SponsorsPageSeeder::class,
             AlumniPageSeeder::class,
+            FooterSeeder::class,
             ContentSeeder::class,
             NotificationTemplateSeeder::class,
             // DummyDataSeeder::class,

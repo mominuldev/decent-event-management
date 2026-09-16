@@ -1,4 +1,4 @@
-import { BarChart3, Bell, CalendarDays, CreditCard, MessageSquare, Palette, ScanLine, Settings2, ShieldCheck, UserPlus, type LucideIcon } from 'lucide-react';
+import { BarChart3, Bell, CalendarDays, Contact, CreditCard, MessageSquare, Palette, ScanLine, Settings2, ShieldCheck, UserPlus, type LucideIcon } from 'lucide-react';
 import { titleCase } from '@/lib/format';
 
 interface GroupMeta {
@@ -18,6 +18,11 @@ const GROUP_META: Record<string, GroupMeta> = {
         label: 'Event',
         description: 'Name, date and venue. These appear on the public website and on every ticket.',
         Icon: CalendarDays,
+    },
+    contact: {
+        label: 'Contact',
+        description: 'The helpline, email, address and social links shown in the public site’s footer and on its Contact page.',
+        Icon: Contact,
     },
     registration: {
         label: 'Registration',
@@ -65,7 +70,7 @@ const GROUP_META: Record<string, GroupMeta> = {
 };
 
 /** Sections render in this order; anything unlisted follows, alphabetically. */
-const GROUP_ORDER = ['event', 'registration', 'payment', 'checkin', 'notification', 'sms', 'report', 'security', 'branding'];
+const GROUP_ORDER = ['event', 'contact', 'registration', 'payment', 'checkin', 'notification', 'sms', 'report', 'security', 'branding'];
 
 export function groupMeta(group: string): GroupMeta {
     return GROUP_META[group] ?? { label: titleCase(group), description: '', Icon: Settings2 };

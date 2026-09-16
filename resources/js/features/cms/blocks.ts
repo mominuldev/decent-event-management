@@ -1273,6 +1273,51 @@ export const BLOCK_SCHEMAS: Record<BlockType, BlockSchema> = {
         media: 'none',
         fields: [],
     },
+
+    // ---------------------------------------------------------------------
+    // Site footer. These live on the `footer` page, which is not a route:
+    // the public site reads its blocks into the footer under every page.
+    // ---------------------------------------------------------------------
+
+    footer_identity: {
+        label: 'Footer identity',
+        description: 'The motto and short paragraph under the logo in the footer.',
+        media: 'none',
+        fields: [
+            { key: 'tagline', label: 'Motto', kind: 'text', help: 'One display line under the logo.' },
+            { key: 'description', label: 'Paragraph', kind: 'textarea', help: 'Two or three sentences; keep it short — it sits beside the link columns.' },
+        ],
+    },
+
+    footer_links: {
+        label: 'Footer link column',
+        description: 'One column of footer links. Add a block per column; the footer shows them in order.',
+        media: 'none',
+        fields: [
+            { key: 'title', label: 'Column heading', kind: 'text' },
+            {
+                key: 'links',
+                label: 'Links',
+                kind: 'repeater',
+                itemLabel: 'link',
+                item: [
+                    { key: 'label', label: 'Label', kind: 'text' },
+                    { key: 'href', label: 'Link', kind: 'url', placeholder: '/history or https://…' },
+                ],
+            },
+        ],
+    },
+
+    footer_credit: {
+        label: 'Footer credit',
+        description: 'The “developed by” line in the footer’s bottom band.',
+        media: 'none',
+        fields: [
+            { key: 'label', label: 'Lead-in', kind: 'text', help: 'e.g. “Developed by”.' },
+            { key: 'name', label: 'Name', kind: 'text' },
+            { key: 'url', label: 'Link', kind: 'url', help: 'Optional — wraps the name in a link when set.' },
+        ],
+    },
 };
 
 /** A stat-row entry, the only structured (non-string) field value we store. */

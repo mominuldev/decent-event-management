@@ -133,6 +133,72 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Contact
+    |--------------------------------------------------------------------------
+    |
+    | The channels the public site shows in its footer and on the Contact
+    | page. These are the *site's* channels; `event.support_*` above are the
+    | ticket-holder help lines printed in emails, and may differ.
+    */
+
+    'contact.phone' => [
+        'group' => 'contact',
+        'type' => 'string',
+        'is_public' => true,
+        'label' => 'Helpline number',
+        'description' => 'Shown in the footer and on the Contact page’s helpline card. Include the country code.',
+        'default' => '+880 1234-567890',
+    ],
+
+    'contact.email' => [
+        'group' => 'contact',
+        'type' => 'string',
+        'is_public' => true,
+        'label' => 'Contact email',
+        'description' => 'Shown in the footer and on the Contact page’s email card.',
+        'default' => 'info@nsbatihighschool.edu.bd',
+    ],
+
+    'contact.address' => [
+        'group' => 'contact',
+        'type' => 'string',
+        'is_public' => true,
+        'label' => 'Address',
+        'description' => 'One line, shown in the footer and on the Contact page’s office card.',
+        'default' => 'চাঁপাইনবাবগঞ্জ সদর, চাঁপাইনবাবগঞ্জ',
+    ],
+
+    // Defaulted empty on purpose: the footer hides a social button whose
+    // link is blank rather than sending visitors to a placeholder.
+    'contact.facebook' => [
+        'group' => 'contact',
+        'type' => 'string',
+        'is_public' => true,
+        'label' => 'Facebook page',
+        'description' => 'Full URL. The footer’s Facebook button appears once this is set.',
+        'default' => '',
+    ],
+
+    'contact.youtube' => [
+        'group' => 'contact',
+        'type' => 'string',
+        'is_public' => true,
+        'label' => 'YouTube channel',
+        'description' => 'Full URL. The footer’s YouTube button appears once this is set.',
+        'default' => '',
+    ],
+
+    'contact.whatsapp' => [
+        'group' => 'contact',
+        'type' => 'string',
+        'is_public' => true,
+        'label' => 'WhatsApp link',
+        'description' => 'A wa.me link, e.g. https://wa.me/8801700000000. The footer’s WhatsApp button appears once this is set.',
+        'default' => '',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Registration
     |--------------------------------------------------------------------------
     */

@@ -53,6 +53,8 @@ export const BLOCK_TYPES = [
     'how_it_works', 'ticket_faq',
     // Attendees-page sections — the directory itself is a live query.
     'attendees_hero', 'attendee_directory',
+    // Site footer — blocks on the `footer` page, rendered under every route.
+    'footer_identity', 'footer_links', 'footer_credit',
 ] as const;
 
 export type BlockType = (typeof BLOCK_TYPES)[number];
