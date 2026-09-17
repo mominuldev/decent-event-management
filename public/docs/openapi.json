@@ -8322,6 +8322,18 @@
                                                         "format": "date-time",
                                                         "nullable": true
                                                     },
+                                                    "registration_opens_at": {
+                                                        "description": "The moment a registration on this type is accepted from: the later of the registration.opens_at setting and sale_starts_at; null when neither is set",
+                                                        "type": "string",
+                                                        "format": "date-time",
+                                                        "nullable": true
+                                                    },
+                                                    "registration_closes_at": {
+                                                        "description": "The moment registration on this type stops being accepted: the earlier of the registration.closes_at setting and sale_ends_at; null when neither is set",
+                                                        "type": "string",
+                                                        "format": "date-time",
+                                                        "nullable": true
+                                                    },
                                                     "is_active": {
                                                         "type": "boolean"
                                                     },
@@ -8642,6 +8654,18 @@
                                             "nullable": true
                                         },
                                         "sale_ends_at": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "nullable": true
+                                        },
+                                        "registration_opens_at": {
+                                            "description": "The moment a registration on this type is accepted from: the later of the registration.opens_at setting and sale_starts_at; null when neither is set",
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "nullable": true
+                                        },
+                                        "registration_closes_at": {
+                                            "description": "The moment registration on this type stops being accepted: the earlier of the registration.closes_at setting and sale_ends_at; null when neither is set",
                                             "type": "string",
                                             "format": "date-time",
                                             "nullable": true
@@ -12789,11 +12813,12 @@
                 "tags": [
                     "Public"
                 ],
-                "summary": "List active, on-sale, publicly visible ticket types",
+                "summary": "List active, publicly visible ticket types whose sale has not ended",
+                "description": "Types whose sale has not opened yet are listed, not hidden. Until\n2026-09-17 the query also required `sale_starts_at <= now()`, which\nmade an organiser-set opening time invisible to the public site: with\nthe row absent, the tickets page could only say \"nothing is on sale\",\nnever \"opens on Friday at 10:00\". The resource carries the window a\nregistration is accepted in (`registration_opens_at`, the organiser's\n`registration.opens_at` setting narrowed by the row's own dates — see\n{@see RegistrationWindow}), so the site reads it from the row and\n{@see CreateRegistration} refuses a purchase ahead of it — listing\nis not selling.\n\nEnded sales stay excluded: there is nothing left to announce. An\nevent-wide `registration.closes_at` that has passed is not filtered\nhere; the row still lists, carrying `registration_closes_at`, and\nthe site says registration has closed.",
                 "operationId": "6d84660b887a6c7ab01b93332defae1b",
                 "responses": {
                     "200": {
-                        "description": "Publicly purchasable ticket type catalogue",
+                        "description": "Public ticket type catalogue. Types whose registration_opens_at is still ahead are included so the site can say when registration opens; only the create endpoint decides whether one is buyable.",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -12883,6 +12908,18 @@
                                                     "sale_ends_at": {
                                                         "type": "string",
                                                         "format": "date-time"
+                                                    },
+                                                    "registration_opens_at": {
+                                                        "description": "The moment a registration on this type is accepted from: the later of the registration.opens_at setting and sale_starts_at; null when neither is set",
+                                                        "type": "string",
+                                                        "format": "date-time",
+                                                        "nullable": true
+                                                    },
+                                                    "registration_closes_at": {
+                                                        "description": "The moment registration on this type stops being accepted: the earlier of the registration.closes_at setting and sale_ends_at; null when neither is set",
+                                                        "type": "string",
+                                                        "format": "date-time",
+                                                        "nullable": true
                                                     },
                                                     "is_active": {
                                                         "type": "boolean"

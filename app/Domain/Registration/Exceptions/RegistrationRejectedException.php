@@ -2,13 +2,14 @@
 
 namespace App\Domain\Registration\Exceptions;
 
+use Carbon\CarbonInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
 
 /**
- * A registration the caller may not make — sold out, or a ticket that is
- * not sold to the participant type they chose.
+ * A registration the caller may not make — sold out, not yet on sale, or
+ * a ticket that is not sold to the participant type they chose.
  *
  * This is caller error, not a server fault, so it must not surface as a
  * 500: the public ticket form shows the API's `message` verbatim, and
@@ -29,6 +30,26 @@ class RegistrationRejectedException extends RuntimeException
     public static function soldOut(): self
     {
         return new self('Tickets are sold out or capacity is full.', 'sold_out');
+    }
+
+    /**
+     * The ticket type is listed but its sale window is not open — either
+     * not yet, in which case the opening moment is named so the reader
+     * knows when to come back, or already closed.
+     */
+    public static function notOnSale(?CarbonInterface $opensAt): self
+    {
+        if ($opensAt !== null && now()->lt($opensAt)) {
+            // Spelled out in Dhaka time, not the UTC the app stores: the
+            // reader is at the school, and "opens at 04:00" for a 10am
+            // launch is a message that sends them away confused.
+            return new self(
+                'Registration for this ticket opens on '.$opensAt->copy()->timezone('Asia/Dhaka')->format('j F Y \a\t g:i A').'.',
+                'not_on_sale',
+            );
+        }
+
+        return new self('Registration for this ticket has closed.', 'not_on_sale');
     }
 
     public static function participantTypeNotAllowed(string $participantType): self

@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Domain\Registration\Support\PartySize;
+use App\Domain\Registration\Support\RegistrationWindow;
 use App\Domain\Ticketing\Models\TicketType;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -50,6 +51,14 @@ class TicketTypeResource extends JsonResource
             'includes_meal' => $this->includes_meal,
             'sale_starts_at' => $this->sale_starts_at?->toISOString(),
             'sale_ends_at' => $this->sale_ends_at?->toISOString(),
+            // The window a registration on this type is actually accepted
+            // in — the event-wide `registration.opens_at` / `closes_at`
+            // settings narrowed by the sale dates above. Published for the
+            // same reason as `max_party_size`: the public site gates its
+            // form on exactly what CreateRegistration will enforce, rather
+            // than re-deriving it from a settings fetch of its own.
+            'registration_opens_at' => RegistrationWindow::opensFor($this->resource)?->toISOString(),
+            'registration_closes_at' => RegistrationWindow::closesFor($this->resource)?->toISOString(),
             'is_active' => $this->is_active,
             'is_public' => $this->is_public,
             'badge_color' => $this->badge_color,

@@ -12,6 +12,7 @@ use App\Domain\Registration\Models\RegistrationGuest;
 use App\Domain\Registration\Support\AttendeeIdentity;
 use App\Domain\Registration\Support\PartySize;
 use App\Domain\Registration\Support\RegistrationContext;
+use App\Domain\Registration\Support\RegistrationWindow;
 use App\Domain\Shared\Models\ActivityLog;
 use App\Domain\Shared\Models\User;
 use App\Domain\Ticketing\Models\TicketType;
@@ -57,8 +58,9 @@ class CreateRegistration
             /** @var array<int, mixed> $guests */
             $guests = isset($data['guests']) && is_array($data['guests']) ? $data['guests'] : [];
 
-            // All four checked before reserving, so a rejected registration
+            // All five checked before reserving, so a rejected registration
             // never holds capacity it is not entitled to.
+            $this->assertOnSale($ticketType, $context);
             $this->assertParticipantTypeAllowed($ticketType, (string) $data['participant_type']);
             $this->assertPartyFits($ticketType, $adultsCount, $childrenCount, $guests);
             $this->assertEmailAvailable($email, $attendee);
@@ -252,6 +254,30 @@ class CreateRegistration
         if (! in_array($participantType, $allowed, true)) {
             throw RegistrationRejectedException::participantTypeNotAllowed($participantType);
         }
+    }
+
+    /**
+     * The public checkout only sells while registration is open for the
+     * type — the organiser's `registration.opens_at` / `closes_at` window,
+     * narrowed by the type's own sale dates ({@see RegistrationWindow}).
+     *
+     * The public catalogue lists a type ahead of its opening so the site
+     * can announce it, which means the ulid is in the page source before
+     * anyone may buy on it — so the window has to be enforced here, at the
+     * one place capacity is taken, not by hiding the row.
+     *
+     * Only the public web context is held to it. A staff member at a desk
+     * registers whoever the organiser has put in front of them — an early
+     * counter sale to a guest of honour is the organiser's call, and the
+     * same override they already have on capacity and pricing.
+     */
+    private function assertOnSale(TicketType $ticketType, RegistrationContext $context): void
+    {
+        if ($context->isCounter() || RegistrationWindow::isOpenFor($ticketType)) {
+            return;
+        }
+
+        throw RegistrationRejectedException::notOnSale(RegistrationWindow::opensFor($ticketType));
     }
 
     /**
