@@ -245,15 +245,15 @@ class TicketsPageSeeder extends Seeder
                     [
                         'question' => self::t('My child is exactly 1 year old. Is the ticket free?', 'আমার সন্তানের বয়স ঠিক ১ বছর। টিকিট কি ফ্রি?'),
                         'answer' => self::t(
-                            "No. The free admission applies to children under 1 year. From the first birthday onwards a child is charged the standard family-member rate, which still includes the T-shirt, meals and the children's activity corner. A free child is still admitted at the gate like everyone else — the discount is on the price, not the seat.",
-                            'না। ১ বছরের কম বয়সী শিশুদের জন্যই বিনামূল্যে প্রবেশ প্রযোজ্য। প্রথম জন্মদিনের পর থেকে একটি শিশুর জন্য স্বাভাবিক পারিবারিক সদস্য হার প্রযোজ্য হয়, যাতে টি-শার্ট, খাবার ও শিশুদের কার্যক্রম কর্নারে প্রবেশ অন্তর্ভুক্ত থাকে। বিনামূল্যের শিশুও সবার মতোই গেটে ভর্তি হয় — ছাড়টি শুধু মূল্যে, আসনে নয়।',
+                            "No. The free admission applies to children under 1 year. From the first birthday onwards a child is charged the standard family-member rate, which includes meals and the children's activity corner. A free child is still admitted at the gate like everyone else — the discount is on the price, not the seat.",
+                            'না। ১ বছরের কম বয়সী শিশুদের জন্যই বিনামূল্যে প্রবেশ প্রযোজ্য। প্রথম জন্মদিনের পর থেকে একটি শিশুর জন্য স্বাভাবিক পারিবারিক সদস্য হার প্রযোজ্য হয়, যাতে খাবার ও শিশুদের কার্যক্রম কর্নারে প্রবেশ অন্তর্ভুক্ত থাকে। বিনামূল্যের শিশুও সবার মতোই গেটে ভর্তি হয় — ছাড়টি শুধু মূল্যে, আসনে নয়।',
                         ),
                     ],
                     [
                         'question' => self::t('How do T-shirt sizes work?', 'টি-শার্টের সাইজ কীভাবে ঠিক হয়?'),
                         'answer' => self::t(
-                            'A commemorative centennial T-shirt is included with every paid seat. Choose your size during registration, and a size for each family member you add — children under 1 receive a keepsake bib instead.',
-                            'প্রতিটি পরিশোধিত আসনের সঙ্গে একটি শতবর্ষ স্মারক টি-শার্ট অন্তর্ভুক্ত। নিবন্ধনের সময় নিজের সাইজ বেছে নিন, এবং সঙ্গে আনা প্রতিটি সদস্যের জন্যও একটি করে — ১ বছরের কম বয়সী শিশুরা টি-শার্টের বদলে একটি স্মারক বিব পাবে।',
+                            'A commemorative centennial T-shirt is included with your own seat — choose your size during registration. Family members you bring do not receive a T-shirt; they get the meals and the keepsake.',
+                            'আপনার নিজের আসনের সঙ্গে একটি শতবর্ষ স্মারক টি-শার্ট অন্তর্ভুক্ত — নিবন্ধনের সময় নিজের সাইজ বেছে নিন। সঙ্গে আনা পরিবারের সদস্যদের জন্য টি-শার্ট নেই; তাঁরা খাবার ও স্মারক পাবেন।',
                         ),
                     ],
                     [
