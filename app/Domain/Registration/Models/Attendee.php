@@ -80,15 +80,13 @@ class Attendee extends AuthUserBase
      * The classes a current student may be in — the school runs six to ten.
      *
      * Stored as a short language-neutral code, each frontend rendering
-     * "Class Nine" / "নবম শ্রেণি" from it. `new_10` is "New Ten" — the
-     * students just promoted into class ten, who the school counts
-     * separately from the SSC candidates already in it. Rows that predate
-     * this list may hold free text ("Class 9, Section B"); those are kept
-     * as recorded and only ever replaced with a value from here.
+     * "Class Nine" / "নবম শ্রেণি" from it. Rows that predate this list may
+     * hold free text ("Class 9, Section B"); those are kept as recorded and
+     * only ever replaced with a value from here.
      *
      * @var list<string>
      */
-    public const CURRENT_CLASSES = ['6', '7', '8', '9', 'new_10', '10'];
+    public const CURRENT_CLASSES = ['6', '7', '8', '9', '10'];
 
     protected $hidden = [
         'auth_token_hash',

@@ -355,7 +355,7 @@ class AttendeeController extends Controller
                             enum: ['current_student', 'former_student', 'teacher', 'staff', 'guardian', 'guest', 'sponsor', 'other']
                         ),
                         new OAT\Property(property: 'ssc_batch_year', type: 'integer', nullable: true),
-                        new OAT\Property(property: 'current_class', type: 'string', enum: ['6', '7', '8', '9', 'new_10', '10'], nullable: true),
+                        new OAT\Property(property: 'current_class', type: 'string', enum: ['6', '7', '8', '9', '10'], nullable: true),
                         new OAT\Property(property: 'current_section', type: 'string', maxLength: 32, nullable: true),
                         new OAT\Property(property: 'current_roll', type: 'string', maxLength: 16, nullable: true),
                         new OAT\Property(property: 'designation', type: 'string', nullable: true, maxLength: 100),

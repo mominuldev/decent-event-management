@@ -380,11 +380,6 @@ class AttendeeAddressAndIdentityFieldsTest extends TestCase
         unset($seven['ssc_batch_year']);
         $this->submit($seven)->assertStatus(201)->assertJsonPath('data.attendee.current_class', '7');
 
-        // "New Ten" — just promoted into class ten — is its own value.
-        $newTen = $this->payload($ticketType, ['participant_type' => 'current_student', 'current_class' => 'new_10', 'current_section' => 'A', 'current_roll' => '12', 'mobile' => '+8801799000001', 'email' => 'newten@example.test']);
-        unset($newTen['ssc_batch_year']);
-        $this->submit($newTen)->assertStatus(201)->assertJsonPath('data.attendee.current_class', 'new_10');
-
         // Nobody else is asked for one.
         $this->submit($this->payload($ticketType, ['mobile' => '+8801799000002', 'email' => 'former@example.test']))
             ->assertStatus(201);

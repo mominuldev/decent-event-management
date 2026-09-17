@@ -91,7 +91,6 @@ export const CURRENT_CLASSES: { value: string; label: string }[] = [
     { value: '7', label: 'Class Seven' },
     { value: '8', label: 'Class Eight' },
     { value: '9', label: 'Class Nine' },
-    { value: 'new_10', label: 'New Ten' },
     { value: '10', label: 'Class Ten' },
 ];
 
