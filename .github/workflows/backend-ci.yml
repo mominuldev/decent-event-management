@@ -595,6 +595,20 @@ jobs:
 
           "$php_bin" artisan storage:link || true
 
+          # storage/ is excluded from the rsync above, so Laravel creates
+          # storage/app itself on the host the first time a disk is written --
+          # and the *private* disk gets there first (its root is
+          # storage/app/private), so the parent comes out 0700. PHP runs as
+          # this user and never notices; the web server's static handler
+          # cannot traverse it, so every public upload under
+          # storage/app/public then fails the .htaccess -f test, falls
+          # through to index.php, and is answered by the CDN's image
+          # optimiser as `422 Invalid source image`. Seen live 2026-09-17.
+          # 755 on the two directories the symlink path crosses is all it
+          # needs; the files inside keep whatever the disk gave them.
+          mkdir -p storage/app/public
+          chmod 755 storage/app storage/app/public
+
           # Clear before re-caching, not just re-cache. config:cache overwrites
           # bootstrap/cache/config.php, but a stale route or view cache from the
           # previous release is not overwritten by anything below -- and a

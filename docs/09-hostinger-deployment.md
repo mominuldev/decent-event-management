@@ -607,7 +607,19 @@ cd ~/domains/100potal.nsbatihighschool.edu.bd/laravel
 mkdir -p storage/app/public storage/app/private \
          storage/framework/{cache/data,sessions,views} storage/logs
 chmod -R 775 storage bootstrap/cache
+```
 
+> **If `storage/app` is missing here, do not let Laravel create it for you.** The private
+> disk's root is `storage/app/private`, so the first upload creates `storage/app` at `0700`
+> — PHP (running as you) never notices, but the web server's static handler cannot traverse
+> it, so every public upload under `storage/app/public` fails the `.htaccess` `-f` test,
+> falls through to `index.php`, and comes back from Hostinger's CDN image optimiser as
+> `422 Invalid source image` while the file sits readable on disk. Signature: `/build/`
+> answers 403 (a real directory) while `/storage/` answers a 301 to `/storage`. Seen live
+> 2026-09-17; the deploy now `chmod 755`s `storage/app` and `storage/app/public` after
+> `storage:link` so it cannot recur.
+
+```bash
 php artisan key:generate            # only if APP_KEY is still blank
 php artisan qr-signing:generate-key --if-missing   # the deploy now does this too; harmless to repeat
 php artisan migrate --force
