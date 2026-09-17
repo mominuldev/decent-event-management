@@ -161,9 +161,11 @@ class TicketsPageSeeder extends Seeder
                 'checklist_heading' => self::t('What you need to register:', 'নিবন্ধনের জন্য প্রয়োজনীয় কাগজপত্র ও তথ্যাদি:'),
                 'checklist_items' => [
                     ['text' => self::t('A recent, clear passport-size colour photo', 'পাসপোর্ট সাইজের সাম্প্রতিক স্পষ্ট রঙিন ছবি')],
-                    ['text' => self::t('National ID (required)', 'জাতীয় পরিচয়পত্র (বাধ্যতামূলক)')],
+                    ['text' => self::t('National ID / Birth Registration Number (optional)', 'জাতীয় পরিচয়পত্র / জন্ম নিবন্ধন নম্বর (ঐচ্ছিক)')],
                     ['text' => self::t('An active mobile number or email address (one is required)', 'সচল মোবাইল নম্বর এবং ইমেইল এড্রেস (মোবাইল নম্বর আবশ্যক)')],
                     ['text' => self::t('Your correct T-shirt size', 'আপনার টি-শার্টের সঠিক মাপ')],
+                    ['text' => self::t('bKash, Nagad or a card ready to pay the registration fee', 'নিবন্ধন ফি পরিশোধের জন্য বিকাশ, নগদ বা কার্ড প্রস্তুত রাখুন')],
+                    ['text' => self::t('Form needs to be filled out in Bengali', 'নিবন্ধন ফর্মটি বাংলায় পূরণ করতে হবে')],
                 ],
                 'video_label' => self::t('How to register? Watch the video tutorial', 'কীভাবে নিবন্ধন করবেন? ভিডিও টিউটোরিয়াল দেখুন'),
                 'video_url' => '',
