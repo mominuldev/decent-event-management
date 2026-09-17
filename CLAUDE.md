@@ -2295,6 +2295,26 @@ The point is control over when QR codes exist in inboxes: the organisers can hol
 
 **Still open:** the public site's registration page says nothing about a ticket arriving later, and the confirmation page copy may still imply the QR is in the inbox; the attendee dashboard shows the QR regardless (it is authenticated), which is fine but worth deciding on if the intent is that nobody sees a QR before release day.
 
+### ✅ Every CMS photo field has the media-library picker, and blocks start collapsed — 2026-09-17
+
+Three block types held their pictures behind plain `url` inputs, so the only way to change one was to paste a path: `history_teaser` (Back/Front photo), `founding_story` (the same pair) and `headmaster_message` (Portrait). All five fields are now `kind: 'image'` in `resources/js/features/cms/blocks.ts` — the same control the `home_hero` artwork has had: a thumbnail, the path input, and a **Library** button that browses or uploads into the `content` collection and writes the file's public URL into the field.
+
+- **The stored value is unchanged** — a string URL in `data`, exactly as before — so the seeded `/images/...` paths, `HomePageSeeder`/`HistoryPageSeeder` and the public site's renderer are untouched. The one behavioural difference is that an `image` field is written to both locales identically, where `url` was per-locale; a photo is not translatable, so that is the right shape (and is what the hero already did).
+- **The audit found nothing else.** Every other picture in the catalogue (`gallery`, `archive_gallery`, `photo_grid`, `guest_carousel` rows) was already `image`; the ~25 remaining `url` fields are genuinely links, and `sponsor_grid`'s logo cards are typographic by design.
+- **Block cards on the page editor now start collapsed** (`BlockCard`'s `defaultCollapsed`, `BlockEditor.tsx`), so a long page reads as an outline of labels with the move/show/delete controls still on the row. The block just *added* opens, because the next thing the editor does is fill it in. The header's bottom border renders only while a card is expanded, so a collapsed card is one clean row.
+
+Typecheck and build clean; not checked in a browser (no driver here).
+
+### 🚨 `storage/app` came out `0700` on the live host and every public upload answered `422 Invalid source image` — 2026-09-17
+
+Reported as uploads failing in the CMS media library with `Invalid source image` while the file was demonstrably on disk. The upload was fine; **serving** it was not, and the error text belongs to Hostinger's CDN image optimiser, not to this application.
+
+**Cause.** `storage/` is excluded from the deploy rsync, so Laravel creates `storage/app` itself the first time a disk is written — and the *private* disk (root `storage/app/private`) gets there first, so the parent is created `0700`. PHP runs as the same user and never notices. The web server's static handler cannot traverse it, so a request for `/storage/<file>` fails `.htaccess`'s `-f` test, falls through to `index.php`, and the CDN in front reports the non-image response as `422 Invalid source image`.
+
+- **The signature, because every instinct points at the upload code:** `/build/` answers **403** (a real, traversable directory) while `/storage/` answers a **301** to `/storage` (the symlink target cannot be entered). The file itself is readable on disk the whole time.
+- **Fixed in the deploy** (`backend-ci.yml`): after `storage:link`, `mkdir -p storage/app/public && chmod 755 storage/app storage/app/public` — the two directories the symlink path crosses, and nothing inside them. docs/09 §6 carries the same note where the directory is first created by hand.
+- The live host was fixed in place with the same `chmod` before the workflow change landed.
+
 ### 🚨 External Dependencies (start during Phase 2!)
 - [ ] **PayStation live merchant account** — the only gateway relationship now needed. Sandbox is self-service (credentials are published in their docs and are already the defaults here), so nothing is blocked until go-live; what is needed is a live `PAYSTATION_MERCHANT_ID`/`PAYSTATION_MERCHANT_PASSWORD` plus the IPN URL registered in their dashboard. See [§PayStation replaces SSLCommerz](#-paystation-replaces-sslcommerz--2026-09-10).
 - [ ] ~~Payment gateway merchant applications (bKash, Nagad, Rocket, SSLCommerz)~~ — **no longer on the critical path** (2026-09-10). PayStation aggregates all of these on one hosted checkout, so direct adapters are now an optional optimisation rather than a prerequisite for launch.
