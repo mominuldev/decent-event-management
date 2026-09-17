@@ -122,7 +122,9 @@ class TicketResendTest extends TestCase
         $this->as();
         $ticket = $this->ticket();
 
-        // Stand in for the automatic send at issuance.
+        // Stand in for an earlier send of the ticket — nothing sends it at
+        // issuance any more, but the first console send writes exactly this
+        // row and the second must not be swallowed by it.
         Notification::factory()->create([
             'notifiable_type' => $ticket->getMorphClass(),
             'notifiable_id' => $ticket->id,

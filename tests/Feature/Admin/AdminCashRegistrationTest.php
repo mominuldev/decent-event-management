@@ -273,9 +273,17 @@ class AdminCashRegistrationTest extends TestCase
         $this->assertTrue((bool) $ticket->qrCode?->is_active);
         $this->assertSame('confirmed', $registration->refresh()->status);
 
-        $channels = Notification::where('template_key', 'ticket_delivered')->pluck('channel')->all();
-        sort($channels);
-        $this->assertSame(['email', 'sms'], $channels);
+        // What goes out automatically is the registration-confirmed email
+        // (the share card) and nothing else — the QR ticket is a separate
+        // message staff send from the console when the organisers choose
+        // to, so a walk-up does not get a QR in their inbox before anyone
+        // else does. No SMS: the one SMS a purchase sends goes with the
+        // ticket.
+        $this->assertSame(
+            ['email'],
+            Notification::where('template_key', 'registration_confirmed')->pluck('channel')->all(),
+        );
+        $this->assertSame(0, Notification::where('template_key', 'ticket_delivered')->count());
     }
 
     public function test_a_counter_sale_does_not_also_send_complete_your_payment(): void
@@ -461,9 +469,12 @@ class AdminCashRegistrationTest extends TestCase
 
     private function seedTicketDeliveredTemplates(): void
     {
-        foreach ([['email', 'bn'], ['sms', 'en']] as [$channel, $locale]) {
+        // Both keys are seeded active, on both channels, so the assertion
+        // above proves the *listener* chose the registration email and the
+        // email channel — not that a missing template happened to.
+        foreach ([['registration_confirmed', 'email', 'bn'], ['registration_confirmed', 'sms', 'en'], ['ticket_delivered', 'email', 'bn'], ['ticket_delivered', 'sms', 'en']] as [$key, $channel, $locale]) {
             NotificationTemplate::factory()->create([
-                'key' => 'ticket_delivered',
+                'key' => $key,
                 'channel' => $channel,
                 'locale' => $locale,
                 'version' => 1,

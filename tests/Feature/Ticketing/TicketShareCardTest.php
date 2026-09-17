@@ -4,6 +4,7 @@ namespace Tests\Feature\Ticketing;
 
 use App\Domain\CheckIn\Models\EventSession;
 use App\Domain\Notification\Channels\MailDriver;
+use App\Domain\Notification\Listeners\QueueRegistrationConfirmedNotification;
 use App\Domain\Notification\Models\Notification;
 use App\Domain\Registration\Models\Attendee;
 use App\Domain\Registration\Models\Registration;
@@ -11,6 +12,7 @@ use App\Domain\Shared\Exceptions\ImageRenderingException;
 use App\Domain\Shared\Models\MediaFile;
 use App\Domain\Shared\Services\HtmlToImageRenderer;
 use App\Domain\Ticketing\Actions\IssueTicket;
+use App\Domain\Ticketing\Actions\ResendTicketNotification;
 use App\Domain\Ticketing\Models\Ticket;
 use App\Domain\Ticketing\Models\TicketType;
 use App\Domain\Ticketing\Services\TicketShareCard;
@@ -25,7 +27,8 @@ use Tests\Support\FakeImageRenderer;
 use Tests\TestCase;
 
 /**
- * The "আমি থাকছি!" share card that goes out with a ticket confirmation.
+ * The "আমি থাকছি!" share card that goes out with the registration-confirmed
+ * email — the one issuance sends, which deliberately carries no QR.
  *
  * Everything here runs against {@see FakeImageRenderer} except the one
  * test that reads the pixels: what the card *says* is asserted on the
@@ -148,7 +151,7 @@ class TicketShareCardTest extends TestCase
         $this->assertSame(1, MediaFile::where('collection', TicketShareCard::COLLECTION)->count());
     }
 
-    public function test_the_confirmation_email_carries_the_card_as_an_inline_jpeg_part(): void
+    public function test_the_registration_confirmed_email_carries_the_card_as_an_inline_jpeg_part(): void
     {
         $ticket = $this->issue();
 
@@ -160,10 +163,54 @@ class TicketShareCardTest extends TestCase
         $this->assertCount(1, $jpegs, 'the share card should travel exactly once');
         $this->assertStringContainsString('cid:'.$jpegs[0]->getContentId(), $html);
         $this->assertStringContainsString('বন্ধুদের জানান', $html);
+        $this->assertStringContainsString('নিবন্ধন নিশ্চিত', $html);
+    }
 
-        // The QR still travels beside it — the card does not replace the ticket.
-        $pngs = array_filter($inline, fn (DataPart $part) => $part->getMediaSubtype() === 'png');
-        $this->assertNotEmpty($pngs);
+    /**
+     * The whole reason the two emails are separate. The registration
+     * confirmation is the one people forward, and it goes out before the
+     * organisers have decided to release any QR — so nothing in it may
+     * admit anyone: no QR part, no ticket number, no gate notes.
+     */
+    public function test_the_registration_confirmed_email_carries_nothing_that_admits(): void
+    {
+        $ticket = $this->issue();
+
+        $email = $this->sendFor($ticket);
+        $html = (string) $email->getHtmlBody();
+
+        $pngs = array_filter($this->inlineImages($email), fn (DataPart $part) => $part->getFilename() === 'ticket-qr.png');
+        $this->assertCount(0, $pngs, 'the registration email must not carry the QR');
+        $this->assertStringNotContainsString($ticket->ticket_number, $html);
+        $this->assertStringNotContainsString('গেটে স্ক্যান করুন', $html);
+        $this->assertStringNotContainsString('আপনার টিকিট নম্বর', $html);
+
+        // What it does point at is the registration page — the one public
+        // URL the payment return leg already proves exists.
+        $this->assertStringContainsString('/registrations/'.$ticket->registration->ulid, $html);
+    }
+
+    /**
+     * And the converse: the ticket email — sent by staff, later — is the QR
+     * and the gate details, without the card. The card went out with the
+     * confirmation; a second copy in the message that carries the QR would
+     * invite the reader to forward *that* one instead.
+     */
+    public function test_the_ticket_email_carries_the_qr_and_not_the_card(): void
+    {
+        $ticket = $this->issue();
+
+        $email = $this->sendFor($ticket, ResendTicketNotification::TEMPLATE_KEY);
+        $inline = $this->inlineImages($email);
+        $html = (string) $email->getHtmlBody();
+
+        $jpegs = array_filter($inline, fn (DataPart $part) => $part->getMediaSubtype() === 'jpeg');
+        $this->assertCount(0, $jpegs);
+        $this->assertStringNotContainsString('বন্ধুদের জানান', $html);
+
+        $qr = array_filter($inline, fn (DataPart $part) => $part->getFilename() === 'ticket-qr.png');
+        $this->assertCount(1, $qr);
+        $this->assertStringContainsString($ticket->ticket_number, $html);
     }
 
     public function test_a_card_that_cannot_be_drawn_does_not_stop_the_email(): void
@@ -183,15 +230,18 @@ class TicketShareCardTest extends TestCase
         });
 
         $email = $this->sendFor($ticket->fresh());
+        $html = (string) $email->getHtmlBody();
 
         $jpegs = array_filter($this->inlineImages($email), fn (DataPart $part) => $part->getMediaSubtype() === 'jpeg');
         $this->assertCount(0, $jpegs);
-        $this->assertStringNotContainsString('বন্ধুদের জানান', (string) $email->getHtmlBody());
-        // And the QR — the part that admits — is still there.
-        $this->assertNotEmpty($this->inlineImages($email));
+        $this->assertStringNotContainsString('বন্ধুদের জানান', $html);
+        // The message itself still went, body copy and all — the reader is
+        // told their seat is theirs even when the picture could not be drawn.
+        $this->assertStringContainsString('আপনার নিবন্ধন সম্পন্ন হয়েছে।', $html);
+        $this->assertStringContainsString('নিবন্ধন নিশ্চিত', $html);
     }
 
-    public function test_a_voided_ticket_email_does_not_say_i_am_in(): void
+    public function test_a_voided_ticket_registration_email_does_not_say_i_am_in(): void
     {
         $ticket = $this->issue();
         $ticket->refresh();
@@ -242,17 +292,17 @@ class TicketShareCardTest extends TestCase
         return $issued->fresh();
     }
 
-    private function sendFor(Ticket $ticket): Email
+    private function sendFor(Ticket $ticket, string $templateKey = QueueRegistrationConfirmedNotification::TEMPLATE_KEY): Email
     {
         $notification = Notification::factory()->create([
             'notifiable_type' => 'ticket',
             'notifiable_id' => $ticket->id,
-            'template_key' => 'ticket_delivered',
+            'template_key' => $templateKey,
             'channel' => 'email',
             'locale' => 'bn',
             'recipient' => 'holder@example.test',
-            'subject' => 'আপনার টিকিট প্রস্তুত — '.$ticket->ticket_number,
-            'body_rendered' => '<p>আপনার টিকিট নিশ্চিত হয়েছে।</p>',
+            'subject' => 'আপনার নিবন্ধন সম্পন্ন হয়েছে',
+            'body_rendered' => '<p>আপনার নিবন্ধন সম্পন্ন হয়েছে।</p>',
         ]);
 
         $result = (new MailDriver)->send($notification);

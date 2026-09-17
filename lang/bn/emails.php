@@ -13,6 +13,12 @@ return [
     'headline_accent' => 'নিশ্চিত হয়েছে।',
     'card_eyebrow' => 'অনুষ্ঠান',
 
+    'registration' => [
+        'kicker' => 'নিবন্ধন নিশ্চিত',
+        'headline' => 'আপনার নিবন্ধন',
+        'headline_accent' => 'সম্পন্ন হয়েছে।',
+    ],
+
     'fact' => [
         'date' => 'তারিখ',
         'venue' => 'স্থান',

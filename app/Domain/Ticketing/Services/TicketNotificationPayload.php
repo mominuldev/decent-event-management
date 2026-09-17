@@ -7,23 +7,25 @@ use App\Domain\Ticketing\Models\Ticket;
 use Illuminate\Support\Carbon;
 
 /**
- * The `{{variables}}` a `ticket_delivered` message interpolates — the one
- * definition, shared by the `TicketIssued` listener that sends it the
- * first time and by `ResendTicketNotification` when an operator sends it
- * again.
+ * The `{{variables}}` a ticket's messages interpolate — the one
+ * definition, shared by the `registration_confirmed` message the
+ * `TicketIssued` listener sends at issuance and the `ticket_delivered`
+ * message `ResendTicketNotification` sends when an operator sends the
+ * ticket.
  *
  * Shared rather than rebuilt, for the reason docs/08 R12 keeps naming: a
- * resend that assembles its own payload is a second implementation of the
+ * second assembly of this payload is a second implementation of the
  * message, and the first thing it would drift on is the SMS — where a
  * variable this class supplies and the other does not is not an error but
  * a literal `{{event_name}}` delivered to a real ticket-holder, because
  * `QueueNotification::interpolate()` leaves an unrecognised placeholder
- * verbatim rather than throwing.
+ * verbatim rather than throwing. One payload also means an editor can
+ * move a placeholder between the two templates freely.
  *
- * Every value is read live, not from the notification row that was
- * written at issuance: a resend exists because something about the first
- * attempt was wrong, and a venue corrected in the settings screen after
- * the original send is exactly the kind of thing it is for.
+ * Every value is read live, not from a notification row written earlier:
+ * a ticket is sent some time after the registration was confirmed, and a
+ * venue corrected in the settings screen in between is exactly the kind
+ * of thing that should reach it.
  */
 class TicketNotificationPayload
 {
@@ -42,6 +44,19 @@ class TicketNotificationPayload
             'ticket_number' => (string) $ticket->ticket_number,
             'admits_total' => (string) $ticket->admits_total,
 
+            // The reference the registration-confirmed message quotes in
+            // place of the ticket number, which that message must not
+            // carry. It is also what the share card prints.
+            'registration_number' => (string) $ticket->registration?->registration_number,
+
+            // What the registration cost, so the registration-confirmed
+            // email is also the receipt — the payment-received email was
+            // folded into it (2026-09-17). Read from the registration's own
+            // total rather than the Payment module's rows, which Ticketing
+            // does not reach into; the two agree by construction, since a
+            // payment settles only against `amount_due_paisa`.
+            'amount_bdt' => $this->amountBdt($ticket),
+
             // Added for the SMS, which is the only message a purchase
             // sends and so has to say what the other two used to.
             'customer_name' => (string) $attendee?->full_name,
@@ -51,6 +66,13 @@ class TicketNotificationPayload
             'event_date' => $this->eventStart($ticket)?->format('j M Y') ?? '',
             'event_time' => $this->eventStart($ticket)?->format('g:i A') ?? '',
         ];
+    }
+
+    private function amountBdt(Ticket $ticket): string
+    {
+        $paisa = $ticket->registration?->total_paisa;
+
+        return $paisa === null ? '' : number_format(((int) $paisa) / 100, 2);
     }
 
     /**

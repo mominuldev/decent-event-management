@@ -21,17 +21,18 @@ class QueueManualPaymentVerifiedNotification
         $this->queueNotification->execute(
             notifiable: $payment,
             templateKey: 'payment_manual_verified',
-            // Email and WhatsApp only, for the same reason as
-            // `QueueRegistrationReceivedNotification`: this is a payment
-            // confirmation, and a buyer paying by bank transfer would
-            // otherwise still receive two SMS for one purchase — this and
-            // the ticket. The ticket confirmation is the one that keeps SMS.
+            // WhatsApp only, matching `QueuePaymentSucceededNotification`:
+            // an approved manual payment queues ticket issuance, and
+            // issuance sends the registration-confirmed email with the
+            // amount paid, so an email from here was a duplicate receipt
+            // arriving seconds before it. SMS went on 2026-08-22 for the
+            // same one-message-per-purchase reason.
             //
             // `payment_failed` and `refund_issued` deliberately keep theirs:
             // neither is part of a normal purchase, both need attention
             // rather than a record, and an email nobody opens is no use for
             // a payment that did not go through.
-            channels: ['email', 'whatsapp'],
+            channels: ['whatsapp'],
             attendee: $attendee,
             payload: [
                 'full_name' => $attendee->full_name,

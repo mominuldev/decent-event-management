@@ -4,6 +4,7 @@ namespace App\Domain\Ticketing\Models;
 
 use App\Domain\CheckIn\Models\CheckIn;
 use App\Domain\CheckIn\Models\EventSession;
+use App\Domain\Notification\Listeners\QueueRegistrationConfirmedNotification;
 use App\Domain\Notification\Mail\MailPresentation;
 use App\Domain\Notification\Mail\ProvidesMailPresentation;
 use App\Domain\Registration\Models\Attendee;
@@ -12,6 +13,7 @@ use App\Domain\Shared\Models\MediaFile;
 use App\Domain\Shared\Models\User;
 use App\Domain\Shared\Support\HasStateMachine;
 use App\Domain\Shared\Support\HasUlid;
+use App\Domain\Ticketing\Actions\ResendTicketNotification;
 use App\Domain\Ticketing\Services\TicketMailPresentation;
 use Database\Factories\TicketFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -174,9 +176,21 @@ class Ticket extends Model implements ProvidesMailPresentation
      * drained by a worker, and the model should not be the thing that
      * knows how to reach storage or render a symbol.
      */
-    public function mailPresentation(): ?MailPresentation
+    /**
+     * A ticket is behind two emails, and the outbox row's template key is
+     * the only thing that says which one is being sent: the ticket itself
+     * (QR, number, gate details — sent by staff), or the
+     * registration-confirmed message (the share card — sent at issuance).
+     * Any other key gets the plain shell: better a message with no chrome
+     * than a QR delivered by a template that was never meant to carry one.
+     */
+    public function mailPresentation(string $templateKey): ?MailPresentation
     {
-        return app(TicketMailPresentation::class)->for($this);
+        return match ($templateKey) {
+            ResendTicketNotification::TEMPLATE_KEY => app(TicketMailPresentation::class)->for($this),
+            QueueRegistrationConfirmedNotification::TEMPLATE_KEY => app(TicketMailPresentation::class)->registrationConfirmed($this),
+            default => null,
+        };
     }
 
     /**

@@ -21,16 +21,20 @@ class QueuePaymentSucceededNotification
         $this->queueNotification->execute(
             notifiable: $payment,
             templateKey: 'payment_succeeded',
-            // Email and WhatsApp only. SMS was deliberately dropped
-            // (2026-08-22): a ticket purchase used to fire three separate
-            // messages — booking, payment, ticket — and a buyer wants one.
-            // The ticket confirmation is the one that matters, since it is
-            // the message that says they are in and where to be, so it keeps
-            // the SMS channel and now carries the event details these two
-            // used to. Removing it here is also two thirds of the SMS bill
-            // for every ticket sold. Both keep their email, which costs
-            // nothing and is where the receipt detail belongs.
-            channels: ['email', 'whatsapp'],
+            // WhatsApp only. SMS was dropped on 2026-08-22 and email on
+            // 2026-09-17, for the same reason each time: a buyer wants one
+            // message per purchase, not a chain of them. A settled payment
+            // queues ticket issuance, and issuance sends the
+            // registration-confirmed email — the share card, and the amount
+            // paid — seconds later, so an email from here arrived as a
+            // duplicate receipt right before it. The amount the payer is
+            // owed a record of now travels in that message
+            // (`TicketNotificationPayload::amount_bdt`).
+            //
+            // The trade: if issuance fails, the payer hears nothing until
+            // the job is replayed from `failed_jobs`. That was true of the
+            // ticket before this too; the payment row is settled either way.
+            channels: ['whatsapp'],
             attendee: $attendee,
             payload: [
                 'full_name' => $attendee->full_name,

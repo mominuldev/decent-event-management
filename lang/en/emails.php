@@ -18,6 +18,16 @@ return [
     'headline_accent' => 'confirmed.',
     'card_eyebrow' => 'Event',
 
+    // The registration-confirmed message — the one sent at issuance, with
+    // the share card and without the QR. The ticket's own strings above
+    // are not reused because "Your ticket is confirmed" over an email that
+    // deliberately carries no ticket invites the reader to look for one.
+    'registration' => [
+        'kicker' => 'Registration confirmed',
+        'headline' => 'Your registration is',
+        'headline_accent' => 'confirmed.',
+    ],
+
     'fact' => [
         'date' => 'Date',
         'venue' => 'Venue',

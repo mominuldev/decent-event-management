@@ -44,7 +44,7 @@ function ChannelPicker({
                             )}
                         </div>
                         <Switch
-                            label={`Resend by ${label}`}
+                            label={`Send by ${label}`}
                             checked={selected.includes(key)}
                             onChange={(on) => onChange(on ? [...selected, key] : selected.filter((c) => c !== key))}
                         />
@@ -95,8 +95,8 @@ export function ResendTicketDialog({
         <Dialog
             open
             onClose={onClose}
-            title="Resend ticket"
-            description={`${ticketNumber} — sends the confirmation again to the holder on file.`}
+            title="Send ticket"
+            description={`${ticketNumber} — sends the QR ticket to the holder on file. Nothing is sent automatically at issuance, so this is how the ticket goes out; it can be sent again if it does not arrive.`}
             className="max-w-md"
             footer={
                 <div className="flex justify-end gap-2">
@@ -106,7 +106,7 @@ export function ResendTicketDialog({
                         disabled={channels.length === 0 || mutation.isPending}
                         onClick={() => mutation.mutate()}
                     >
-                        <Send size={14} /> {mutation.isPending ? 'Sending…' : 'Resend'}
+                        <Send size={14} /> {mutation.isPending ? 'Sending…' : 'Send ticket'}
                     </Button>
                 </div>
             }
@@ -170,7 +170,7 @@ export function ResendAllDialog({
     const mutation = useMutation({
         mutationFn: () => ticketsApi.resendAllTickets(scope, channels, preview?.tickets ?? -1),
         onSuccess: (data) => {
-            push('success', `Queued a resend to ${data.tickets} ticket(s). Progress appears in Notifications.`);
+            push('success', `Queued the ticket to ${data.tickets} holder(s). Progress appears in Notifications.`);
             onClose();
         },
         onError: (e: Error) => push('critical', e.message),
@@ -191,7 +191,7 @@ export function ResendAllDialog({
         <Dialog
             open
             onClose={onClose}
-            title={targeted ? `Resend to ${picked} selected ticket${picked === 1 ? '' : 's'}` : 'Resend to all tickets'}
+            title={targeted ? `Send ${picked} selected ticket${picked === 1 ? '' : 's'}` : 'Send all tickets'}
             description={
                 targeted
                     ? 'Sends to the tickets ticked in the list, and to nobody else.'
@@ -210,7 +210,7 @@ export function ResendAllDialog({
                         onClick={() => mutation.mutate()}
                     >
                         <Send size={14} />
-                        {mutation.isPending ? 'Queueing…' : `Resend to ${preview?.tickets ?? 0}`}
+                        {mutation.isPending ? 'Queueing…' : `Send to ${preview?.tickets ?? 0}`}
                     </Button>
                 </div>
             }

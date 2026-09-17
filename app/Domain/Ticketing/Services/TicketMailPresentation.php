@@ -15,8 +15,20 @@ use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 /**
- * Builds the ticket card, QR panel and notes strip a ticket email is
- * wrapped in.
+ * Builds what the shell renders around a ticket's two emails.
+ *
+ * There are two, and they deliberately share nothing that admits anyone:
+ *
+ *  - {@see for()} — the **ticket** (`ticket_delivered`): ticket card, QR
+ *    panel, ticket number, gate notes. Sent by staff from the admin
+ *    console, not at issuance.
+ *  - {@see registrationConfirmed()} — the **registration-confirmed**
+ *    message (`registration_confirmed`): the "আমি থাকছি!" share card and
+ *    a link to the registration. No QR, no ticket number, no gate notes.
+ *    Sent automatically the moment the ticket is issued.
+ *
+ * `Ticket::mailPresentation()` picks between them by the outbox row's
+ * template key.
  *
  * Everything here is resolved at *send* time, which is the point of the
  * class. `GenerateTicketAssetsJob` renders the stored QR PNG on the
@@ -39,6 +51,11 @@ class TicketMailPresentation
         private readonly TicketShareCard $shareCard,
     ) {}
 
+    /**
+     * The ticket: QR, number, gate details. No share card — that went out
+     * with the registration-confirmed message, and a holder who is sent
+     * the ticket has already been handed the picture once.
+     */
     public function for(Ticket $ticket): MailPresentation
     {
         $ticket->loadMissing(['ticketType', 'eventSession', 'qrCode.image', 'registration', 'attendee']);
@@ -63,6 +80,29 @@ class TicketMailPresentation
             ctaUrl: $this->registrationUrl($ticket),
             ctaLabel: $this->line('cta'),
             footerNote: $this->line('footer_note'),
+        );
+    }
+
+    /**
+     * The registration-confirmed message: the share card and a link to the
+     * registration, and nothing that admits anyone. No `facts`, no
+     * `ticketId`, no `qrPng` and no `notes`, so the shell renders neither
+     * the ticket card nor the gate strip — this email is meant to be
+     * forwarded, and the QR must not be in anything that gets forwarded.
+     * The card itself already carries the date, venue and registration
+     * number, which is why they are not repeated as fact rows.
+     */
+    public function registrationConfirmed(Ticket $ticket): MailPresentation
+    {
+        $ticket->loadMissing(['registration', 'attendee']);
+
+        return new MailPresentation(
+            headline: $this->line('registration.headline'),
+            headlineAccent: $this->line('registration.headline_accent'),
+            mastheadKicker: $this->line('registration.kicker'),
+            ctaUrl: $this->registrationUrl($ticket),
+            ctaLabel: $this->line('cta'),
+            footerNote: $this->line('footer_note'),
             shareJpeg: $this->shareJpeg($ticket),
             shareFileName: $this->shareCard->fileName($ticket),
             shareHeading: $this->line('share.heading'),
@@ -75,11 +115,11 @@ class TicketMailPresentation
      * The "আমি থাকছি!" card — stored by the asset job if it has run, drawn
      * now if it has not (and stored, so the job finds it).
      *
-     * Best-effort, unlike the QR. The QR *is* the ticket, so failing to
-     * resolve it fails the send; the card is a picture to post, and a host
-     * without Chromium must not lose every confirmation email over it. The
-     * failure is logged so it is not silent, and the email goes out
-     * without the section.
+     * Best-effort. The card is a picture to post, and a host without
+     * Chromium must not lose every registration-confirmed email over it.
+     * The failure is logged so it is not silent, and the email goes out
+     * without the section — the body copy and the link still tell the
+     * reader their seat is theirs.
      */
     private function shareJpeg(Ticket $ticket): ?string
     {
@@ -90,7 +130,7 @@ class TicketMailPresentation
         try {
             return $this->shareCard->bytes($ticket);
         } catch (Throwable $e) {
-            Log::warning('Ticket share card could not be rendered; sending the confirmation without it.', [
+            Log::warning('Ticket share card could not be rendered; sending the registration confirmation without it.', [
                 'ticket' => $ticket->ticket_number,
                 'reason' => $e->getMessage(),
             ]);

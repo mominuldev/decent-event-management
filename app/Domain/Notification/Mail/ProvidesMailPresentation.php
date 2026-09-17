@@ -18,8 +18,14 @@ use App\Domain\Notification\Channels\MailDriver;
  * Resolution happens at send time, not when the outbox row is written:
  * ticket assets are rendered asynchronously on the `tickets` lane and are
  * usually not ready at issuance.
+ *
+ * The template key is passed because one notifiable can be the subject
+ * of more than one kind of email. A ticket is behind both the
+ * registration-confirmed message (the share card, no QR) and the ticket
+ * itself (the QR, no share card), and only the row's `template_key` says
+ * which of the two is being sent.
  */
 interface ProvidesMailPresentation
 {
-    public function mailPresentation(): ?MailPresentation;
+    public function mailPresentation(string $templateKey): ?MailPresentation;
 }

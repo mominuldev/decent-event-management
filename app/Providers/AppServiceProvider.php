@@ -11,8 +11,8 @@ use App\Domain\Notification\Listeners\QueueManualPaymentVerifiedNotification;
 use App\Domain\Notification\Listeners\QueuePaymentFailedNotification;
 use App\Domain\Notification\Listeners\QueuePaymentSucceededNotification;
 use App\Domain\Notification\Listeners\QueueRefundIssuedNotification;
+use App\Domain\Notification\Listeners\QueueRegistrationConfirmedNotification;
 use App\Domain\Notification\Listeners\QueueRegistrationReceivedNotification;
-use App\Domain\Notification\Listeners\QueueTicketDeliveredNotification;
 use App\Domain\Notification\Support\SmsGatewayConfig;
 use App\Domain\Payment\Events\ManualPaymentVerified;
 use App\Domain\Payment\Events\PaymentFailed;
@@ -102,7 +102,7 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(PaymentFailed::class, QueuePaymentFailedNotification::class);
         Event::listen(ManualPaymentVerified::class, QueueManualPaymentVerifiedNotification::class);
         Event::listen(RefundIssued::class, QueueRefundIssuedNotification::class);
-        Event::listen(TicketIssued::class, QueueTicketDeliveredNotification::class);
+        Event::listen(TicketIssued::class, QueueRegistrationConfirmedNotification::class);
 
         // docs/06 §6.5 — rotating the QR signing key notifies all Event
         // Managers. Ticketing publishes the event and knows nothing about

@@ -167,6 +167,10 @@ class NotificationTemplateSeeder extends Seeder
                 ],
             ],
             [
+                // The email rows are seeded but unsent since 2026-09-17: the
+                // listener queues WhatsApp only, because the
+                // registration-confirmed email that follows issuance is the
+                // receipt. Kept so flipping the channel back needs no seed.
                 'key' => 'payment_succeeded',
                 'variables' => ['full_name', 'full_name_bn', 'payment_number', 'amount_bdt', 'method', 'gateway_transaction_id'],
                 'channels' => [
@@ -217,8 +221,42 @@ class NotificationTemplateSeeder extends Seeder
                 ],
             ],
             [
+                // Sent automatically the moment a ticket is issued — and it
+                // is deliberately *not* the ticket. It says the seat is
+                // theirs and carries the "আমি থাকছি!" share card, which the
+                // shell embeds from the ticket; the QR, the ticket number
+                // and the gate details are in `ticket_delivered`, which staff
+                // send from the admin console when the organisers decide
+                // to. The body may name the registration number but must
+                // never name the ticket number — this is the email people
+                // forward. It does not interpolate `{{event_name}}`: that
+                // variable is the *English* name (it exists for the SMS),
+                // and the masthead already names the event from settings
+                // with a fallback, where the payload has none.
+                //
+                // It is also the receipt: `payment_succeeded` and
+                // `payment_manual_verified` no longer send email, because a
+                // settled payment leads here within seconds and two emails
+                // for one event is noise. Hence `{{amount_bdt}}`.
+                //
+                // Email only: the registration line does not earn an SMS
+                // segment; the SMS goes out with the ticket.
+                'key' => 'registration_confirmed',
+                'variables' => ['full_name', 'full_name_bn', 'registration_number', 'amount_bdt', 'event_name', 'event_date', 'event_time', 'venue'],
+                'channels' => [
+                    'email' => [
+                        'en' => ['subject' => 'Your registration is confirmed — {{registration_number}}', 'body' => '<p>Dear {{full_name}},</p><p>Thank you for registering. We have received your payment of <strong>BDT {{amount_bdt}}</strong>, and your registration <strong>{{registration_number}}</strong> is complete — your seat is reserved.</p><p>Your admission ticket, with its QR code, will be sent to you in a separate email before the event. Please keep an eye on this inbox.</p><p>In the meantime, the card below is yours to share — let your friends and batchmates know you are coming.</p>'],
+                        'bn' => ['subject' => 'আপনার নিবন্ধন সম্পন্ন হয়েছে — {{registration_number}}', 'body' => '<p>প্রিয় {{full_name_bn}},</p><p>নিবন্ধনের জন্য আপনাকে ধন্যবাদ। আমরা আপনার <strong>{{amount_bdt}} টাকা</strong> পেমেন্ট পেয়েছি এবং আপনার নিবন্ধন <strong>{{registration_number}}</strong> সম্পন্ন হয়েছে — আপনার আসন সংরক্ষিত রয়েছে।</p><p>আপনার প্রবেশ টিকিট, QR কোডসহ, অনুষ্ঠানের আগে আলাদা একটি ইমেইলে পাঠানো হবে। অনুগ্রহ করে এই ইনবক্সে নজর রাখুন।</p><p>ইতিমধ্যে, নিচের কার্ডটি আপনার শেয়ার করার জন্য — বন্ধু ও ব্যাচমেটদের জানিয়ে দিন আপনি আসছেন।</p>'],
+                    ],
+                ],
+            ],
+            [
+                // The ticket itself. Since 2026-09-17 nothing sends this
+                // automatically: staff send it from the admin console (one
+                // ticket, a selection, or all of them), so the organisers
+                // decide when the QR codes go out.
                 'key' => 'ticket_delivered',
-                'variables' => ['full_name', 'full_name_bn', 'ticket_number', 'admits_total', 'customer_name', 'ticket_id', 'event_name', 'event_date', 'event_time', 'venue'],
+                'variables' => ['full_name', 'full_name_bn', 'ticket_number', 'admits_total', 'registration_number', 'amount_bdt', 'customer_name', 'ticket_id', 'event_name', 'event_date', 'event_time', 'venue'],
                 'channels' => [
                     'email' => [
                         // Body copy only — the ticket number, admit count,
@@ -230,9 +268,10 @@ class NotificationTemplateSeeder extends Seeder
                         'en' => ['subject' => 'Your ticket is confirmed — {{ticket_number}}', 'body' => '<p>Dear {{full_name}},</p><p>Thank you for registering. We are pleased to confirm that your ticket has been issued; the details are set out below.</p><p>The QR code in this message serves as your admission pass. Please present it at the gate on the day of the event, either on your phone or as a printed copy of this email.</p><p>Please retain this email for your records. We look forward to welcoming you.</p>'],
                         'bn' => ['subject' => 'আপনার টিকিট নিশ্চিত হয়েছে — {{ticket_number}}', 'body' => '<p>প্রিয় {{full_name_bn}},</p><p>নিবন্ধনের জন্য আপনাকে ধন্যবাদ। আপনার টিকিট ইস্যু করা হয়েছে; বিস্তারিত নিচে দেওয়া হলো।</p><p>এই বার্তার QR কোডটিই আপনার প্রবেশপত্র। অনুষ্ঠানের দিন গেটে অনুগ্রহ করে এটি ফোন থেকে দেখান, অথবা এই ইমেইলটি প্রিন্ট করে সঙ্গে আনুন।</p><p>এই ইমেইলটি সংরক্ষণ করে রাখুন। আপনাকে স্বাগত জানানোর অপেক্ষায় রইলাম।</p>'],
                     ],
-                    // The only SMS a ticket purchase sends — booking and
-                    // payment confirmations are email-only, so this one
-                    // carries what all three used to.
+                    // The only SMS a ticket purchase sends — booking,
+                    // payment and registration confirmations are email-only,
+                    // so this one carries what all of them used to. It goes
+                    // out when staff send the ticket, alongside the email.
                     //
                     // Written to fit **one segment**, and it is close to the
                     // line: 146 of the 160 GSM-7 characters at the seeded

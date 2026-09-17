@@ -108,7 +108,7 @@ function TicketDetail({ ulid, onClose }: { ulid: string; onClose: () => void }) 
                         <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
                         {canResend && (
                             <Button variant="outline" size="sm" onClick={() => setResending(true)}>
-                                <Send size={14} /> Resend
+                                <Send size={14} /> Send ticket
                             </Button>
                         )}
                         {canReissue && (
@@ -311,7 +311,7 @@ function TicketsTab() {
         // Outside the updater deliberately: a state updater must be pure, and
         // React runs it twice in development, which would double the toast.
         if (incoming.length > room) {
-            push('critical', `You can select at most ${ticketsApi.MAX_SELECTED_TICKETS} tickets at a time. Filter the list and use "Resend to all" to reach more.`);
+            push('critical', `You can select at most ${ticketsApi.MAX_SELECTED_TICKETS} tickets at a time. Filter the list and use "Send all tickets" to reach more.`);
         }
     }, [picked, push]);
 
@@ -324,7 +324,7 @@ function TicketsTab() {
                 enableSorting: false,
                 header: () => (
                     <RowCheck
-                        label="Select every resendable ticket on this page"
+                        label="Select every sendable ticket on this page"
                         checked={pageSelectable.length > 0 && pagePickedCount === pageSelectable.length}
                         indeterminate={pagePickedCount > 0}
                         disabled={pageSelectable.length === 0}
@@ -355,8 +355,8 @@ function TicketsTab() {
                     if (!isResendable(row)) return null;
                     return (
                         <IconButton
-                            aria-label={`Resend ${row.ticket_number}`}
-                            title="Resend this confirmation"
+                            aria-label={`Send ${row.ticket_number}`}
+                            title="Send this ticket (QR) to the holder"
                             onClick={(e) => {
                                 // Without this the row's own handler opens the
                                 // detail dialog behind the resend one.
@@ -384,7 +384,7 @@ function TicketsTab() {
                     // and it spends the prepaid SMS balance.
                     can('notification.send_broadcast') ? (
                         <Button variant="outline" size="sm" onClick={() => setResendingAll(true)}>
-                            <Send size={14} /> Resend to all
+                            <Send size={14} /> Send all tickets
                         </Button>
                     ) : undefined
                 }
@@ -432,7 +432,7 @@ function TicketsTab() {
                         {picked.size} ticket{picked.size === 1 ? '' : 's'} selected
                     </span>
                     <Button size="sm" onClick={() => setResendingPicked(true)}>
-                        <Send size={14} /> Resend to selected
+                        <Send size={14} /> Send to selected
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())}>
                         Clear selection

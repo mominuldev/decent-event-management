@@ -3,7 +3,6 @@
 namespace App\Domain\Ticketing\Actions;
 
 use App\Domain\Notification\Actions\QueueNotification;
-use App\Domain\Notification\Listeners\QueueTicketDeliveredNotification;
 use App\Domain\Shared\Models\ActivityLog;
 use App\Domain\Shared\Models\User;
 use App\Domain\Ticketing\Models\Ticket;
@@ -11,33 +10,41 @@ use App\Domain\Ticketing\Services\TicketNotificationPayload;
 use InvalidArgumentException;
 
 /**
- * Sends a ticket's confirmation again, on the channels an operator asks
- * for — the "I never got my ticket" counter request.
+ * Sends the ticket — QR code, ticket number, gate details — on the
+ * channels an operator asks for.
+ *
+ * Since 2026-09-17 this is the **only** path that sends it. Issuance no
+ * longer emails the QR; it emails a registration-confirmed message with
+ * the share card (`QueueRegistrationConfirmedNotification`), and the
+ * ticket goes out when staff send it from the admin console — one holder
+ * from the ticket page, or every holder at once. The class and its routes
+ * keep the `resend` name because the mechanism is unchanged and it does
+ * still serve the "I never got my ticket" desk request: it composes the
+ * message afresh, any number of times.
  *
  * Deliberately **not** `Notification\Actions\ResendNotification`, which
  * clones an existing outbox row and only from `failed`/`bounced`. That is
  * a different job: it retries a message this system already composed and
- * failed to deliver. This one composes the message afresh, so it works in
- * the cases that actually walk up to the desk — the email was delivered
- * and deleted, the row is `sent` and so ineligible for a clone, or no row
- * was ever written because the attendee had no email address at issuance
- * and has just given one.
+ * failed to deliver. This one composes the message afresh, so it works
+ * whether or not a row exists — including for an attendee who had no
+ * email address at issuance and has just given one.
  *
  * Composing afresh is also why it reads through
- * `TicketNotificationPayload`: an operator's resend and the automatic send
- * are then provably the same message rather than two implementations of
- * it.
+ * `TicketNotificationPayload`, shared with the registration-confirmed
+ * listener: the two messages interpolate one set of variables rather than
+ * two implementations of it.
  */
 class ResendTicketNotification
 {
+    /** The template behind the ticket itself — QR, number, gate details. */
+    public const string TEMPLATE_KEY = 'ticket_delivered';
+
     /**
      * Email and SMS only, while `whatsapp` still resolves to
      * `FakeWhatsAppDriver` (Meta template approval, External Dependencies).
-     * The automatic send queues all three because a fake row costs nothing
-     * and will start working the day a real driver lands; an *operator
-     * action* is different — offering a button that fakes a send would put
-     * `sent` in the delivery log for a message that never left the
-     * building, and the operator would tell the ticket-holder it had.
+     * This is an *operator action* — offering a button that fakes a send
+     * would put `sent` in the delivery log for a message that never left
+     * the building, and the operator would tell the ticket-holder it had.
      *
      * @var array<int, string>
      */
@@ -91,16 +98,17 @@ class ResendTicketNotification
 
         $outcomes = $this->queueNotification->execute(
             notifiable: $ticket,
-            templateKey: QueueTicketDeliveredNotification::TEMPLATE_KEY,
+            templateKey: self::TEMPLATE_KEY,
             channels: $channels,
             attendee: $attendee,
             payload: $this->payload->for($ticket),
             // Without a suffix the outbox's one-per-(subject, template,
-            // channel) dedupe would swallow this silently — the operator
-            // would get a 200 and the ticket-holder would get nothing. The
-            // suffix is unique per resend rather than per second: two
-            // clicks are two messages, and on SMS two charges, which is
-            // what the endpoint's Idempotency-Key is there to prevent.
+            // channel) dedupe would swallow every send after the first
+            // silently — the operator would get a 200 and the ticket-holder
+            // would get nothing. The suffix is unique per send rather than
+            // per second: two clicks are two messages, and on SMS two
+            // charges, which is what the endpoint's Idempotency-Key is
+            // there to prevent.
             dedupeSuffix: 'resend-'.now()->getTimestampMs().'-'.$resentBy->id,
         );
 

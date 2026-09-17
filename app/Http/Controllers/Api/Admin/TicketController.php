@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Domain\Notification\Actions\QueueNotification;
-use App\Domain\Notification\Listeners\QueueTicketDeliveredNotification;
 use App\Domain\Notification\Support\ChannelKillSwitch;
 use App\Domain\Notification\Support\SmsGatewayConfig;
 use App\Domain\Notification\Support\SmsSegmentCalculator;
@@ -407,11 +406,13 @@ class TicketController extends Controller
 
     #[OAT\Post(
         path: '/admin/tickets/{ticket}/resend',
-        summary: "Resend a ticket's confirmation to its holder by email and/or SMS",
-        description: 'Composes the confirmation afresh from the ticket rather than replaying a stored '
-            .'message, so it works whether or not the original was ever delivered — or ever written. '
-            .'Requires an Idempotency-Key: a resent SMS is billed, so a double-tapped button must not '
-            .'send twice.',
+        summary: 'Send the ticket (QR code, number, gate details) to its holder by email and/or SMS',
+        description: 'The only path that sends the QR ticket: issuance emails a registration-confirmed '
+            .'message with the share card and no QR, and staff send the ticket itself from here when '
+            .'the organisers choose to. Composes the message afresh from the ticket rather than '
+            .'replaying a stored one, so it can be sent again whether or not an earlier send was ever '
+            .'delivered — or ever written. Requires an Idempotency-Key: an SMS is billed, so a '
+            .'double-tapped button must not send twice.',
         tags: ['Tickets'],
         security: [['bearerAuth' => []]],
         parameters: [
@@ -504,7 +505,7 @@ class TicketController extends Controller
 
     #[OAT\Get(
         path: '/admin/tickets/resend-preview',
-        summary: 'How many tickets a bulk resend would reach, and what the SMS would cost',
+        summary: 'How many tickets a bulk send would reach, and what the SMS would cost',
         description: 'Read-only. Takes the same filters as the ticket list and narrows them to tickets '
             .'whose QR still admits someone. Pass `ulids[]` to price a hand-picked selection instead; it '
             .'composes with the other filters, so it can only ever narrow the set. The count it returns '
@@ -595,7 +596,7 @@ class TicketController extends Controller
 
     #[OAT\Post(
         path: '/admin/tickets/resend-all',
-        summary: 'Resend the ticket confirmation to every ticket matching a filter set, or to a hand-picked selection',
+        summary: 'Send the QR ticket to every ticket matching a filter set, or to a hand-picked selection',
         description: 'Queues a background fan-out on the `reports` lane; the response returns immediately '
             .'with the number of tickets it will walk. Pass `ulids` to send to a hand-picked selection '
             .'rather than a whole filter set — it narrows, never widens, and a present-but-empty list '
@@ -695,7 +696,7 @@ class TicketController extends Controller
      */
     private function ticketSmsSegments(QueueNotification $queueNotification): int
     {
-        $template = $queueNotification->resolveTemplate(QueueTicketDeliveredNotification::TEMPLATE_KEY, 'sms');
+        $template = $queueNotification->resolveTemplate(ResendTicketNotification::TEMPLATE_KEY, 'sms');
         $body = $template?->body;
 
         if (! is_string($body) || $body === '') {

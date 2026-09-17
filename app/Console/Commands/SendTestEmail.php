@@ -3,7 +3,9 @@
 namespace App\Console\Commands;
 
 use App\Domain\Notification\Channels\MailDriver;
+use App\Domain\Notification\Listeners\QueueRegistrationConfirmedNotification;
 use App\Domain\Notification\Mail\NotificationMail;
+use App\Domain\Ticketing\Actions\ResendTicketNotification;
 use App\Domain\Ticketing\Models\Ticket;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\App;
@@ -25,16 +27,19 @@ use Throwable;
  * It does not write an outbox row and does not touch the kill switches —
  * this checks the transport, not the notification pipeline on top of it.
  *
- * `--ticket=CEN-00001` sends the real confirmation email for an existing
- * ticket instead of the plain probe — same shell, same inline QR — so the
+ * `--ticket=CEN-00001` sends the real ticket email for an existing ticket
+ * instead of the plain probe — same shell, same inline QR — so the
  * message that reaches a gate can be checked in a real inbox without
- * pushing another registration through payment.
+ * pushing another registration through payment. Add `--registration` to
+ * send that ticket's registration-confirmed email instead: the share
+ * card and no QR, which is what issuance actually sends.
  */
 class SendTestEmail extends Command
 {
     protected $signature = 'mail:test
         {recipient : Address to send the test message to}
-        {--ticket= : Ticket number to send the real confirmation email for, QR and all}';
+        {--ticket= : Ticket number to send the real ticket email for, QR and all}
+        {--registration : With --ticket, send the registration-confirmed email (share card, no QR) instead}';
 
     protected $description = 'Send a test email through the configured mailer';
 
@@ -97,21 +102,32 @@ class SendTestEmail extends Command
         }
 
         try {
-            Mail::to($recipient)->send($ticket !== null
-                ? new NotificationMail(
+            $mailable = match (true) {
+                $ticket !== null && (bool) $this->option('registration') => new NotificationMail(
+                    'আপনার নিবন্ধন সম্পন্ন হয়েছে — '.(string) $ticket->registration?->registration_number,
+                    '<p>প্রিয় '.e((string) ($ticket->holder_name_bn ?: $ticket->holder_name)).',</p>'
+                    .'<p>আপনার নিবন্ধন সম্পন্ন হয়েছে এবং আসন সংরক্ষিত রয়েছে। QR কোডসহ প্রবেশ টিকিট '
+                    .'আলাদা ইমেইলে পাঠানো হবে।</p>',
+                    $ticket->mailPresentation(QueueRegistrationConfirmedNotification::TEMPLATE_KEY),
+                    $locale,
+                ),
+                $ticket !== null => new NotificationMail(
                     'আপনার টিকিট প্রস্তুত — '.$ticket->ticket_number,
                     '<p>প্রিয় '.e((string) ($ticket->holder_name_bn ?: $ticket->holder_name)).',</p>'
                     .'<p>আপনার টিকিট নিশ্চিত হয়েছে। নিচের কোডটিই আপনার প্রবেশপত্র — গেটে ফোন থেকে '
                     .'দেখান, অথবা এই ইমেইলটি প্রিন্ট করে সঙ্গে আনুন।</p>',
-                    $ticket->mailPresentation(),
+                    $ticket->mailPresentation(ResendTicketNotification::TEMPLATE_KEY),
                     $locale,
-                )
-                : new NotificationMail(
+                ),
+                default => new NotificationMail(
                     config('app.name').' — test email',
                     '<p>This is a test message from <strong>'.e((string) config('app.name')).'</strong>.</p>'
                     .'<p>If you are reading it, the SMTP transport is configured correctly and '
                     .'ticket confirmation emails will be delivered the same way.</p>',
-                ));
+                ),
+            };
+
+            Mail::to($recipient)->send($mailable);
         } catch (Throwable $e) {
             $this->components->error('Send failed: '.$e->getMessage());
 

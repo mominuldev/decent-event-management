@@ -214,9 +214,17 @@ class NotificationOutboxTest extends TestCase
         $this->assertSame(0, Notification::count());
     }
 
-    public function test_payment_succeeded_queues_notification(): void
+    /**
+     * A settled payment does not email a receipt of its own: issuance
+     * follows within seconds and the registration-confirmed email is the
+     * receipt (it carries the amount). Only the WhatsApp row remains here,
+     * and the email template is seeded active to prove it is the listener
+     * that leaves email out.
+     */
+    public function test_payment_succeeded_queues_whatsapp_only_because_the_registration_email_is_the_receipt(): void
     {
         $this->activeTemplate('payment_succeeded', 'email');
+        $this->activeTemplate('payment_succeeded', 'whatsapp');
 
         $attendee = Attendee::factory()->create(['email' => 'payer@example.com']);
         // 'paid' is the real precondition VerifyPayment::markSucceeded()
@@ -229,7 +237,10 @@ class NotificationOutboxTest extends TestCase
 
         PaymentSucceeded::dispatch($payment);
 
-        $this->assertSame(1, Notification::where('template_key', 'payment_succeeded')->where('notifiable_type', 'payment')->count());
+        $this->assertSame(
+            ['whatsapp'],
+            Notification::where('template_key', 'payment_succeeded')->where('notifiable_type', 'payment')->pluck('channel')->all(),
+        );
     }
 
     public function test_payment_failed_queues_email_and_sms_but_not_whatsapp(): void
@@ -247,17 +258,21 @@ class NotificationOutboxTest extends TestCase
         $this->assertEqualsCanonicalizing(['email', 'sms'], $channels);
     }
 
-    public function test_manual_payment_verified_queues_notification(): void
+    public function test_manual_payment_verified_queues_whatsapp_only(): void
     {
         $this->activeTemplate('payment_manual_verified', 'email');
+        $this->activeTemplate('payment_manual_verified', 'whatsapp');
 
-        $attendee = Attendee::factory()->create(['email' => 'payer@example.com']);
+        $attendee = Attendee::factory()->create(['email' => 'payer@example.com', 'mobile' => '+8801711223344']);
         $payment = Payment::factory()->for($attendee)->create();
         $verifier = User::factory()->create();
 
         ManualPaymentVerified::dispatch($payment, $verifier);
 
-        $this->assertSame(1, Notification::where('template_key', 'payment_manual_verified')->count());
+        $this->assertSame(
+            ['whatsapp'],
+            Notification::where('template_key', 'payment_manual_verified')->pluck('channel')->all(),
+        );
     }
 
     public function test_refund_issued_queues_email_and_sms_but_not_whatsapp(): void
@@ -276,15 +291,56 @@ class NotificationOutboxTest extends TestCase
         $this->assertEqualsCanonicalizing(['email', 'sms'], $channels);
     }
 
-    public function test_ticket_issued_queues_notification(): void
+    /**
+     * Issuance sends the registration-confirmed email — the share card —
+     * and never the ticket. The QR goes out when staff send it from the
+     * console (`ResendTicketNotification`), so an active `ticket_delivered`
+     * template and a mobile number on file are both present here to prove
+     * it is the listener's channel and key list that excludes them, not a
+     * missing row or recipient.
+     */
+    public function test_ticket_issued_queues_the_registration_confirmed_email_and_not_the_ticket(): void
     {
+        $this->activeTemplate('registration_confirmed', 'email');
+        $this->activeTemplate('registration_confirmed', 'sms');
         $this->activeTemplate('ticket_delivered', 'email');
+        $this->activeTemplate('ticket_delivered', 'sms');
 
-        $attendee = Attendee::factory()->create(['email' => 'holder@example.com']);
+        $attendee = Attendee::factory()->create(['email' => 'holder@example.com', 'mobile' => '+8801711223344']);
         $ticket = Ticket::factory()->for($attendee)->create();
 
         TicketIssued::dispatch($ticket);
 
-        $this->assertSame(1, Notification::where('template_key', 'ticket_delivered')->count());
+        $this->assertSame(
+            ['email'],
+            Notification::where('template_key', 'registration_confirmed')->pluck('channel')->all(),
+        );
+        $this->assertSame(0, Notification::where('template_key', 'ticket_delivered')->count());
+    }
+
+    /**
+     * The registration-confirmed email is also the receipt — the
+     * payment-received email was folded into it — so the amount and the
+     * registration number must actually interpolate, not arrive as
+     * `{{amount_bdt}}` in a real person's inbox.
+     */
+    public function test_the_registration_confirmed_email_quotes_the_amount_paid_and_the_registration_number(): void
+    {
+        NotificationTemplate::factory()->create([
+            'key' => 'registration_confirmed', 'channel' => 'email', 'locale' => 'en', 'version' => 1,
+            'subject' => 'Confirmed — {{registration_number}}',
+            'body' => 'Paid BDT {{amount_bdt}} for {{registration_number}}.',
+            'is_active' => true,
+        ]);
+
+        $attendee = Attendee::factory()->create(['email' => 'holder@example.com']);
+        $registration = Registration::factory()->for($attendee)->create(['total_paisa' => 152000]);
+        $ticket = Ticket::factory()->for($attendee)->for($registration)->create();
+
+        TicketIssued::dispatch($ticket);
+
+        $row = Notification::where('template_key', 'registration_confirmed')->sole();
+        $this->assertSame("Paid BDT 1,520.00 for {$registration->registration_number}.", $row->body_rendered);
+        $this->assertSame("Confirmed — {$registration->registration_number}", $row->subject);
     }
 }

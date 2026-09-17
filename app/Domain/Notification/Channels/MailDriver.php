@@ -53,7 +53,9 @@ class MailDriver implements NotificationChannelInterface
 
     /**
      * Ask the notifiable what else belongs in its email — a ticket
-     * contributes its QR code and gate details.
+     * contributes its QR code and gate details to the ticket message, and
+     * the "আমি থাকছি!" share card to the registration-confirmed one. The
+     * template key is what tells it which of those it is being asked for.
      *
      * Built under the notification's own locale. The Mailable wraps its
      * view render in `withLocale`, but the presentation is assembled
@@ -79,7 +81,7 @@ class MailDriver implements NotificationChannelInterface
         App::setLocale($notification->locale);
 
         try {
-            return $notifiable->mailPresentation();
+            return $notifiable->mailPresentation((string) $notification->template_key);
         } finally {
             App::setLocale($previous);
         }
