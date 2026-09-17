@@ -635,8 +635,8 @@ class HomePageSeeder extends Seeder
                         'subtitle' => self::t('Bring the family', 'পরিবারসহ অংশগ্রহণ'),
                         'price' => '৳ ৪,৫০০',
                         'features' => self::t(
-                            "Event admission (whole family)\nCovers every family member\nT-shirts for everyone\nGala dinner",
-                            "অনুষ্ঠানে অংশগ্রহণ (পরিবারসহ)\nপরিবারের সদস্যদের জন্য\nটি-শার্ট (সবার জন্য)\nগালা ডিনার",
+                            "Event admission (whole family)\nCovers every family member\nGala dinner",
+                            "অনুষ্ঠানে অংশগ্রহণ (পরিবারসহ)\nপরিবারের সদস্যদের জন্য\nগালা ডিনার",
                         ),
                         'image' => '/images/home/pricing/family.jpg',
                         'tone' => 'amber',
