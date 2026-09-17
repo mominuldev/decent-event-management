@@ -227,16 +227,17 @@ class NotificationTemplateSeeder extends Seeder
                         // from the ticket, not interpolated here. An editor
                         // rewriting this copy cannot remove the code the
                         // holder is admitted with.
-                        'en' => ['subject' => 'Your ticket is ready — {{ticket_number}}', 'body' => '<p>Dear {{full_name}},</p><p>Your ticket is confirmed. The code below is your admission pass — show it at the gate from your phone, or print this email and bring it with you.</p><p>Everything you need is in this message. We look forward to seeing you.</p>'],
-                        'bn' => ['subject' => 'আপনার টিকিট প্রস্তুত — {{ticket_number}}', 'body' => '<p>প্রিয় {{full_name_bn}},</p><p>আপনার টিকিট নিশ্চিত হয়েছে। নিচের কোডটিই আপনার প্রবেশপত্র — গেটে ফোন থেকে দেখান, অথবা এই ইমেইলটি প্রিন্ট করে সঙ্গে আনুন।</p><p>প্রয়োজনীয় সব তথ্য এই বার্তাতেই রয়েছে। আপনাকে দেখার অপেক্ষায় রইলাম।</p>'],
+                        'en' => ['subject' => 'Your ticket is confirmed — {{ticket_number}}', 'body' => '<p>Dear {{full_name}},</p><p>Thank you for registering. We are pleased to confirm that your ticket has been issued; the details are set out below.</p><p>The QR code in this message serves as your admission pass. Please present it at the gate on the day of the event, either on your phone or as a printed copy of this email.</p><p>Please retain this email for your records. We look forward to welcoming you.</p>'],
+                        'bn' => ['subject' => 'আপনার টিকিট নিশ্চিত হয়েছে — {{ticket_number}}', 'body' => '<p>প্রিয় {{full_name_bn}},</p><p>নিবন্ধনের জন্য আপনাকে ধন্যবাদ। আপনার টিকিট ইস্যু করা হয়েছে; বিস্তারিত নিচে দেওয়া হলো।</p><p>এই বার্তার QR কোডটিই আপনার প্রবেশপত্র। অনুষ্ঠানের দিন গেটে অনুগ্রহ করে এটি ফোন থেকে দেখান, অথবা এই ইমেইলটি প্রিন্ট করে সঙ্গে আনুন।</p><p>এই ইমেইলটি সংরক্ষণ করে রাখুন। আপনাকে স্বাগত জানানোর অপেক্ষায় রইলাম।</p>'],
                     ],
                     // The only SMS a ticket purchase sends — booking and
                     // payment confirmations are email-only, so this one
                     // carries what all three used to.
                     //
                     // Written to fit **one segment**, and it is close to the
-                    // line: 144 of the 160 GSM-7 characters at the seeded
-                    // event name and venue. Two things tip it into a second
+                    // line: 146 of the 160 GSM-7 characters at the seeded
+                    // event name and venue (measured with `CEN-00001`, a
+                    // `j M Y` date and a `g:i A` time in the placeholders). Two things tip it into a second
                     // segment and double the bill on every ticket — a longer
                     // `event.name_en`/`event.venue_en`, and any character
                     // outside GSM-7. Emoji are the obvious ones; the
@@ -244,12 +245,12 @@ class NotificationTemplateSeeder extends Seeder
                     // are { } [ ] ~ ^ \ €. The templates screen shows the
                     // live segment count for exactly this reason.
                     'sms' => [
-                        'en' => ['body' => "Ticket confirmed - {{event_name}}\nID: {{ticket_id}}\n{{event_date}}, {{event_time}}, {{venue}}\nQR ticket sent to your email. Keep it for entry."],
-                        'bn' => ['body' => "টিকিট নিশ্চিত - {{event_name}}\nID: {{ticket_id}}\n{{event_date}}, {{event_time}}, {{venue}}\nQR টিকিট ইমেইলে পাঠানো হয়েছে। প্রবেশের জন্য রাখুন।"],
+                        'en' => ['body' => "Ticket confirmed: {{event_name}}\nID: {{ticket_id}}\n{{event_date}}, {{event_time}}, {{venue}}\nYour QR ticket has been emailed. Please present it at the gate."],
+                        'bn' => ['body' => "টিকিট নিশ্চিত হয়েছে: {{event_name}}\nID: {{ticket_id}}\n{{event_date}}, {{event_time}}, {{venue}}\nQR টিকিট ইমেইলে পাঠানো হয়েছে। গেটে দেখান।"],
                     ],
                     'whatsapp' => [
-                        'en' => ['body' => 'Ticket {{ticket_number}} is ready, admits {{admits_total}}. View it in your account.'],
-                        'bn' => ['body' => 'টিকিট {{ticket_number}} প্রস্তুত, প্রবেশাধিকার {{admits_total}} জন। আপনার অ্যাকাউন্টে দেখুন।'],
+                        'en' => ['body' => 'Your ticket {{ticket_number}} has been issued and admits {{admits_total}}. Please sign in to your account to view it.'],
+                        'bn' => ['body' => 'আপনার টিকিট {{ticket_number}} ইস্যু করা হয়েছে; প্রবেশাধিকার {{admits_total}} জন। অনুগ্রহ করে আপনার অ্যাকাউন্টে সাইন ইন করে দেখুন।'],
                     ],
                 ],
             ],

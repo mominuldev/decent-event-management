@@ -2262,6 +2262,14 @@ send time on the `notifications` lane costs ~2.5s per email when the asset job
 has not won the race, which is fine at registration pace and worth watching in
 a bulk resend.
 
+### ✅ The ticket confirmation templates were rewritten in a professional tone — 2026-09-17
+
+The six `ticket_delivered` rows (email, SMS, WhatsApp × EN/BN) in `NotificationTemplateSeeder` were reworded — "Thank you for registering. We are pleased to confirm that your ticket has been issued…" in place of the draft copy. No variables, channels or structure changed; the shell still renders the ticket card, QR and gate details itself, so the copy is body text only.
+
+- **The English SMS is still one GSM-7 segment: 146 of 160 characters** at the seeded event name and venue (was 132), so the headroom for a longer `event.name_en`/`event.venue_en` is now 14 characters rather than 28 before it tips to two segments and doubles the bill. The Bangla SMS stays at 2 Unicode segments (129 characters); a first draft measured 3 and was cut back.
+- **The seeder does not overwrite an existing row**, so an already-seeded database keeps its old wording until somebody edits it in the admin console — or, as was done on this dev box, updates only the rows still byte-identical to the previous seeded copy. `estimated_segments` was recomputed on the SMS rows at the same time.
+- No test pins the seeded wording (`NotificationTemplateAdminTest` carries its own inline copy). 74 notification tests green, Pint clean.
+
 ### 🚨 External Dependencies (start during Phase 2!)
 - [ ] **PayStation live merchant account** — the only gateway relationship now needed. Sandbox is self-service (credentials are published in their docs and are already the defaults here), so nothing is blocked until go-live; what is needed is a live `PAYSTATION_MERCHANT_ID`/`PAYSTATION_MERCHANT_PASSWORD` plus the IPN URL registered in their dashboard. See [§PayStation replaces SSLCommerz](#-paystation-replaces-sslcommerz--2026-09-10).
 - [ ] ~~Payment gateway merchant applications (bKash, Nagad, Rocket, SSLCommerz)~~ — **no longer on the critical path** (2026-09-10). PayStation aggregates all of these on one hosted checkout, so direct adapters are now an optional optimisation rather than a prerequisite for launch.
