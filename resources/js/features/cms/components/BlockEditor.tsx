@@ -251,6 +251,7 @@ function BlockCard({
     onChange,
     onMove,
     onRemove,
+    defaultCollapsed,
 }: {
     block: BlockDraft;
     index: number;
@@ -259,13 +260,15 @@ function BlockCard({
     onChange: (next: BlockDraft) => void;
     onMove: (from: number, to: number) => void;
     onRemove: () => void;
+    /** Blocks start collapsed so a long page reads as an outline; the one just added opens so it can be filled in. */
+    defaultCollapsed: boolean;
 }) {
-    const [collapsed, setCollapsed] = useState(false);
+    const [collapsed, setCollapsed] = useState<boolean>(defaultCollapsed);
     const schema = BLOCK_SCHEMAS[block.type];
 
     return (
         <div className={cn('rounded-2xl border border-border bg-surface', !block.is_visible && 'opacity-60')}>
-            <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
+            <div className={cn('flex items-center gap-2 px-4 py-2.5', !collapsed && 'border-b border-border')}>
                 <GripVertical size={16} className="text-text-faint" />
                 <span className="text-[13.5px] font-semibold text-text">{schema.label}</span>
                 {!block.is_visible && <Badge tone="neutral" size="sm">Hidden</Badge>}
@@ -373,6 +376,7 @@ export function BlockEditor({
     onChange: (next: BlockDraft[]) => void;
 }) {
     const [adding, setAdding] = useState<BlockType>('rich_text');
+    const [freshKey, setFreshKey] = useState<string | null>(null);
 
     const move = (from: number, to: number) => {
         if (to < 0 || to >= blocks.length) return;
@@ -400,6 +404,7 @@ export function BlockEditor({
                     onChange={(next) => onChange(blocks.map((b, j) => (j === i ? next : b)))}
                     onMove={move}
                     onRemove={() => onChange(blocks.filter((_, j) => j !== i))}
+                    defaultCollapsed={block.key !== freshKey}
                 />
             ))}
 
@@ -412,7 +417,15 @@ export function BlockEditor({
                         ))}
                     </Select>
                 </div>
-                <Button type="button" variant="outline" onClick={() => onChange([...blocks, emptyBlock(adding)])}>
+                <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                        const fresh = emptyBlock(adding);
+                        setFreshKey(fresh.key);
+                        onChange([...blocks, fresh]);
+                    }}
+                >
                     <Plus size={15} /> Add
                 </Button>
             </div>
