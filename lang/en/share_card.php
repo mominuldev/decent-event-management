@@ -4,8 +4,9 @@
  * Every word drawn on the "I'm in!" share card
  * (resources/views/tickets/share-card.blade.php) that is not read off the
  * ticket itself. The attendee's name, batch, party size, registration
- * number and the event facts come from the record; the campaign copy —
- * the shout, the headline, the invitation — is here, per language.
+ * number and the event date come from the record; the campaign copy —
+ * the shout, the headline, the invitation, and the fixed time and venue
+ * — is here, per language.
  *
  * The card is drawn in the email channel's language
  * (`config/notifications.php`), which is Bangla by default, so this file
@@ -39,8 +40,13 @@ return [
         'date' => 'Date',
         'time' => 'Time',
         'venue' => 'Venue',
+        // Fixed campaign copy, matching the Figma frame — the card's time
+        // and venue do not follow the session or the event settings.
+        'time_value' => '8:00 AM',
+        'time_note' => 'until 10:00 PM',
+        'venue_value' => 'School campus',
+        'venue_note' => 'Chapainawabganj',
     ],
-    'until' => 'until :time',
 
     'registration' => 'Registration no.',
     'stub_batch' => 'SSC batch',

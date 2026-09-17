@@ -208,6 +208,12 @@ class TicketShareCard
     }
 
     /**
+     * The date is read off the ticket's session (or `event.date`); the
+     * time and the venue are campaign copy from `lang/{locale}/share_card.php`,
+     * fixed to what the Figma frame ("Event Ticket — v6", 202:1079) shows,
+     * so the card says the same thing whichever session a ticket lands on
+     * and never loses a column for want of one.
+     *
      * @return array<int, array{label: string, value: string, note: string|null}>
      */
     private function facts(Ticket $ticket): array
@@ -225,28 +231,17 @@ class TicketShareCard
             ];
         }
 
-        if ($session !== null) {
-            $facts[] = [
-                'label' => $this->line('fact.time'),
-                'value' => $this->digits($this->inEventTimezone($session->starts_at)->isoFormat('A h:mm')),
-                'note' => $this->line('until', [
-                    'time' => $this->digits($this->inEventTimezone($session->ends_at)->isoFormat('A h:mm')),
-                ]),
-            ];
-        }
+        $facts[] = [
+            'label' => $this->line('fact.time'),
+            'value' => $this->line('fact.time_value'),
+            'note' => $this->line('fact.time_note'),
+        ];
 
-        $venue = $session?->venue ?: $this->setting('event.venue');
-
-        if ($venue !== null) {
-            $address = $this->setting('event.venue_address');
-
-            $facts[] = [
-                'label' => $this->line('fact.venue'),
-                'value' => $venue,
-                // The same string twice reads as a rendering fault.
-                'note' => $address === $venue ? null : $address,
-            ];
-        }
+        $facts[] = [
+            'label' => $this->line('fact.venue'),
+            'value' => $this->line('fact.venue_value'),
+            'note' => $this->line('fact.venue_note'),
+        ];
 
         return $facts;
     }
@@ -327,7 +322,7 @@ class TicketShareCard
     /**
      * Through the catalogue, so a key nobody has saved yet answers with
      * its configured default — the same value the Settings screen shows —
-     * rather than leaving the date and venue off the card.
+     * rather than leaving the date off the card.
      */
     private function setting(string $key): ?string
     {

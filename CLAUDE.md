@@ -2262,6 +2262,18 @@ send time on the `notifications` lane costs ~2.5s per email when the asset job
 has not won the race, which is fine at registration pace and worth watching in
 a bulk resend.
 
+#### The card's time and venue are fixed to the design — 2026-09-17
+
+The facts row used to read the time off the ticket's session (`starts_at`/`ends_at`, dropped when
+a ticket had no session) and the venue off the session or `event.venue`/`event.venue_address`.
+At the client's request both are now **campaign copy matching the Figma frame** ("Event Ticket —
+v6", `202:1079`): `fact.time_value` / `fact.time_note` / `fact.venue_value` / `fact.venue_note` in
+`lang/{bn,en}/share_card.php` — `সকাল ৮:০০` · `রাত ১০:০০ পর্যন্ত` and `বিদ্যালয় প্রাঙ্গণ` ·
+`চাঁপাইনবাবগঞ্জ`. The **date is still dynamic** (session, else `event.date`), and both columns now
+render for a session-less ticket rather than being dropped. Changing the time or venue on the
+card means editing the lang file, not a setting or a session. `TicketShareCardTest` pins it with a
+session at a different hour and place; the email presentation's own facts row is untouched.
+
 ### ✅ The ticket confirmation templates were rewritten in a professional tone — 2026-09-17
 
 The six `ticket_delivered` rows (email, SMS, WhatsApp × EN/BN) in `NotificationTemplateSeeder` were reworded — "Thank you for registering. We are pleased to confirm that your ticket has been issued…" in place of the draft copy. No variables, channels or structure changed; the shell still renders the ticket card, QR and gate details itself, so the copy is body text only.

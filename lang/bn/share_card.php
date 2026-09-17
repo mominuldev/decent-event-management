@@ -33,8 +33,13 @@ return [
         'date' => 'তারিখ',
         'time' => 'সময়',
         'venue' => 'স্থান',
+        // The time and the venue are fixed to the design (Figma "Event
+        // Ticket — v6"), not read from the session or the settings.
+        'time_value' => 'সকাল ৮:০০',
+        'time_note' => 'রাত ১০:০০ পর্যন্ত',
+        'venue_value' => 'বিদ্যালয় প্রাঙ্গণ',
+        'venue_note' => 'চাঁপাইনবাবগঞ্জ',
     ],
-    'until' => ':time পর্যন্ত',
 
     'registration' => 'রেজিস্ট্রেশন নং',
     'stub_batch' => 'এসএসসি ব্যাচ',

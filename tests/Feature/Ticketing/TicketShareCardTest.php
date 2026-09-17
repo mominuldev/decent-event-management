@@ -111,14 +111,16 @@ class TicketShareCardTest extends TestCase
         $this->assertMatchesRegularExpression('/class="year long">\s*শিক্ষক\s*</u', $html);
     }
 
-    public function test_the_session_supplies_the_date_time_and_venue(): void
+    public function test_the_session_supplies_the_date_and_the_time_and_venue_are_fixed_to_the_design(): void
     {
         config(['app.timezone' => 'Asia/Dhaka']);
 
+        // A session at a different hour and place than the design shows:
+        // the date must follow it, the time and venue must not.
         $session = EventSession::factory()->create([
-            'starts_at' => '2027-02-12 02:00:00', // 08:00 in Asia/Dhaka
-            'ends_at' => '2027-02-12 16:00:00',   // 22:00
-            'venue' => 'বিদ্যালয় প্রাঙ্গণ',
+            'starts_at' => '2027-02-12 04:30:00', // 10:30 in Asia/Dhaka
+            'ends_at' => '2027-02-12 10:00:00',   // 16:00
+            'venue' => 'Town Hall auditorium',
         ]);
         $ticket = $this->issue(ticket: ['event_session_id' => $session->id]);
 
@@ -129,8 +131,24 @@ class TicketShareCardTest extends TestCase
         $month = Carbon::parse('2027-02-12')->locale('bn')->isoFormat('MMMM');
         $this->assertStringContainsString("১২ {$month} ২০২৭", $html);
         $this->assertStringContainsString('শুক্রবার', $html);
+
         $this->assertStringContainsString('সকাল ৮:০০', $html);
         $this->assertStringContainsString('রাত ১০:০০ পর্যন্ত', $html);
+        $this->assertStringContainsString('বিদ্যালয় প্রাঙ্গণ', $html);
+        $this->assertStringContainsString('চাঁপাইনবাবগঞ্জ', $html);
+        $this->assertStringNotContainsString('১০:৩০', $html);
+        $this->assertStringNotContainsString('Town Hall', $html);
+    }
+
+    public function test_a_ticket_with_no_session_still_shows_the_time_and_venue(): void
+    {
+        $ticket = $this->issue(ticket: ['event_session_id' => null]);
+
+        $html = app(TicketShareCard::class)->html($ticket);
+
+        $this->assertStringContainsString('সময়', $html);
+        $this->assertStringContainsString('সকাল ৮:০০', $html);
+        $this->assertStringContainsString('স্থান', $html);
         $this->assertStringContainsString('বিদ্যালয় প্রাঙ্গণ', $html);
     }
 
