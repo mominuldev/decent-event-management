@@ -57,7 +57,7 @@ return [
         'is_public' => true,
         'label' => 'Event date',
         'description' => 'The headline date the public sees. Gate sessions have their own times — see Check-in.',
-        'default' => '+6 months 00:00',
+        'default' => '2027-03-13 09:00',
     ],
 
     'event.venue' => [

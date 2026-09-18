@@ -34,12 +34,12 @@ class EventPageSeeder extends Seeder
     use SeedsContentBlocks;
 
     /**
-     * The event day, as Figma's own hero and schedule header set it — a
-     * different placeholder from the homepage's Jan 1 stand-in, because this
-     * page's frame explicitly draws 12 February. Times on the sessions below
-     * are wall-clock Bangladesh time against this date.
+     * The confirmed celebration day: Saturday 13 March 2027, the same date
+     * the frontend's `CENTENNIAL.eventDateIso` and the `event.date` setting
+     * carry. Times on the sessions below are wall-clock Bangladesh time
+     * against this date.
      */
-    private const EVENT_DATE = '2027-02-12';
+    private const EVENT_DATE = '2027-03-13';
 
     public function run(): void
     {
@@ -110,7 +110,7 @@ class EventPageSeeder extends Seeder
                 'facts' => [
                     [
                         'label' => self::t('Date', 'তারিখ'),
-                        'value' => self::t('12 February 2027, Friday', '১২ ফেব্রুয়ারি ২০২৭, শুক্রবার'),
+                        'value' => self::t('13 March 2027, Saturday', '১৩ মার্চ ২০২৭, শনিবার'),
                         'icon' => 'Calendar',
                         'tone' => 'violet',
                     ],

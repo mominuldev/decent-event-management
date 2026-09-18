@@ -85,7 +85,7 @@ class SouvenirPageSeeder extends Seeder
                 'facts' => [
                     ['icon' => 'BookOpen', 'label' => self::t('Pages', 'পৃষ্ঠাসংখ্যা'), 'value' => self::t('320+', '৩২০+')],
                     ['icon' => 'PenLine', 'label' => self::t('Compiled Writings', 'সংকলিত লেখা'), 'value' => self::t('86', '৮৬টি')],
-                    ['icon' => 'CalendarDays', 'label' => self::t('Publish Date', 'প্রকাশকাল'), 'value' => self::t('12 February 2027', '১২ ফেব্রুয়ারি ২০২৭')],
+                    ['icon' => 'CalendarDays', 'label' => self::t('Publish Date', 'প্রকাশকাল'), 'value' => self::t('13 March 2027', '১৩ মার্চ ২০২৭')],
                 ],
             ],
         ];

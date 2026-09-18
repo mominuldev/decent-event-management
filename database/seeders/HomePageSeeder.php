@@ -107,7 +107,7 @@ class HomePageSeeder extends Seeder
                 // A placeholder until a real date is set: the centenary year is
                 // fixed but carries no month or day, so this is deliberately
                 // New Year's Day of it rather than an invented date.
-                'countdown_target' => '2027-01-01T09:00:00+06:00',
+                'countdown_target' => '2027-03-13T09:00:00+06:00',
                 'image' => '/images/home/hero/hero-composition.png',
             ],
         ];

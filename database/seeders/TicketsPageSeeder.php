@@ -87,11 +87,11 @@ class TicketsPageSeeder extends Seeder
                     '১৯৭১ থেকে ২০২৬ — সব ব্যাচের প্রাক্তন শিক্ষার্থী, বর্তমান শিক্ষার্থী, শিক্ষক ও কর্মচারী সবাই আমন্ত্রিত। একা আসুন, কিংবা পরিবারসহ।',
                 ),
                 'facts' => [
-                    ['icon' => 'CalendarDays', 'label' => self::t('Date', 'তারিখ'), 'value' => self::t('12 February 2027, Friday', '১২ ফেব্রুয়ারি ২০২৭, শুক্রবার')],
+                    ['icon' => 'CalendarDays', 'label' => self::t('Date', 'তারিখ'), 'value' => self::t('13 March 2027, Saturday', '১৩ মার্চ ২০২৭, শনিবার')],
                     ['icon' => 'MapPin', 'label' => self::t('Venue', 'স্থান'), 'value' => self::t('School Grounds, Main Campus', 'বিদ্যালয় প্রাঙ্গণ, মূল ক্যাম্পাস')],
                     ['icon' => 'Clock', 'label' => self::t('Time', 'সময়'), 'value' => self::t('8:00 AM – 10:00 PM', 'সকাল ৮:০০ – রাত ১০:০০')],
                 ],
-                'countdown_target' => '2027-02-12T09:00:00+06:00',
+                'countdown_target' => '2027-03-13T09:00:00+06:00',
                 'primary_label' => self::t('Start registration', 'নিবন্ধন শুরু করুন'),
                 'primary_url' => '#register',
                 'secondary_label' => self::t('See ticket prices', 'টিকিটের মূল্য দেখুন'),
