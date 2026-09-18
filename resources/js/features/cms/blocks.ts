@@ -130,7 +130,7 @@ export const BLOCK_SCHEMAS: Record<BlockType, BlockSchema> = {
                 label: 'Questions (homepage grid)',
                 kind: 'repeater',
                 itemLabel: 'question',
-                help: 'Only the homepage teaser grid reads these. Leave empty to fall back to the shipped six.',
+                help: 'Only the homepage teaser grid reads these. An empty list draws no grid.',
                 item: [
                     { key: 'question', label: 'Question', kind: 'text' },
                     { key: 'answer', label: 'Answer', kind: 'textarea' },
@@ -153,7 +153,7 @@ export const BLOCK_SCHEMAS: Record<BlockType, BlockSchema> = {
                 label: 'Logo cards (homepage row)',
                 kind: 'repeater',
                 itemLabel: 'logo',
-                help: 'Only the homepage row reads these — it draws typographic cards, not the Sponsors tab records. Leave empty for the shipped six.',
+                help: 'Only the homepage row reads these — it draws typographic cards, not the Sponsors tab records. An empty list draws no row.',
                 item: [
                     { key: 'mark', label: 'Wordmark', kind: 'text' },
                     { key: 'tagline', label: 'Tagline', kind: 'text' },
@@ -178,7 +178,7 @@ export const BLOCK_SCHEMAS: Record<BlockType, BlockSchema> = {
                 label: 'Programme stops (homepage rail)',
                 kind: 'repeater',
                 itemLabel: 'stop',
-                help: 'Only the homepage teaser rail reads these; /event still renders the Schedule tab records. Leave empty for the shipped seven.',
+                help: 'Only the homepage teaser rail reads these; /event has its own programme blocks. An empty list draws no rail.',
                 item: [
                     { key: 'time', label: 'Time', kind: 'text', placeholder: '08:00 AM', translatable: false },
                     { key: 'title', label: 'Title', kind: 'text' },
@@ -204,7 +204,7 @@ export const BLOCK_SCHEMAS: Record<BlockType, BlockSchema> = {
                 label: 'Photo strip (homepage)',
                 kind: 'repeater',
                 itemLabel: 'photo',
-                help: 'Only the homepage scrapbook strip reads these; its five slots — their size, rotation and overlap — are fixed by the design, so a row only sets the picture and its year pill and a sixth would have nowhere to sit. Leave empty for the shipped strip.',
+                help: 'Only the homepage scrapbook strip reads these; its five slots — their size, rotation and overlap — are fixed by the design, so a row only sets the picture and its year pill and a sixth would have nowhere to sit. An empty list draws no strip.',
                 item: [
                     { key: 'year', label: 'Year pill', kind: 'text', placeholder: '১৯২৭' },
                     { key: 'image', label: 'Photo', kind: 'image' },
@@ -226,9 +226,13 @@ export const BLOCK_SCHEMAS: Record<BlockType, BlockSchema> = {
     // ---------------------------------------------------------------------
     // Home-page sections.
     //
-    // Every field below is optional in practice: the public site keeps the
-    // designed copy as its fallback, so a half-filled block degrades to the
-    // shipped default rather than rendering an empty section.
+    // A blank field renders nothing on the public site (since 2026-09-19):
+    // each section hides whatever has no text, and an emptied list draws no
+    // list. What an editor clears is gone from the page, never replaced by
+    // the copy the design shipped with — that copy shows only on a page
+    // with no CMS page behind it at all. The one exception is artwork the
+    // layout cannot stand without (the homepage hero art, the site logo),
+    // which keeps its shipped file when left blank.
     // ---------------------------------------------------------------------
 
     home_hero: {
@@ -451,9 +455,8 @@ export const BLOCK_SCHEMAS: Record<BlockType, BlockSchema> = {
     },
 
     // ---------------------------------------------------------------------
-    // History-page sections. Same contract as the homepage ones above: every
-    // field is optional in practice, because the public site keeps the
-    // designed copy as its fallback and a cleared field degrades to it.
+    // History-page sections. Same contract as the homepage ones above: a
+    // blank field renders nothing.
     //
     // `cta_banner` above closes the History page too — the design binds
     // identical copy to that symbol on both pages, so it is one type, not two.
@@ -592,9 +595,8 @@ export const BLOCK_SCHEMAS: Record<BlockType, BlockSchema> = {
     },
 
     // ---------------------------------------------------------------------
-    // Events-page sections. Same contract again: every field is optional in
-    // practice, because the public site keeps the designed copy as its
-    // fallback.
+    // Events-page sections. Same contract again: a blank field renders
+    // nothing.
     //
     // The Attractions grid, Guests carousel and CTA banner on that page are
     // the homepage's own types above — the design uses one symbol for each
@@ -719,8 +721,7 @@ export const BLOCK_SCHEMAS: Record<BlockType, BlockSchema> = {
 
     // ---------------------------------------------------------------------
     // Shared inner-page sections. The same contract as every bespoke section
-    // above: every field is optional in practice, because the public site
-    // keeps the designed copy as its fallback.
+    // above: a blank field renders nothing.
     // ---------------------------------------------------------------------
 
     page_hero: {
@@ -1176,7 +1177,7 @@ export const BLOCK_SCHEMAS: Record<BlockType, BlockSchema> = {
                 label: 'What every ticket includes',
                 kind: 'repeater',
                 itemLabel: 'item',
-                help: 'Leave the list empty to keep the designed one; the first row you add replaces it entirely.',
+                help: 'An empty list draws no list.',
                 item: [{ key: 'text', label: 'Item', kind: 'text' }],
             },
             { key: 'family_title', label: '“Bringing family?” heading', kind: 'text' },
@@ -1186,7 +1187,7 @@ export const BLOCK_SCHEMAS: Record<BlockType, BlockSchema> = {
                 label: 'What family members get',
                 kind: 'repeater',
                 itemLabel: 'item',
-                help: 'Shown only when the ticket type allows family. Same rule as above: empty keeps the designed list.',
+                help: 'Shown only when the ticket type allows family. An empty list draws no list.',
                 item: [{ key: 'text', label: 'Item', kind: 'text' }],
             },
         ],
@@ -1194,7 +1195,7 @@ export const BLOCK_SCHEMAS: Record<BlockType, BlockSchema> = {
 
     pricing_rules: {
         label: 'Pricing rules',
-        description: 'The heading and the three worked-out rules. The figures are live from the ticket type — write them as placeholders, never as numbers: {{base_price}}, {{student_price}}, {{member_price}}, {{max_members}}, {{free_age}}. A blank field keeps the designed wording.',
+        description: 'The heading and the three worked-out rules. The figures are live from the ticket type — write them as placeholders, never as numbers: {{base_price}}, {{student_price}}, {{member_price}}, {{max_members}}, {{free_age}}. A rule with a blank title and body is not shown.',
         media: 'none',
         fields: [
             { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
