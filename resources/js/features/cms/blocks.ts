@@ -620,7 +620,7 @@ export const BLOCK_SCHEMAS: Record<BlockType, BlockSchema> = {
                 help: 'Three fit the row as designed — date, venue, time.',
                 item: [
                     { key: 'label', label: 'Label', kind: 'text', placeholder: 'Date' },
-                    { key: 'value', label: 'Value', kind: 'text', placeholder: '12 February 2027, Friday' },
+                    { key: 'value', label: 'Value', kind: 'text', placeholder: '13 March 2027, Saturday' },
                     { key: 'icon', label: 'Icon', kind: 'text', placeholder: 'Calendar', translatable: false },
                     { key: 'tone', label: 'Tone', kind: 'text', placeholder: 'violet', translatable: false },
                 ],
@@ -676,7 +676,7 @@ export const BLOCK_SCHEMAS: Record<BlockType, BlockSchema> = {
                 item: [
                     { key: 'start_time', label: 'Start time', kind: 'text', placeholder: '08:00', translatable: false },
                     { key: 'end_time', label: 'End time', kind: 'text', placeholder: '09:30', translatable: false },
-                    { key: 'date', label: 'Date override', kind: 'text', placeholder: '2027-02-13', translatable: false },
+                    { key: 'date', label: 'Date override', kind: 'text', placeholder: '2027-03-13', translatable: false },
                     { key: 'title', label: 'Title', kind: 'text' },
                     { key: 'description', label: 'Description', kind: 'textarea' },
                     { key: 'track', label: 'Track', kind: 'text', placeholder: 'Registration' },
