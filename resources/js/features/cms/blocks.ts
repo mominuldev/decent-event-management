@@ -665,7 +665,7 @@ export const BLOCK_SCHEMAS: Record<BlockType, BlockSchema> = {
                 key: 'event_date',
                 label: 'Event date',
                 kind: 'text',
-                help: 'YYYY-MM-DD, e.g. 2027-02-12. Sessions take this date unless a row overrides it; times are Bangladesh time.',
+                help: 'YYYY-MM-DD, e.g. 2027-03-13. Sessions take this date unless a row overrides it; times are Bangladesh time.',
             },
             {
                 key: 'items',
