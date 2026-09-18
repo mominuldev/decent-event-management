@@ -1194,12 +1194,18 @@ export const BLOCK_SCHEMAS: Record<BlockType, BlockSchema> = {
 
     pricing_rules: {
         label: 'Pricing rules',
-        description: 'The heading beside the worked-out pricing rules. The rule bodies quote live prices and cannot be edited here.',
+        description: 'The heading and the three worked-out rules. The figures are live from the ticket type — write them as placeholders, never as numbers: {{base_price}}, {{student_price}}, {{member_price}}, {{max_members}}, {{free_age}}. A blank field keeps the designed wording.',
         media: 'none',
         fields: [
             { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
             { key: 'heading_dark', label: 'Heading', kind: 'text' },
             { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
+            { key: 'seat_title', label: 'Rule 1 — title', kind: 'text' },
+            { key: 'seat_body', label: 'Rule 1 — body', kind: 'textarea', help: 'Use {{base_price}} and {{student_price}}. The student placeholder is empty on a ticket with no student rate, so keep it inside a clause you would not miss.' },
+            { key: 'member_title', label: 'Rule 2 — title', kind: 'text', help: 'This rule is shown only when the ticket allows family.' },
+            { key: 'member_body', label: 'Rule 2 — body', kind: 'textarea', help: 'Use {{member_price}} and {{max_members}}.' },
+            { key: 'child_title', label: 'Rule 3 — title', kind: 'text', help: 'Shown only when the ticket has a free-child age. Use {{free_age}}.' },
+            { key: 'child_body', label: 'Rule 3 — body', kind: 'textarea', help: 'Use {{free_age}}.' },
         ],
     },
 

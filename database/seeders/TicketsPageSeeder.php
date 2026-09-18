@@ -148,8 +148,8 @@ class TicketsPageSeeder extends Seeder
     }
 
     /**
-     * Figma "04 · Pricing Rules" — the heading only; the three rules quote
-     * the live prices.
+     * Figma "04 · Pricing Rules" — the heading and the three rules' words.
+     * The rules quote the live prices through placeholders, not figures.
      *
      * @return array{type: string, fields: array<string, mixed>}
      */
@@ -161,6 +161,25 @@ class TicketsPageSeeder extends Seeder
                 'eyebrow' => self::t('Transparent math', 'স্বচ্ছ হিসাব'),
                 'heading_dark' => self::t('How the', 'মূল্য যেভাবে'),
                 'heading_accent' => self::t('price is worked out', 'হিসাব হয়'),
+                // The figures are `{{placeholders}}` the renderer fills from
+                // the ticket type at request time — a number typed here would
+                // be the one thing on the page that could disagree with the
+                // amount charged.
+                'seat_title' => self::t('Your Seat', 'আপনার আসন'),
+                'seat_body' => self::t(
+                    '{{base_price}} for alumni, teachers, staff and guardians. Current students pay {{student_price}} for their own seat.',
+                    '{{base_price}} — প্রাক্তন শিক্ষার্থী, শিক্ষক, কর্মচারী ও অভিভাবকদের জন্য। বর্তমান শিক্ষার্থীদের নিজের আসনের মূল্য {{student_price}}।',
+                ),
+                'member_title' => self::t('Those You Bring', 'সঙ্গে যাঁরা আসবেন'),
+                'member_body' => self::t(
+                    '{{member_price}} each, up to {{max_members}} people. Bringing nobody is fine — you simply pay for your own seat.',
+                    'প্রতিজন {{member_price}} করে, সর্বোচ্চ {{max_members}} জন পর্যন্ত। কাউকে না আনলেও সমস্যা নেই — তখন শুধু নিজের আসনের মূল্যই দিতে হবে।',
+                ),
+                'child_title' => self::t('Children Under {{free_age}}', '{{free_age}} বছরের কম শিশু'),
+                'child_body' => self::t(
+                    'Free, always — never counted in the paid total, but still given a seat and admitted at the gate. From the first birthday, the standard member rate applies.',
+                    'সবসময় বিনামূল্যে — পরিশোধযোগ্য সংখ্যায় গণনা হয় না, তবু আসন ও প্রবেশের অনুমতি থাকবে। প্রথম জন্মদিনের পর সাধারণ সদস্য হার প্রযোজ্য।',
+                ),
             ],
         ];
     }
