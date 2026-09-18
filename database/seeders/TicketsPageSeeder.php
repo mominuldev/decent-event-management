@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Domain\Content\Models\ContentPage;
 use Database\Seeders\Concerns\SeedsContentBlocks;
 use Illuminate\Database\Seeder;
 
@@ -27,7 +26,7 @@ class TicketsPageSeeder extends Seeder
 
     public function run(): void
     {
-        $page = ContentPage::updateOrCreate(
+        $page = $this->seedPage(
             ['slug' => 'tickets'],
             [
                 'template' => 'landing',
@@ -101,7 +100,11 @@ class TicketsPageSeeder extends Seeder
     }
 
     /**
-     * Figma "03 · Ticket Pricing" — the heading only; the card is live.
+     * Figma "03 · Ticket Pricing" — the heading, and the card's own words
+     * (the TicketCard symbol, node `123:712`). Every *figure* on the card —
+     * the prices, the family limit, the free-child age — is read live from
+     * the ticket type and has no field here; the two lists and the labels
+     * around them are what an editor may change.
      *
      * @return array{type: string, fields: array<string, mixed>}
      */
@@ -117,6 +120,29 @@ class TicketsPageSeeder extends Seeder
                     'Come on your own or bring the family — it is the same ticket either way, and the price you see here is the price you pay.',
                     'একা আসুন বা পরিবার নিয়ে — টিকিট একটিই। এখানে যে মূল্য দেখছেন, ঠিক সেটিই দিতে হবে; কোনো বাড়তি চার্জ নেই।',
                 ),
+                'card_badge' => self::t('Centennial Ticket', 'শতবর্ষ টিকিট'),
+                'card_tagline' => self::t(
+                    'Your seat at a hundred years of this school.',
+                    'এই বিদ্যালয়ের একশ বছরে আপনার আসনটি।',
+                ),
+                'card_price_caption' => self::t('for your seat', 'আপনার আসনের জন্য'),
+                'card_cta_label' => self::t('Start registration', 'নিবন্ধন শুরু করুন'),
+                'includes_title' => self::t('Every ticket includes', 'প্রতিটি টিকিটে যা থাকছে'),
+                'includes' => [
+                    ['text' => self::t('Full-day entry to all centennial programmes', 'দিনভর সব শতবর্ষ আয়োজনে প্রবেশ')],
+                    ['text' => self::t('Commemorative centennial T-shirt', 'শতবর্ষ স্মারক টি-শার্ট')],
+                    ['text' => self::t('Lunch and evening refreshments', 'দুপুরের খাবার ও সান্ধ্য আপ্যায়ন')],
+                    ['text' => self::t('Souvenir centennial keepsake', 'শতবর্ষ স্মারক উপহার')],
+                    ['text' => self::t('Reunion photo with your batch', 'নিজ ব্যাচের সঙ্গে পুনর্মিলনীর ছবি')],
+                ],
+                'family_title' => self::t('Bringing family?', 'পরিবার নিয়ে আসছেন?'),
+                'family_optional_label' => self::t('(optional)', '(ঐচ্ছিক)'),
+                'family_includes' => [
+                    ['text' => self::t('Bring your spouse, children, parents or siblings', 'স্বামী/স্ত্রী, সন্তান, বাবা-মা বা ভাইবোনকে সঙ্গে আনুন')],
+                    ['text' => self::t('Every member gets meals and the keepsake', 'প্রত্যেক সদস্যই পাবেন খাবার ও স্মারক')],
+                    ['text' => self::t('Family seating in the celebration pavilion', 'উৎসব প্যাভিলিয়নে পরিবারের জন্য আলাদা আসন')],
+                    ['text' => self::t("Children's centennial activity corner", 'শিশুদের জন্য শতবর্ষ কার্যক্রম কর্নার')],
+                ],
             ],
         ];
     }

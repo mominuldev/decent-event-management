@@ -30,6 +30,25 @@ trait SeedsContentBlocks
     }
 
     /**
+     * The page row itself, on the same terms as the blocks: a normal run
+     * writes the seeded attributes over whatever is there, the additive run
+     * (`ContentSeedMode::$fillMissingOnly`) creates the page if it is
+     * missing and otherwise leaves it exactly as the editor last saved it —
+     * title, SEO copy and publication state included. Every page seeder creates its row through
+     * this rather than `updateOrCreate` directly, so the additive guarantee
+     * holds for the whole page and not only its blocks.
+     *
+     * @param  array<string, mixed>  $match
+     * @param  array<string, mixed>  $attributes
+     */
+    private function seedPage(array $match, array $attributes): ContentPage
+    {
+        return ContentSeedMode::$fillMissingOnly
+            ? ContentPage::firstOrCreate($match, $attributes)
+            : ContentPage::updateOrCreate($match, $attributes);
+    }
+
+    /**
      * Writes the page's blocks, in order, and drops any left over from a
      * longer previous run — a shorter page on a re-run must not leave orphaned
      * sections rendering below the last one this seeder wrote.
@@ -40,6 +59,12 @@ trait SeedsContentBlocks
      */
     private function syncBlocks(ContentPage $page, array $blocks): void
     {
+        if (ContentSeedMode::$fillMissingOnly) {
+            $this->fillMissingBlockFields($page, $blocks);
+
+            return;
+        }
+
         foreach ($blocks as $position => $block) {
             [$data, $dataBn] = $this->split($block['fields']);
 
@@ -57,6 +82,65 @@ trait SeedsContentBlocks
         ContentBlock::where('content_page_id', $page->id)
             ->where('position', '>=', count($blocks))
             ->delete();
+    }
+
+    /**
+     * The additive counterpart of `syncBlocks()`: a stored block at the same
+     * position and of the same type gains only the keys it does not already
+     * carry, a position with no block yet is created whole, and a stored
+     * block of a *different* type is left alone — the editor has restructured
+     * the page, and the seeder's idea of what sits there no longer applies.
+     * Trailing blocks the seeder does not know about are kept.
+     *
+     * Absence is judged on `data` alone, so a key the editor cleared to an
+     * empty string stays cleared rather than springing back to the seeded
+     * copy.
+     *
+     * @param  list<array{type: string, fields: array<string, mixed>}>  $blocks
+     */
+    private function fillMissingBlockFields(ContentPage $page, array $blocks): void
+    {
+        foreach ($blocks as $position => $block) {
+            [$data, $dataBn] = $this->split($block['fields']);
+
+            $existing = ContentBlock::query()
+                ->where('content_page_id', $page->id)
+                ->where('position', $position)
+                ->first();
+
+            if ($existing === null) {
+                ContentBlock::create([
+                    'content_page_id' => $page->id,
+                    'position' => $position,
+                    'type' => $block['type'],
+                    'data' => $data,
+                    'data_bn' => $dataBn,
+                    'is_visible' => true,
+                ]);
+
+                continue;
+            }
+
+            if ($existing->type !== $block['type']) {
+                continue;
+            }
+
+            /** @var array<string, mixed> $storedData */
+            $storedData = $existing->data ?? [];
+            /** @var array<string, mixed> $storedBn */
+            $storedBn = $existing->data_bn ?? [];
+
+            $missing = array_diff_key($data, $storedData);
+
+            if ($missing === []) {
+                continue;
+            }
+
+            $existing->update([
+                'data' => $storedData + $missing,
+                'data_bn' => $storedBn + array_intersect_key($dataBn, $missing),
+            ]);
+        }
     }
 
     /**

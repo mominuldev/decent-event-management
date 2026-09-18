@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Domain\Content\Models\ContentPage;
 use Database\Seeders\Concerns\SeedsContentBlocks;
 use Illuminate\Database\Seeder;
 
@@ -22,7 +21,7 @@ class FaqPageSeeder extends Seeder
 
     public function run(): void
     {
-        $page = ContentPage::updateOrCreate(
+        $page = $this->seedPage(
             ['slug' => 'faq'],
             [
                 'template' => 'standard',

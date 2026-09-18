@@ -1159,13 +1159,36 @@ export const BLOCK_SCHEMAS: Record<BlockType, BlockSchema> = {
 
     ticket_pricing: {
         label: 'Ticket pricing',
-        description: 'The heading over the live ticket card. The card itself reads its prices from the ticket type.',
+        description: 'The heading over the ticket card, and the card’s own words. Every figure on the card — the prices, the family limit, the free-child age — comes from the ticket type and is edited under Tickets, not here.',
         media: 'none',
         fields: [
             { key: 'eyebrow', label: 'Eyebrow', kind: 'text' },
             { key: 'heading_dark', label: 'Heading', kind: 'text' },
             { key: 'heading_accent', label: 'Heading accent', kind: 'text' },
             { key: 'body', label: 'Body', kind: 'textarea' },
+            { key: 'card_badge', label: 'Card badge', kind: 'text', help: 'The small pill at the top of the price panel.' },
+            { key: 'card_tagline', label: 'Card tagline', kind: 'textarea', help: 'The line under the badge, above the price.' },
+            { key: 'card_price_caption', label: 'Price caption', kind: 'text', help: 'The small line under the headline price.' },
+            { key: 'card_cta_label', label: 'Button label', kind: 'text', help: 'The button jumps to the registration form on this page.' },
+            { key: 'includes_title', label: '“Every ticket includes” heading', kind: 'text' },
+            {
+                key: 'includes',
+                label: 'What every ticket includes',
+                kind: 'repeater',
+                itemLabel: 'item',
+                help: 'Leave the list empty to keep the designed one; the first row you add replaces it entirely.',
+                item: [{ key: 'text', label: 'Item', kind: 'text' }],
+            },
+            { key: 'family_title', label: '“Bringing family?” heading', kind: 'text' },
+            { key: 'family_optional_label', label: 'Optional tag', kind: 'text', help: 'The small “(optional)” beside the family heading.' },
+            {
+                key: 'family_includes',
+                label: 'What family members get',
+                kind: 'repeater',
+                itemLabel: 'item',
+                help: 'Shown only when the ticket type allows family. Same rule as above: empty keeps the designed list.',
+                item: [{ key: 'text', label: 'Item', kind: 'text' }],
+            },
         ],
     },
 
