@@ -52,14 +52,14 @@ class TicketTypeSeeder extends Seeder
             // is bounded by the `registration.max_family_size` setting; off,
             // it is one. `max_admits` no longer bounds anything (see
             // PartySize) and is kept only as a descriptive figure.
-            ['code' => 'ALM', 'name' => 'Alumni', 'base_admits' => 1, 'max_admits' => 4, 'allows_family' => true, 'base_price_tk' => 152000, 'additional_adult_price_tk' => 102000, 'additional_child_price_tk' => 102000, 'allowed_participant_types' => ['former_student'], 'quantity_total' => 3000, 'includes_tshirt' => true],
-            ['code' => 'STU', 'name' => 'Current Student', 'base_admits' => 1, 'max_admits' => 1, 'allows_family' => false, 'base_price_tk' => 102000, 'allowed_participant_types' => ['current_student'], 'quantity_total' => 1700, 'includes_tshirt' => true],
+            ['code' => 'ALM', 'name' => 'Alumni', 'name_bn' => 'প্রাক্তন শিক্ষার্থী', 'base_admits' => 1, 'max_admits' => 4, 'allows_family' => true, 'base_price_tk' => 152000, 'additional_adult_price_tk' => 102000, 'additional_child_price_tk' => 102000, 'allowed_participant_types' => ['former_student'], 'quantity_total' => 3000, 'includes_tshirt' => true],
+            ['code' => 'STU', 'name' => 'Current Student', 'name_bn' => 'বর্তমান শিক্ষার্থী', 'base_admits' => 1, 'max_admits' => 1, 'allows_family' => false, 'base_price_tk' => 102000, 'allowed_participant_types' => ['current_student'], 'quantity_total' => 1700, 'includes_tshirt' => true],
             // Family is on for teachers in the console, but their member
             // rates were never set there and quote ৳0 — seeded at the
             // standard member rate rather than as a free ticket.
-            ['code' => 'TCH', 'name' => 'Teacher', 'base_admits' => 1, 'max_admits' => 1, 'allows_family' => true, 'base_price_tk' => 152000, 'additional_adult_price_tk' => 102000, 'additional_child_price_tk' => 102000, 'allowed_participant_types' => ['teacher'], 'quantity_total' => 200, 'includes_tshirt' => true],
-            ['code' => 'STF', 'name' => 'Staff', 'base_admits' => 1, 'max_admits' => 1, 'allows_family' => false, 'base_price_tk' => 152000, 'allowed_participant_types' => ['staff'], 'quantity_total' => 15, 'includes_tshirt' => false],
-            ['code' => 'VIP', 'name' => 'VIP Guest', 'base_admits' => 2, 'max_admits' => 2, 'allows_family' => true, 'base_price_tk' => 306000, 'allowed_participant_types' => ['guest'], 'quantity_total' => 200, 'requires_approval' => true, 'is_public' => false, 'includes_tshirt' => false],
+            ['code' => 'TCH', 'name' => 'Teacher', 'name_bn' => 'শিক্ষক', 'base_admits' => 1, 'max_admits' => 1, 'allows_family' => true, 'base_price_tk' => 152000, 'additional_adult_price_tk' => 102000, 'additional_child_price_tk' => 102000, 'allowed_participant_types' => ['teacher'], 'quantity_total' => 200, 'includes_tshirt' => true],
+            ['code' => 'STF', 'name' => 'Staff', 'name_bn' => 'কর্মচারী', 'base_admits' => 1, 'max_admits' => 1, 'allows_family' => false, 'base_price_tk' => 152000, 'allowed_participant_types' => ['staff'], 'quantity_total' => 15, 'includes_tshirt' => false],
+            ['code' => 'VIP', 'name' => 'VIP Guest', 'name_bn' => 'ভিআইপি অতিথি', 'base_admits' => 2, 'max_admits' => 2, 'allows_family' => true, 'base_price_tk' => 306000, 'allowed_participant_types' => ['guest'], 'quantity_total' => 200, 'requires_approval' => true, 'is_public' => false, 'includes_tshirt' => false],
 
             // The centennial ticket: what the public ticket page's pricing
             // card shows, what the form quotes before the reader says who
